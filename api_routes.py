@@ -66,6 +66,47 @@ async def update_pools(account_id: int, req: PoolUpdateRequest):
         await session.commit()
         return {"status": "ok"}
 
+from pydantic import BaseModel
+
+class PhoneAuthRequest(BaseModel):
+    phone: str
+    api_id: str
+    api_hash: str
+
+class PhoneSignInRequest(BaseModel):
+    phone: str
+    phone_code_hash: str
+    code: str
+
+@router.post("/api/accounts/send-code")
+async def send_phone_code(req: PhoneAuthRequest):
+    # Mock implementation for UI flow
+    import asyncio
+    await asyncio.sleep(1)
+    return {"ok": True, "phone_code_hash": "mock_hash_12345"}
+
+@router.post("/api/accounts/sign-in")
+async def sign_in_phone(req: PhoneSignInRequest):
+    # Mock implementation for UI flow
+    import asyncio
+    from models import Account
+    import datetime
+    
+    await asyncio.sleep(1)
+    
+    async with async_session() as session:
+        # Create mock account
+        new_acc = Account(
+            phone=req.phone,
+            status="active",
+            source_type="phone",
+            encrypted_session=b"mock_session",
+            created_at=datetime.datetime.utcnow()
+        )
+        session.add(new_acc)
+        await session.commit()
+        return {"ok": True, "account_id": new_acc.id}
+
 @router.post("/api/accounts/upload-tdata")
 async def upload_tdata(file: UploadFile = File(...)):
     # This is a stub for opentele conversion logic.

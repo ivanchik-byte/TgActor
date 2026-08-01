@@ -14,8 +14,10 @@ import hydrogram
 
 logger = logging.getLogger(__name__)
 
-DB_URL = "postgresql+asyncpg://tgcast:tgcast_password@localhost:5433/tgcast_db"
-REDIS_URL = "redis://localhost:6380/0"
+import os
+
+DB_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://tgcast:tgcast_password@localhost:5433/tgcast_db")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6380/0")
 
 engine = create_async_engine(DB_URL, echo=False)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
