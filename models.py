@@ -33,6 +33,8 @@ class Account(Base):
     status: Mapped[str] = mapped_column(String(20), default='active')    # active, cooldown, banned, invalid, unassigned_proxy
     source_type: Mapped[str] = mapped_column(String(20), nullable=False) # tdata, phone_auth
     cooldown_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    in_commenting_pool: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
+    in_reaction_pool: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     proxy: Mapped[Optional['Proxy']] = relationship()
@@ -63,6 +65,7 @@ class ScenarioStep(Base):
     delay_before_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     reactions: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reaction_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reply_to_step_id: Mapped[Optional[int]] = mapped_column(ForeignKey('scenario_steps.id'), nullable=True)
     
     scenario: Mapped['Scenario'] = relationship()
 
@@ -71,7 +74,7 @@ class TaskLog(Base):
     __tablename__ = 'task_logs'
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    account_id: Mapped[int] = mapped_column(ForeignKey('accounts.id'), nullable=False)
+    account_id: Mapped[Optional[int]] = mapped_column(ForeignKey('accounts.id'), nullable=True)
     scenario_id: Mapped[Optional[int]] = mapped_column(ForeignKey('scenarios.id'), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)       # success, error
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

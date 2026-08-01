@@ -29,6 +29,8 @@ class AccountBase(BaseModel):
     proxy_id: Optional[int] = None
     status: str = Field(default="active", max_length=20)
     source_type: str = Field(..., max_length=20)
+    in_commenting_pool: bool = False
+    in_reaction_pool: bool = False
 
 class AccountCreate(AccountBase):
     encrypted_session: str
