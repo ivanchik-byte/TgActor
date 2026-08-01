@@ -1,0 +1,4 @@
+Project.md
+__pycache__/
+venv/
+.env
