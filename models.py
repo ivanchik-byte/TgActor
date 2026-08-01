@@ -92,3 +92,11 @@ class InboxMessage(Base):
     text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_incoming: Mapped[bool] = mapped_column(Boolean, default=True)
     received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SystemConfig(Base):
+    __tablename__ = 'system_config'
+    
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+

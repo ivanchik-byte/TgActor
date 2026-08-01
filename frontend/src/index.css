@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--bg-main);
+  --color-card: var(--bg-card);
+  --color-primary: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border-color);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+}
+
+@layer base {
+  :root {
+    --bg-main: #0c0a09;
+    --bg-card: #1c1917;
+    --text-main: #fafaf9;
+    --text-muted: #a8a29e;
+    --border-color: #292524;
+    --accent: #e11d48; /* Rose 600 */
+    --accent-hover: #be123c;
+  }
+
+  .dark-charcoal {
+    --bg-main: #0f172a;
+    --bg-card: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-color: #334155;
+    --accent: #3b82f6; /* Blue 500 */
+    --accent-hover: #2563eb;
+  }
+
+  .light {
+    --bg-main: #f8fafc;
+    --bg-card: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --accent: #e11d48; /* Rose 600 */
+    --accent-hover: #be123c;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+  }
+}
