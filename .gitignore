@@ -2,3 +2,4 @@ Project.md
 __pycache__/
 venv/
 .env
+COMMANDS_DEV.md

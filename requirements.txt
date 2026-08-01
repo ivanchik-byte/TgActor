@@ -1,0 +1,12 @@
+fastapi==0.111.0
+uvicorn==0.30.1
+sqlalchemy==2.0.31
+asyncpg==0.29.0
+alembic==1.13.2
+hydrogram==0.2.0
+redis==5.0.7
+PyJWT==2.8.0
+cryptography==42.0.8
+python-multipart==0.0.9
+pydantic==2.8.2
+pydantic-settings==2.3.4
