@@ -164,24 +164,38 @@ export default function Dashboard() {
                   <td className="px-4 py-3 text-muted">#{acc.id}</td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-muted">—</div>
-                    <div className="text-muted text-xs mt-0.5">id {acc.telegram_id || acc.phone}</div>
+                    <div className="text-muted text-xs mt-0.5">{acc.phone}</div>
                   </td>
-                  <td className="px-4 py-3 font-medium">{acc.first_name || acc.username || 'Letxxirc Oqyendoybg'}</td>
+                  <td className="px-4 py-3 font-medium">{acc.first_name || acc.username || 'Без имени'}</td>
                   <td className="px-4 py-3 text-muted">{acc.source_type}</td>
-                  <td className="px-4 py-3 text-muted">id={acc.proxy_id || 20}</td>
+                  <td className="px-4 py-3 text-muted">id={acc.proxy_id || 'Нет'}</td>
                   <td className="px-4 py-3">
-                    <span className="flex items-center text-emerald-500 font-medium text-xs">
-                      <Check className="w-3 h-3 mr-1" /> активен
-                    </span>
+                    {acc.status === 'active' ? (
+                      <span className="flex items-center text-emerald-500 font-medium text-xs">
+                        <Check className="w-3 h-3 mr-1" /> активен
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-red-500 font-medium text-xs">
+                        <X className="w-3 h-3 mr-1" /> {acc.status || 'неизвестно'}
+                      </span>
+                    )}
                     <div className="text-muted text-[10px] mt-0.5">ok</div>
                   </td>
-                  <td className="px-4 py-3 text-emerald-500 text-xs font-medium">07-17 00:37 ok</td>
+                  <td className="px-4 py-3 text-emerald-500 text-xs font-medium">{new Date(acc.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-start space-x-2">
                       <button className="bg-background border border-border hover:text-primary px-3 py-1 rounded text-xs transition-colors">Профиль</button>
                       <button className="bg-background border border-border hover:text-primary px-3 py-1 rounded text-xs transition-colors">Чаты</button>
                       <button className="bg-background border border-border hover:text-primary px-3 py-1 rounded text-xs transition-colors">Проверить</button>
-                      <button className="bg-background border border-border hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 px-2 py-1 rounded text-xs transition-colors">
+                      <button 
+                        onClick={async () => {
+                          if (confirm('Точно удалить аккаунт?')) {
+                            await axios.delete(`/api/accounts/${acc.id}`);
+                            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+                          }
+                        }}
+                        className="bg-background border border-border hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 px-2 py-1 rounded text-xs transition-colors"
+                      >
                         <X className="w-3 h-3" />
                       </button>
                     </div>
