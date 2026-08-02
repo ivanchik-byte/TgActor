@@ -67,6 +67,49 @@ async def _message_handler(client: TelegramSessionClient, account_id: int, messa
         logger.info(f"Аккаунт {account_id} получил ЛС от {sender_id}. Сохранено и отправлено в Redis.")
 
 
+async def sync_recent_dialogs(client, account_id: int):
+    from datetime import datetime
+    import hydrogram
+    try:
+        logger.info(f"Синхронизация последних диалогов для аккаунта {account_id}...")
+        async for dialog in client.get_dialogs(limit=30):
+            if dialog.chat.type != hydrogram.enums.ChatType.PRIVATE:
+                continue
+                
+            peer_id = dialog.chat.id
+            username = dialog.chat.username or dialog.chat.first_name or str(peer_id)
+            
+            last_msg = dialog.top_message
+            if last_msg:
+                text = last_msg.text or last_msg.caption or ""
+                is_incoming = last_msg.outgoing is False
+                received_at = last_msg.date or datetime.utcnow()
+                
+                async with async_session() as session:
+                    stmt = select(InboxMessage).where(
+                        InboxMessage.account_id == account_id,
+                        InboxMessage.peer_id == peer_id,
+                        InboxMessage.message_id == last_msg.id
+                    )
+                    res = await session.execute(stmt)
+                    existing = res.scalar_one_or_none()
+                    
+                    if not existing:
+                        inbox_msg = InboxMessage(
+                            account_id=account_id,
+                            peer_id=peer_id,
+                            message_id=last_msg.id,
+                            sender_username=username,
+                            text=text,
+                            is_incoming=is_incoming,
+                            received_at=received_at
+                        )
+                        session.add(inbox_msg)
+                        await session.commit()
+        logger.info(f"Диалоги для аккаунта {account_id} успешно синхронизированы.")
+    except Exception as e:
+        logger.error(f"Ошибка при синхронизации диалогов для {account_id}: {e}")
+
 async def start_account_listener(account: Account):
     if account.id in active_clients:
         return
@@ -96,6 +139,9 @@ async def start_account_listener(account: Account):
             
         active_clients[account.id] = client
         logger.info(f"Слушатель запущен для аккаунта {account.id}")
+        
+        # Start async task for background sync of recent chats
+        asyncio.create_task(sync_recent_dialogs(client.client, account.id))
         
     except Exception as e:
         logger.error(f"Не удалось запустить слушатель для аккаунта {account.id}: {e}")
