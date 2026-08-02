@@ -445,9 +445,12 @@ async def send_inbox_message(req: SendMessageRequest):
 
 @router.delete("/api/accounts/{account_id}")
 async def delete_account(account_id: int):
+    from models import TaskLog, InboxMessage
     async with async_session() as session:
         account = await session.get(Account, account_id)
         if account:
+            await session.execute(delete(TaskLog).where(TaskLog.account_id == account_id))
+            await session.execute(delete(InboxMessage).where(InboxMessage.account_id == account_id))
             await session.delete(account)
             await session.commit()
         return {"status": "deleted"}
