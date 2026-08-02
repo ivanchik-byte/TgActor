@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'dark-crimson' | 'dark-charcoal' | 'light';
+type Theme = 'deep-indigo' | 'dark-crimson' | 'dark-charcoal' | 'light';
 
 interface ThemeContextType {
   theme: Theme;
@@ -18,8 +18,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem('tgcast-theme', theme);
     const root = window.document.body;
-    root.classList.remove('dark-crimson', 'dark-charcoal', 'light');
-    root.classList.add(theme);
+    root.classList.remove('deep-indigo', 'dark-crimson', 'dark-charcoal', 'light');
+    if (theme !== 'deep-indigo') {
+      root.classList.add(theme);
+    }
   }, [theme]);
 
   return (

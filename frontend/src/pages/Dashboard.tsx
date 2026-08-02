@@ -1,118 +1,201 @@
-
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Shield, ShieldAlert, UploadCloud } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
+  const [phone, setPhone] = useState('');
+  const [apiId, setApiId] = useState('');
+  const [apiHash, setApiHash] = useState('');
+  const [code, setCode] = useState('');
+  const [step, setStep] = useState(1);
+  const [phoneCodeHash, setPhoneCodeHash] = useState('');
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await axios.get('/api/accounts')).data
   });
 
-  const { data: proxyMode } = useQuery({
-    queryKey: ['proxyMode'],
-    queryFn: async () => (await axios.get('/api/config/proxy-mode')).data
+  const requestPhoneCode = useMutation({
+    mutationFn: async () => axios.post('/api/accounts/send-code', { phone, api_id: apiId, api_hash: apiHash }),
+    onSuccess: (res) => {
+      setPhoneCodeHash(res.data.phone_code_hash);
+      setStep(2);
+    }
   });
 
-  const toggleProxyMode = useMutation({
-    mutationFn: async (val: boolean) => axios.post('/api/config/proxy-mode', { use_proxy: val }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['proxyMode'] })
-  });
-
-  const togglePool = useMutation({
-    mutationFn: async ({ id, pool, val }: any) => {
-      const acc = accounts.find((a: any) => a.id === id);
-      return axios.patch(`/api/accounts/${id}/pools`, {
-        in_commenting_pool: pool === 'comment' ? val : acc.in_commenting_pool,
-        in_reaction_pool: pool === 'reaction' ? val : acc.in_reaction_pool,
-      });
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts'] })
+  const submitCode = useMutation({
+    mutationFn: async () => axios.post('/api/accounts/sign-in', { phone, phone_code_hash: phoneCodeHash, code }),
+    onSuccess: () => {
+      setStep(1);
+      setPhone('');
+      setApiId('');
+      setApiHash('');
+      setCode('');
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    }
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center bg-card p-4 rounded-lg border border-border shadow-sm">
-        <div>
-          <h2 className="text-lg font-bold">Настройки сети</h2>
-          <p className="text-sm text-muted">Глобальный переключатель прокси-серверов.</p>
+    <div className="space-y-8">
+      {/* Top Description */}
+      <div>
+        <h2 className="text-2xl font-bold mb-1">Аккаунты</h2>
+        <p className="text-muted text-sm">
+          Bot-ферма. На каждый аккаунт автоматически закрепляется свой sticky-прокси (1:1, не делится). При смерти прокси — авто-свап на свободный.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* TData Upload */}
+        <div className="bg-card rounded-xl border border-border p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h3 className="text-lg font-bold mb-2">Загрузка из tdata-архива</h3>
+            <p className="text-muted text-sm mb-6">
+              .zip с папкой tdata от Telegram Desktop. Будет конвертирован в Telethon-сессию через opentele и привязан к свободному прокси.
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button className="bg-accent hover:bg-accent-hover text-white px-6 py-2 rounded-md text-sm font-medium transition-colors">
+              Импорт
+            </button>
+            <button className="bg-background hover:bg-background/80 border border-border px-4 py-2 rounded-md text-sm transition-colors text-muted hover:text-primary">
+              Обзор...
+            </button>
+            <span className="text-muted text-sm flex-1">Файлы не выбраны.</span>
+          </div>
+          <p className="text-muted text-xs mt-4">Можно выбрать несколько файлов одновременно — обработаются по очереди, каждому свой прокси.</p>
         </div>
-        <div className="flex space-x-2">
-          <button 
-            onClick={() => toggleProxyMode.mutate(true)}
-            className={`px-4 py-2 flex items-center rounded-md font-medium text-sm transition-colors ${
-              proxyMode?.use_proxy ? 'bg-emerald-600 text-white' : 'bg-background border border-border text-muted hover:text-primary'
-            }`}
-          >
-            <Shield className="w-4 h-4 mr-2" />
-            Использовать прокси: ДА (Рекомендовано)
-          </button>
-          <button 
-            onClick={() => toggleProxyMode.mutate(false)}
-            className={`px-4 py-2 flex items-center rounded-md font-medium text-sm transition-colors ${
-              proxyMode?.use_proxy === false ? 'bg-red-600 text-white' : 'bg-background border border-border text-muted hover:text-primary'
-            }`}
-          >
-            <ShieldAlert className="w-4 h-4 mr-2" />
-            Использовать прокси: НЕТ (ОПАСНО)
-          </button>
+
+        {/* Phone Login */}
+        <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+          <h3 className="text-lg font-bold mb-2">Добавить через телефон</h3>
+          <p className="text-muted text-sm mb-6">
+            Введи api_id, api_hash (с my.telegram.org) и номер. Telegram пришлёт код. Если есть 2FA — пароль введёшь после кода.
+          </p>
+          
+          {step === 1 ? (
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="+1442..."
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+              />
+              <div className="flex space-x-3">
+                <input
+                  type="text"
+                  placeholder="api_id"
+                  value={apiId}
+                  onChange={e => setApiId(e.target.value)}
+                  className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                />
+                <input
+                  type="text"
+                  placeholder="api_hash"
+                  value={apiHash}
+                  onChange={e => setApiHash(e.target.value)}
+                  className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex justify-start">
+                <button 
+                  onClick={() => requestPhoneCode.mutate()}
+                  disabled={requestPhoneCode.isPending}
+                  className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors mt-2"
+                >
+                  {requestPhoneCode.isPending ? 'Отправка...' : 'Запросить код'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Введите код из Telegram"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
+              />
+              <div className="flex justify-start">
+                <button 
+                  onClick={() => submitCode.mutate()}
+                  disabled={submitCode.isPending}
+                  className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white px-6 py-2 rounded-md text-sm font-medium transition-colors"
+                >
+                  {submitCode.isPending ? 'Вход...' : 'Отправить код'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-border flex justify-between items-center">
-          <h2 className="text-lg font-bold">Ферма аккаунтов</h2>
-          <button className="bg-accent hover:bg-accent-hover text-white px-3 py-1.5 rounded-md text-sm font-medium flex items-center transition-colors">
-            <UploadCloud className="w-4 h-4 mr-2" /> Загрузить TData (.zip)
+      {/* Accounts List */}
+      <div>
+        <div className="flex justify-start items-center space-x-4 mb-4">
+          <button className="bg-accent hover:bg-accent-hover text-white px-4 py-1.5 rounded-md text-sm transition-colors">
+            Проверить все
           </button>
+          <div className="text-muted text-sm font-medium">
+            Аккаунтов: {accounts.length} <span className="mx-2 text-border">•</span> пул прокси: 5
+          </div>
         </div>
-        <table className="w-full text-left text-sm">
-          <thead className="bg-background text-muted uppercase text-xs">
-            <tr>
-              <th className="px-4 py-3 font-semibold">ID</th>
-              <th className="px-4 py-3 font-semibold">Phone / Username</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold text-center">Commenting Pool</th>
-              <th className="px-4 py-3 font-semibold text-center">Reaction Pool</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {accounts.map((acc: any) => (
-              <tr key={acc.id} className="hover:bg-background/50 transition-colors">
-                <td className="px-4 py-3 text-muted">#{acc.id}</td>
-                <td className="px-4 py-3 font-medium">{acc.phone || acc.username || 'Unknown'}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${acc.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                    {acc.status.toUpperCase()}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <input 
-                    type="checkbox" 
-                    checked={acc.in_commenting_pool}
-                    onChange={(e) => togglePool.mutate({ id: acc.id, pool: 'comment', val: e.target.checked })}
-                    className="w-4 h-4 accent-accent cursor-pointer"
-                  />
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <input 
-                    type="checkbox" 
-                    checked={acc.in_reaction_pool}
-                    onChange={(e) => togglePool.mutate({ id: acc.id, pool: 'reaction', val: e.target.checked })}
-                    className="w-4 h-4 accent-accent cursor-pointer"
-                  />
-                </td>
-              </tr>
-            ))}
-            {accounts.length === 0 && !isLoading && (
+        
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="text-muted uppercase text-xs border-b border-border">
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">Нет загруженных аккаунтов.</td>
+                <th className="px-4 py-4 font-semibold w-16">№</th>
+                <th className="px-4 py-4 font-semibold">ТЕЛЕФОН / TG-ID</th>
+                <th className="px-4 py-4 font-semibold">ПРОФИЛЬ</th>
+                <th className="px-4 py-4 font-semibold">ИСТОЧНИК</th>
+                <th className="px-4 py-4 font-semibold">ПРОКСИ</th>
+                <th className="px-4 py-4 font-semibold">СТАТУС</th>
+                <th className="px-4 py-4 font-semibold">ПРОВЕРЕН</th>
+                <th className="px-4 py-4 font-semibold">ДЕЙСТВИЯ</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {accounts.map((acc: any) => (
+                <tr key={acc.id} className="hover:bg-background/40 transition-colors">
+                  <td className="px-4 py-3 text-muted">#{acc.id}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-muted">—</div>
+                    <div className="text-muted text-xs mt-0.5">id {acc.telegram_id || acc.phone}</div>
+                  </td>
+                  <td className="px-4 py-3 font-medium">{acc.first_name || acc.username || 'Letxxirc Oqyendoybg'}</td>
+                  <td className="px-4 py-3 text-muted">{acc.source_type}</td>
+                  <td className="px-4 py-3 text-muted">id={acc.proxy_id || 20}</td>
+                  <td className="px-4 py-3">
+                    <span className="flex items-center text-emerald-500 font-medium text-xs">
+                      <Check className="w-3 h-3 mr-1" /> активен
+                    </span>
+                    <div className="text-muted text-[10px] mt-0.5">ok</div>
+                  </td>
+                  <td className="px-4 py-3 text-emerald-500 text-xs font-medium">07-17 00:37 ok</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-start space-x-2">
+                      <button className="bg-background border border-border hover:text-primary px-3 py-1 rounded text-xs transition-colors">Профиль</button>
+                      <button className="bg-background border border-border hover:text-primary px-3 py-1 rounded text-xs transition-colors">Чаты</button>
+                      <button className="bg-background border border-border hover:text-primary px-3 py-1 rounded text-xs transition-colors">Проверить</button>
+                      <button className="bg-background border border-border hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 px-2 py-1 rounded text-xs transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {accounts.length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-muted">Нет загруженных аккаунтов.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
