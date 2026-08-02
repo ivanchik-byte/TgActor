@@ -67,6 +67,55 @@ async def _message_handler(client: TelegramSessionClient, account_id: int, messa
         logger.info(f"Аккаунт {account_id} получил ЛС от {sender_id}. Сохранено и отправлено в Redis.")
 
 
+async def start_account_listener(account: Account):
+    if account.id in active_clients:
+        return
+        
+    try:
+        proxy_dict = None
+        if account.proxy:
+            proxy_dict = {
+                "scheme": account.proxy.protocol,
+                "hostname": account.proxy.ip,
+                "port": account.proxy.port,
+            }
+            if account.proxy.username:
+                proxy_dict["username"] = account.proxy.username
+                proxy_dict["password"] = account.proxy.password
+                
+        client = TelegramSessionClient(encrypted_session=account.encrypted_session, proxy=proxy_dict)
+        await client.start()
+        
+        # Register message handler with a closure to bind account_id
+        def create_handler(acc_id, cli):
+            async def on_new_message(hydro_client, message: Message):
+                await _message_handler(cli, acc_id, message)
+            return on_new_message
+        
+        client.client.on_message(filters.private)(create_handler(account.id, client))
+            
+        active_clients[account.id] = client
+        logger.info(f"Слушатель запущен для аккаунта {account.id}")
+        
+    except Exception as e:
+        logger.error(f"Не удалось запустить слушатель для аккаунта {account.id}: {e}")
+        # Mark disconnected to isolate failure
+        async with async_session() as session:
+            acc = await session.get(Account, account.id)
+            if acc:
+                acc.status = "disconnected"
+                await session.commit()
+        logger.info(f"Аккаунт {account.id} переведен в статус disconnected.")
+
+async def stop_account_listener(account_id: int):
+    client = active_clients.pop(account_id, None)
+    if client:
+        try:
+            await client.stop()
+            logger.info(f"Слушатель остановлен для аккаунта {account_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при остановке слушателя {account_id}: {e}")
+
 async def start_listeners():
     """
     Starts listening on all active accounts.
@@ -74,34 +123,12 @@ async def start_listeners():
     logger.info("Запуск слушателей Inbox Daemon...")
     
     async with async_session() as session:
-        stmt = select(Account).where(Account.status == "active")
+        from sqlalchemy.orm import selectinload
+        stmt = select(Account).options(selectinload(Account.proxy)).where(Account.status == "active")
         accounts = (await session.execute(stmt)).scalars().all()
         
     for account in accounts:
-        try:
-            client = TelegramSessionClient(encrypted_session=account.encrypted_session)
-            await client.start()
-            
-            # Register message handler with a closure to bind account_id
-            def create_handler(acc_id, cli):
-                async def on_new_message(hydro_client, message: Message):
-                    await _message_handler(cli, acc_id, message)
-                return on_new_message
-            
-            client.client.on_message(filters.private)(create_handler(account.id, client))
-                
-            active_clients[account.id] = client
-            logger.info(f"Слушатель запущен для аккаунта {account.id}")
-            
-        except Exception as e:
-            logger.error(f"Не удалось запустить слушатель для аккаунта {account.id}: {e}")
-            # Mark disconnected to isolate failure
-            async with async_session() as session:
-                acc = await session.get(Account, account.id)
-                if acc:
-                    acc.status = "disconnected"
-                    await session.commit()
-            logger.info(f"Аккаунт {account.id} переведен в статус disconnected.")
+        await start_account_listener(account)
 
 async def stop_listeners():
     """
