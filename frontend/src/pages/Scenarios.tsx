@@ -1,107 +1,387 @@
-import { useState, useRef } from 'react';
-import { ArrowUp, ArrowDown, X, Paperclip } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
+import { ArrowUp, ArrowDown, Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save } from 'lucide-react';
+
+interface Replica {
+  id: string; // React local temporary ID or database ID
+  dbId?: number;
+  role: string; // Database Account ID (stored as string)
+  type: 'normal' | 'reply';
+  replyToId: string; // Points to temporary ID (id) or dbId
+  text: string;
+  minDelay: string;
+  maxDelay: string;
+  reactions: string;
+  reactionCount: number;
+  fileName: string;
+  noAttachmentIfForbidden: boolean;
+}
 
 export default function Scenarios() {
-  const [isActive, setIsActive] = useState(true);
-  const fileRef1 = useRef<HTMLInputElement>(null);
-  const fileRef2 = useRef<HTMLInputElement>(null);
-  const [file1Name, setFile1Name] = useState('');
-  const [file2Name, setFile2Name] = useState('');
+  const queryClient = useQueryClient();
+  
+  // Active Scenario state
+  const [activeScenarioId, setActiveScenarioId] = useState<number | null>(null);
+  const [newScenarioTitle, setNewScenarioTitle] = useState('');
+  const [showAddScenario, setShowAddScenario] = useState(false);
 
-  // Shared styles
-  const cardStyle: React.CSSProperties = {
+  // Confirm delete scenario ID state
+  const [confirmDeleteScenarioId, setConfirmDeleteScenarioId] = useState<number | null>(null);
+
+  // Toast notification state
+  const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
+
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  // Scenario config editing state
+  const [scenarioName, setScenarioName] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [defaultMinDelay, setDefaultMinDelay] = useState(30);
+  const [defaultMaxDelay, setDefaultMaxDelay] = useState(60);
+
+  // Replica steps state
+  const [replicas, setReplicas] = useState<Replica[]>([]);
+
+  // Fetch accounts from API
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => (await axios.get('/api/accounts')).data
+  });
+
+  // Filter only accounts in commenting pool
+  const commentingAccounts = accounts.filter((a: any) => a.in_commenting_pool);
+
+  // Fetch scenarios list
+  const { data: scenarios = [] } = useQuery({
+    queryKey: ['scenarios'],
+    queryFn: async () => (await axios.get('/api/scenarios')).data
+  });
+
+  // Fetch steps for active scenario
+  const { data: dbSteps = [] } = useQuery({
+    queryKey: ['scenarioSteps', activeScenarioId],
+    queryFn: async () => {
+      if (!activeScenarioId) return [];
+      return (await axios.get(`/api/scenarios/${activeScenarioId}/steps`)).data;
+    },
+    enabled: !!activeScenarioId
+  });
+
+  // Set default active scenario when list is loaded
+  useEffect(() => {
+    if (scenarios.length > 0 && activeScenarioId === null) {
+      setActiveScenarioId(scenarios[0].id);
+    }
+  }, [scenarios, activeScenarioId]);
+
+  // Sync scenario config edit state when active scenario changes
+  useEffect(() => {
+    if (activeScenarioId && scenarios.length > 0) {
+      const activeScen = scenarios.find((s: any) => s.id === activeScenarioId);
+      if (activeScen) {
+        setScenarioName(activeScen.title);
+        setIsActive(activeScen.is_active);
+        setDefaultMinDelay(activeScen.min_delay);
+        setDefaultMaxDelay(activeScen.max_delay);
+      }
+    }
+  }, [activeScenarioId, scenarios]);
+
+  // Sync replica list when dbSteps changes
+  useEffect(() => {
+    if (dbSteps.length > 0) {
+      // Map database steps to React Replica format
+      // We will map reply_to_step_id back to temporary string IDs
+      const mapped: Replica[] = dbSteps.map((s: any, idx: number) => {
+        return {
+          id: `step_${s.id || idx}`,
+          dbId: s.id,
+          role: String(s.role_id),
+          type: s.message_type === 'reply' ? 'reply' : 'normal',
+          replyToId: '', // To be linked in next pass
+          text: s.text || '',
+          minDelay: s.delay_before_min !== null ? String(s.delay_before_min) : '',
+          maxDelay: s.delay_before_max !== null ? String(s.delay_before_max) : '',
+          reactions: s.reactions || '',
+          reactionCount: s.reaction_count || 0,
+          fileName: s.media_path || '',
+          noAttachmentIfForbidden: false,
+        };
+      });
+
+      // Link replyToId based on matching dbId with reply_to_step_id
+      dbSteps.forEach((s: any, idx: number) => {
+        if (s.reply_to_step_id !== null) {
+          const target = mapped.find(r => r.dbId === s.reply_to_step_id);
+          if (target) {
+            mapped[idx].replyToId = target.id;
+          }
+        }
+      });
+
+      setReplicas(mapped);
+    } else {
+      setReplicas([]);
+    }
+  }, [dbSteps]);
+
+  // Mutation: Create Scenario
+  const createScenarioMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const res = await axios.post('/api/scenarios', { title });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      setActiveScenarioId(data.id);
+      setNewScenarioTitle('');
+      setShowAddScenario(false);
+    }
+  });
+
+  // Mutation: Delete Scenario
+  const deleteScenarioMutation = useMutation({
+    mutationFn: async (id: number) => axios.delete(`/api/scenarios/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      setActiveScenarioId(null);
+    }
+  });
+
+  // Mutation: Update Scenario Configuration
+  const updateScenarioMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeScenarioId) return;
+      await axios.put(`/api/scenarios/${activeScenarioId}`, {
+        title: scenarioName,
+        is_active: isActive,
+        min_delay: defaultMinDelay,
+        max_delay: defaultMaxDelay
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      showToast('Конфигурация успешно сохранена!', 'success');
+    }
+  });
+
+  // Mutation: Bulk Save Steps
+  const saveStepsBulkMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeScenarioId) return;
+      
+      const payloadSteps = replicas.map((r, idx) => {
+        let replyToIndex: number | null = null;
+        if (r.type === 'reply' && r.replyToId) {
+          replyToIndex = replicas.findIndex(o => o.id === r.replyToId);
+          if (replyToIndex === -1) replyToIndex = null;
+        }
+
+        return {
+          step_order: idx + 1,
+          role_id: Number(r.role) || (commentingAccounts[0] ? Number(commentingAccounts[0].id) : 0),
+          message_type: r.type,
+          text: r.text,
+          media_path: r.fileName || null,
+          delay_before_min: r.minDelay !== '' ? Number(r.minDelay) : null,
+          delay_before_max: r.maxDelay !== '' ? Number(r.maxDelay) : null,
+          reactions: r.reactions || null,
+          reaction_count: r.reactionCount,
+          reply_to_index: replyToIndex
+        };
+      });
+
+      await axios.post(`/api/scenarios/${activeScenarioId}/steps/bulk`, {
+        steps: payloadSteps
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarioSteps'] });
+      showToast('Диалоговые шаги успешно сохранены!', 'success');
+    }
+  });
+
+  // File input refs map
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  const generateUniqueId = () => {
+    return Math.random().toString(36).substr(2, 9);
+  };
+
+  // Add replica action
+  const handleAddReplica = () => {
+    const newId = generateUniqueId();
+    const defaultRole = commentingAccounts.length > 0 ? String(commentingAccounts[0].id) : '';
+    const newReplica: Replica = {
+      id: newId,
+      role: defaultRole,
+      type: 'normal',
+      replyToId: '',
+      text: '',
+      minDelay: '',
+      maxDelay: '',
+      reactions: '🔥',
+      reactionCount: 1,
+      fileName: '',
+      noAttachmentIfForbidden: false,
+    };
+    setReplicas([...replicas, newReplica]);
+  };
+
+  // Delete replica action
+  const handleDeleteReplica = (id: string) => {
+    const filtered = replicas.filter(r => r.id !== id);
+    const adjusted = filtered.map(r => {
+      if (r.type === 'reply' && !filtered.some(f => f.id === r.replyToId)) {
+        return { ...r, type: 'normal' as const, replyToId: '' };
+      }
+      return r;
+    });
+    setReplicas(adjusted);
+  };
+
+  // Move replica up
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return;
+    const newReplicas = [...replicas];
+    const temp = newReplicas[index];
+    newReplicas[index] = newReplicas[index - 1];
+    newReplicas[index - 1] = temp;
+    setReplicas(newReplicas);
+  };
+
+  // Move replica down
+  const handleMoveDown = (index: number) => {
+    if (index === replicas.length - 1) return;
+    const newReplicas = [...replicas];
+    const temp = newReplicas[index];
+    newReplicas[index] = newReplicas[index + 1];
+    newReplicas[index + 1] = temp;
+    setReplicas(newReplicas);
+  };
+
+  // Update specific replica field
+  const handleUpdateReplica = (id: string, field: keyof Replica, value: any) => {
+    setReplicas(
+      replicas.map(r => {
+        if (r.id === id) {
+          return { ...r, [field]: value };
+        }
+        return r;
+      })
+    );
+  };
+
+  // Triple column page layout styles
+  const pageContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '24px',
+    alignItems: 'stretch',
+    minHeight: '80vh',
+  };
+
+  const scenariosSidebarStyle: React.CSSProperties = {
+    width: '230px',
     backgroundColor: 'var(--bg-card)',
     border: '1px solid var(--border-color)',
-    borderRadius: '12px',
+    borderRadius: '16px',
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    flexShrink: 0,
+  };
+
+  const stepsColumnStyle: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+  };
+
+  const rightColumnStyle: React.CSSProperties = {
+    width: '320px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+    position: 'sticky',
+    top: '28px',
+    maxHeight: 'calc(100vh - 80px)',
+    overflowY: 'auto',
+    flexShrink: 0,
+  };
+
+  const stepCardStyle: React.CSSProperties = {
+    backgroundColor: 'var(--bg-card)',
+    border: '1px solid var(--border-color)',
+    borderRadius: '16px',
     padding: '24px',
-    transition: 'border-color 0.2s',
+    marginBottom: '20px',
+    transition: 'all 0.25s ease',
   };
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
     backgroundColor: 'var(--bg-main)',
     border: '1px solid var(--border-color)',
-    borderRadius: '8px',
-    padding: '8px 12px',
+    borderRadius: '10px',
+    padding: '10px 14px',
     fontSize: '13px',
     color: 'var(--text-main)',
     outline: 'none',
-    transition: 'border-color 0.2s',
+    transition: 'all 0.15s ease',
   };
 
-  const selectStyle: React.CSSProperties = {
+  const textareaStyle: React.CSSProperties = {
     ...inputStyle,
-    cursor: 'pointer',
-    appearance: 'auto' as any,
+    resize: 'vertical',
+    fontFamily: 'inherit',
+    lineHeight: '1.5',
+    height: '100%',
+    minHeight: '110px',
   };
 
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontSize: '11px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
     color: 'var(--text-muted)',
-    marginBottom: '6px',
-    fontWeight: 500,
-  };
-
-  const btnAccent: React.CSSProperties = {
-    backgroundColor: 'var(--accent)',
-    color: '#fff',
-    padding: '8px 18px',
-    borderRadius: '8px',
-    fontSize: '13px',
+    marginBottom: '8px',
     fontWeight: 600,
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'background-color 0.15s',
   };
 
   const btnSecondary: React.CSSProperties = {
     backgroundColor: 'var(--bg-main)',
     color: 'var(--text-muted)',
-    padding: '6px 14px',
-    borderRadius: '6px',
-    fontSize: '11px',
+    padding: '8px 14px',
+    borderRadius: '8px',
+    fontSize: '12px',
     fontWeight: 500,
     border: '1px solid var(--border-color)',
     cursor: 'pointer',
     transition: 'all 0.15s',
   };
 
-  const btnIcon: React.CSSProperties = {
-    backgroundColor: 'var(--bg-main)',
-    border: '1px solid var(--border-color)',
-    color: 'var(--text-muted)',
-    padding: '5px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
-
-  const focusHandler = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    e.currentTarget.style.borderColor = 'var(--accent)';
-  const blurHandler = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    e.currentTarget.style.borderColor = 'var(--border-color)';
-
-  // Custom checkbox component
-  const Checkbox = ({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) => (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+  const CustomCheckbox = ({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
       <div
         onClick={() => onChange(!checked)}
         style={{
-          width: '16px',
-          height: '16px',
-          borderRadius: '4px',
+          width: '18px',
+          height: '18px',
+          borderRadius: '6px',
           border: checked ? 'none' : '1px solid var(--border-color)',
           backgroundColor: checked ? 'var(--accent)' : 'var(--bg-main)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'all 0.15s',
-          flexShrink: 0,
-          cursor: 'pointer',
+          transition: 'all 0.15s ease',
         }}
       >
         {checked && (
@@ -110,299 +390,812 @@ export default function Scenarios() {
           </svg>
         )}
       </div>
-      <span style={{ fontSize: '12px', color: 'var(--text-muted)', transition: 'color 0.15s' }}>
-        {label}
-      </span>
+      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{label}</span>
     </label>
   );
 
-  // Replica card component
-  const ReplicaCard = ({
-    number,
-    defaultRole,
-    defaultType,
-    defaultText,
-    defaultReactions,
-    defaultReactionCount,
-    fileRef,
-    fileName,
-    onFileSelect,
-  }: {
-    number: number;
-    defaultRole: string;
-    defaultType: string;
-    defaultText: string;
-    defaultReactions: string;
-    defaultReactionCount: number;
-    fileRef: React.RefObject<HTMLInputElement | null>;
-    fileName: string;
-    onFileSelect: (name: string) => void;
-  }) => (
-    <div style={cardStyle}>
-      {/* Header */}
+  return (
+    <div style={{ paddingBottom: '60px' }}>
+      {/* Custom Toast Notifications */}
       <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px',
-        paddingBottom: '14px',
-        borderBottom: '1px solid var(--border-color)',
+        flexDirection: 'column',
+        gap: '10px',
+        zIndex: 9999,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{
-            backgroundColor: 'var(--accent)',
+        {toasts.map(t => (
+          <div key={t.id} style={{
+            backgroundColor: t.type === 'error' ? '#ef4444' : t.type === 'info' ? '#3b82f6' : '#22c55e',
             color: '#fff',
-            width: '24px',
-            height: '24px',
-            borderRadius: '50%',
+            padding: '12px 20px',
+            borderRadius: '10px',
+            fontSize: '13px',
+            fontWeight: 600,
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '11px',
-            fontWeight: 700,
+            gap: '8px',
           }}>
-            {number}
-          </span>
-          <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-main)' }}>
-            Реплика
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            style={btnIcon}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-main)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-          >
-            <ArrowUp className="w-4 h-4" />
-          </button>
-          <button
-            style={btnIcon}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-main)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-          >
-            <ArrowDown className="w-4 h-4" />
-          </button>
-          <button
-            style={{
-              ...btnIcon,
-              backgroundColor: 'rgba(239, 68, 68, 0.08)',
-              borderColor: 'rgba(239, 68, 68, 0.15)',
-              color: '#ef4444',
-              marginLeft: '4px',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)'; e.currentTarget.style.color = '#ef4444'; }}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+            <span>{t.text}</span>
+          </div>
+        ))}
       </div>
 
-      {/* Content */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* Role + Type */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '16px' }}>
-          <div>
-            <label style={labelStyle}>Аккаунт (роль №)</label>
-            <select style={selectStyle} defaultValue={defaultRole} onFocus={focusHandler as any} onBlur={blurHandler as any}>
-              <option>1</option>
-              <option>2</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Тип сообщения</label>
-            <select style={selectStyle} defaultValue={defaultType} onFocus={focusHandler as any} onBlur={blurHandler as any}>
-              <option>Обычное сообщение</option>
-              <option>Ответ (reply) на реплику 1</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Text */}
-        <div>
-          <label style={labelStyle}>Текст реплики</label>
-          <textarea
-            rows={2}
-            defaultValue={defaultText}
-            style={{ ...inputStyle, resize: 'vertical' as const }}
-            onFocus={focusHandler as any}
-            onBlur={blurHandler as any}
-          />
-        </div>
-
-        {/* Intervals + Reactions */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-          <div>
-            <label style={labelStyle}>Интервал перед, мин (сек)</label>
-            <select style={{ ...selectStyle, color: 'var(--text-muted)' }} onFocus={focusHandler as any} onBlur={blurHandler as any}>
-              <option>из сценария</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Интервал перед, макс (сек)</label>
-            <select style={{ ...selectStyle, color: 'var(--text-muted)' }} onFocus={focusHandler as any} onBlur={blurHandler as any}>
-              <option>из сценария</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Реакции (эмодзи через пробел)</label>
-            <input
-              type="text"
-              defaultValue={defaultReactions}
-              style={inputStyle}
-              onFocus={focusHandler}
-              onBlur={blurHandler}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Кол-во реакций</label>
-            <input
-              type="number"
-              defaultValue={defaultReactionCount}
-              style={inputStyle}
-              onFocus={focusHandler}
-              onBlur={blurHandler}
-            />
-          </div>
-        </div>
-
-        {/* File + Checkbox */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                ref={fileRef}
-                type="file"
-                style={{ display: 'none' }}
-                onChange={e => {
-                  const f = e.target.files?.[0];
-                  onFileSelect(f ? f.name : '');
-                }}
-              />
-              <button
-                style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}
-                onClick={() => fileRef.current?.click()}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-main)'; e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-              >
-                <Paperclip className="w-3 h-3" />
-                Обзор...
-              </button>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                {fileName || 'Файл не выбран.'}
-              </span>
-            </div>
-            <Checkbox
-              checked={false}
-              onChange={() => {}}
-              label="Не начинать беседу, если вложение запрещено в группе"
-            />
-          </div>
-        </div>
-
-        {/* Save */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '8px' }}>
-          <button
-            style={btnAccent}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--accent-hover)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--accent)'}
-          >
-            Сохранить реплику
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ maxWidth: '960px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px', paddingBottom: '48px' }}>
-      {/* Parameters Section */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-main)' }}>Параметры сценария</h2>
-          <Checkbox checked={isActive} onChange={setIsActive} label="Активен" />
-        </div>
-
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Custom Confirmation Modal */}
+      {confirmDeleteScenarioId !== null && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            width: '380px',
+            padding: '28px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+          }}>
             <div>
-              <label style={labelStyle}>Название</label>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px' }}>
+                Подтверждение удаления
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                Вы действительно хотите удалить этот сценарий и все его шаги? Это действие необратимо и сотрет все привязанные реплики.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => {
+                  deleteScenarioMutation.mutate(confirmDeleteScenarioId);
+                  setConfirmDeleteScenarioId(null);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '10px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'opacity 0.15s',
+                }}
+              >
+                Удалить
+              </button>
+              <button
+                onClick={() => setConfirmDeleteScenarioId(null)}
+                style={{
+                  flex: 1,
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  padding: '10px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles className="w-6 h-6 text-accent" />
+            Конструктор диалогов
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
+            Управление сценариями и автоматизация цепочек ответов с прокси-аккаунтов.
+          </p>
+        </div>
+      </div>
+
+      <div style={pageContainerStyle}>
+        
+        {/* COLUMN 1: Scenario list Sidebar (AI Bot Style) */}
+        <div style={scenariosSidebarStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Сценарии</span>
+            <button
+              onClick={() => setShowAddScenario(!showAddScenario)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-text)' }}
+              title="Создать сценарий"
+            >
+              <PlusCircle className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Add Scenario inline widget */}
+          {showAddScenario && (
+            <div style={{
+              padding: '10px',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '10px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
               <input
                 type="text"
-                defaultValue="test_1"
-                style={inputStyle}
-                onFocus={focusHandler}
-                onBlur={blurHandler}
+                placeholder="Имя сценария..."
+                value={newScenarioTitle}
+                onChange={e => setNewScenarioTitle(e.target.value)}
+                style={{ ...inputStyle, padding: '6px 10px', fontSize: '12px' }}
               />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-              <div>
-                <label style={labelStyle}>Интервал по умолчанию, мин (сек)</label>
-                <input type="number" defaultValue={30} style={inputStyle} onFocus={focusHandler} onBlur={blurHandler} />
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button
+                  onClick={() => newScenarioTitle.trim() && createScenarioMutation.mutate(newScenarioTitle)}
+                  style={{
+                    backgroundColor: 'var(--accent)', color: '#fff', border: 'none',
+                    borderRadius: '6px', padding: '4px 8px', fontSize: '11px', flex: 1, cursor: 'pointer'
+                  }}
+                >
+                  Создать
+                </button>
+                <button
+                  onClick={() => setShowAddScenario(false)}
+                  style={{
+                    backgroundColor: 'transparent', border: '1px solid var(--border-color)',
+                    color: 'var(--text-muted)', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer'
+                  }}
+                >
+                  Отмена
+                </button>
               </div>
-              <div>
-                <label style={labelStyle}>Интервал по умолчанию, макс (сек)</label>
-                <input type="number" defaultValue={60} style={inputStyle} onFocus={focusHandler} onBlur={blurHandler} />
-              </div>
-              <div>
-                <label style={labelStyle}>Реакций на сообщение по умолчанию</label>
-                <input type="number" defaultValue={0} style={inputStyle} onFocus={focusHandler} onBlur={blurHandler} />
-              </div>
             </div>
+          )}
 
-            <div>
-              <label style={labelStyle}>Заметки (для себя)</label>
-              <textarea
-                rows={2}
-                style={{ ...inputStyle, resize: 'vertical' as const }}
-                onFocus={focusHandler as any}
-                onBlur={blurHandler as any}
-              />
-            </div>
+          {/* Scenario list items */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', flex: 1 }}>
+            {scenarios.map((s: any) => {
+              const isSelected = s.id === activeScenarioId;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setActiveScenarioId(s.id)}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    backgroundColor: isSelected ? 'var(--accent-soft)' : 'transparent',
+                    border: isSelected ? '1px solid var(--border-color)' : '1px solid transparent',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <div style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: s.is_active ? '#22c55e' : '#737373',
+                      flexShrink: 0
+                    }} />
+                    <span style={{
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 600 : 500,
+                      color: isSelected ? 'var(--accent-text)' : 'var(--text-main)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {s.title}
+                    </span>
+                  </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
-              <button
-                style={btnAccent}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--accent-hover)'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--accent)'}
-              >
-                Сохранить параметры
-              </button>
-            </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDeleteScenarioId(s.id);
+                    }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--text-muted)', display: isSelected ? 'block' : 'none'
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 hover:text-red-500" />
+                  </button>
+                </div>
+              );
+            })}
+            {scenarios.length === 0 && (
+              <div style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', padding: '20px 0' }}>
+                Нет сценариев
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Replicas */}
-      <div>
-        <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '14px', color: 'var(--text-main)' }}>Реплики</h2>
+        {/* COLUMN 2: Message steps editor */}
+        <div style={stepsColumnStyle}>
+          {activeScenarioId ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Шаги диалога ({replicas.length})
+                </h2>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleAddReplica}
+                    style={{
+                      backgroundColor: 'var(--accent-soft)',
+                      color: 'var(--accent-text)',
+                      border: '1px solid var(--accent-soft)',
+                      borderRadius: '8px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <Plus className="w-4 h-4" /> Добавить шаг
+                  </button>
+                  <button
+                    onClick={() => saveStepsBulkMutation.mutate()}
+                    disabled={saveStepsBulkMutation.isPending}
+                    style={{
+                      backgroundColor: 'var(--accent)',
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '6px 14px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      border: 'none',
+                      opacity: saveStepsBulkMutation.isPending ? 0.5 : 1
+                    }}
+                  >
+                    <Save className="w-4 h-4" /> Сохранить шаги
+                  </button>
+                </div>
+              </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <ReplicaCard
-            number={1}
-            defaultRole="1"
-            defaultType="Обычное сообщение"
-            defaultText="Я вообще не знаю как можно выжить в этой стране, я зарабатываю 3000$ в месяц и я в ахуе просто"
-            defaultReactions="👍 🔥 ❤️"
-            defaultReactionCount={3}
-            fileRef={fileRef1}
-            fileName={file1Name}
-            onFileSelect={setFile1Name}
-          />
+              {replicas.length === 0 ? (
+                <div style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px dashed var(--border-color)',
+                  borderRadius: '16px',
+                  padding: '60px 20px',
+                  textAlign: 'center',
+                  color: 'var(--text-muted)',
+                }}>
+                  <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p style={{ fontSize: '14px', fontWeight: 500 }}>Список диалоговых шагов пуст</p>
+                  <button
+                    onClick={handleAddReplica}
+                    style={{
+                      marginTop: '16px',
+                      backgroundColor: 'var(--accent)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 20px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Создать первый шаг
+                  </button>
+                </div>
+              ) : (
+                replicas.map((replica, index) => {
+                  const precedingReplicas = replicas.slice(0, index);
+                  const selectedRole = replica.role || (commentingAccounts[0] ? String(commentingAccounts[0].id) : '');
 
-          <ReplicaCard
-            number={2}
-            defaultRole="2"
-            defaultType="Ответ (reply) на реплику 1"
-            defaultText={`Очередной "успешный". Деньги не проблема? Лучше реши чью-то проблему, а не выебуйся`}
-            defaultReactions="👍"
-            defaultReactionCount={2}
-            fileRef={fileRef2}
-            fileName={file2Name}
-            onFileSelect={setFile2Name}
-          />
+                  return (
+                    <div key={replica.id} style={stepCardStyle}>
+                      {/* Step Header */}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: '18px',
+                        paddingBottom: '12px',
+                        borderBottom: '1px solid var(--border-color)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            backgroundColor: 'var(--accent-soft)',
+                            color: 'var(--accent-text)',
+                            width: '28px',
+                            height: '28px',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                          }}>
+                            {index + 1}
+                          </span>
+                          <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-main)' }}>
+                            Диалоговое сообщение
+                          </span>
+                        </div>
+
+                        {/* Step Actions */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            onClick={() => handleMoveUp(index)}
+                            disabled={index === 0}
+                            style={{
+                              background: 'none',
+                              border: '1px solid var(--border-color)',
+                              color: index === 0 ? 'var(--border-color)' : 'var(--text-muted)',
+                              padding: '6px',
+                              borderRadius: '8px',
+                              cursor: index === 0 ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              backgroundColor: 'var(--bg-main)',
+                            }}
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleMoveDown(index)}
+                            disabled={index === replicas.length - 1}
+                            style={{
+                              background: 'none',
+                              border: '1px solid var(--border-color)',
+                              color: index === replicas.length - 1 ? 'var(--border-color)' : 'var(--text-muted)',
+                              padding: '6px',
+                              borderRadius: '8px',
+                              cursor: index === replicas.length - 1 ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              backgroundColor: 'var(--bg-main)',
+                            }}
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteReplica(replica.id)}
+                            style={{
+                              background: 'none',
+                              border: '1px solid rgba(239, 68, 68, 0.2)',
+                              color: '#ef4444',
+                              padding: '6px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Custom grid layout */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '32px' }}>
+                        {/* Left Column: Text & Files */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', justifyContent: 'space-between' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={labelStyle}>Содержимое сообщения</label>
+                            <textarea
+                              value={replica.text}
+                              onChange={e => handleUpdateReplica(replica.id, 'text', e.target.value)}
+                              placeholder="Напишите реплику сообщения..."
+                              style={textareaStyle}
+                            />
+                          </div>
+
+                          {/* Attachment upload */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '10px',
+                            backgroundColor: 'var(--bg-main)',
+                            padding: '12px',
+                            borderRadius: '10px',
+                            border: '1px solid var(--border-color)',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={labelStyle}>Вложение</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                {replica.fileName || 'Файл не выбран.'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input
+                                ref={el => { fileInputRefs.current[replica.id] = el; }}
+                                type="file"
+                                style={{ display: 'none' }}
+                                onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  handleUpdateReplica(replica.id, 'fileName', file ? file.name : '');
+                                }}
+                              />
+                              <button
+                                onClick={() => fileInputRefs.current[replica.id]?.click()}
+                                style={btnSecondary}
+                              >
+                                <Paperclip className="w-3.5 h-3.5 inline mr-1" />
+                                Обзор...
+                              </button>
+                              <CustomCheckbox
+                                checked={replica.noAttachmentIfForbidden}
+                                onChange={v => handleUpdateReplica(replica.id, 'noAttachmentIfForbidden', v)}
+                                label="Пропустить при запрете"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Column: Roles, Type & Delay */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                          <div>
+                            <label style={labelStyle}>Персонаж (ID роли)</label>
+                            {commentingAccounts.length === 0 ? (
+                              <div style={{
+                                fontSize: '12px', color: '#ef4444', padding: '8px 12px',
+                                border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '10px',
+                                backgroundColor: 'rgba(239, 68, 68, 0.02)', display: 'flex', alignItems: 'center', gap: '6px'
+                              }}>
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                Нет аккаунтов для комментирования в пуле!
+                              </div>
+                            ) : (
+                              <select
+                                value={selectedRole}
+                                onChange={e => handleUpdateReplica(replica.id, 'role', e.target.value)}
+                                style={inputStyle}
+                              >
+                                {commentingAccounts.map((a: any) => (
+                                  <option key={a.id} value={String(a.id)}>
+                                    {a.username ? `@${a.username}` : `Аккаунт #${a.id}`} ({a.phone})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+
+                          <div>
+                            <label style={labelStyle}>Формат отправки</label>
+                            <select
+                              value={replica.type}
+                              onChange={e => {
+                                const val = e.target.value as 'normal' | 'reply';
+                                handleUpdateReplica(replica.id, 'type', val);
+                                if (val === 'reply' && precedingReplicas.length > 0 && !replica.replyToId) {
+                                  handleUpdateReplica(replica.id, 'replyToId', precedingReplicas[precedingReplicas.length - 1].id);
+                                }
+                              }}
+                              style={inputStyle}
+                            >
+                              <option value="normal">Новое сообщение</option>
+                              {precedingReplicas.length > 0 && (
+                                <option value="reply">Ответ (Reply)</option>
+                              )}
+                            </select>
+                          </div>
+
+                          {replica.type === 'reply' && precedingReplicas.length > 0 && (
+                            <div style={{
+                              padding: '10px',
+                              backgroundColor: 'var(--bg-main)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                            }}>
+                              <label style={labelStyle}>На какое сообщение ответить?</label>
+                              <select
+                                value={replica.replyToId}
+                                onChange={e => handleUpdateReplica(replica.id, 'replyToId', e.target.value)}
+                                style={inputStyle}
+                              >
+                                {precedingReplicas.map((pr, prIdx) => (
+                                  <option key={pr.id} value={pr.id}>
+                                    Шаг №{prIdx + 1} - {pr.text ? `"${pr.text.substring(0, 30)}..."` : 'Без текста'}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          <div>
+                            <label style={labelStyle}>Задержка перед отправкой</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>от</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="по умолчанию"
+                                  value={replica.minDelay}
+                                  onChange={e => handleUpdateReplica(replica.id, 'minDelay', e.target.value)}
+                                  style={inputStyle}
+                                />
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>до</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="по умолчанию"
+                                  value={replica.maxDelay}
+                                  onChange={e => handleUpdateReplica(replica.id, 'maxDelay', e.target.value)}
+                                  style={inputStyle}
+                                />
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={labelStyle}>Набор реакций</label>
+                              <input
+                                type="text"
+                                value={replica.reactions}
+                                onChange={e => handleUpdateReplica(replica.id, 'reactions', e.target.value)}
+                                placeholder="👍 🔥 ❤️"
+                                style={inputStyle}
+                              />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Лимит</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={replica.reactionCount}
+                                onChange={e => handleUpdateReplica(replica.id, 'reactionCount', Number(e.target.value))}
+                                style={inputStyle}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </>
+          ) : (
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px dashed var(--border-color)',
+              borderRadius: '16px',
+              padding: '60px 20px',
+              textAlign: 'center',
+              color: 'var(--text-muted)',
+              marginTop: '40px'
+            }}>
+              <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-30" />
+              <p style={{ fontSize: '14px', fontWeight: 500 }}>Выберите сценарий слева или создайте новый</p>
+            </div>
+          )}
         </div>
+
+        {/* COLUMN 3: Scenario config + Live Preview (Scrollable container to prevent overlay/clipping) */}
+        {activeScenarioId && (
+          <div style={rightColumnStyle}>
+            {/* Config Widget */}
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '20px',
+            }}>
+              <h3 style={{
+                fontSize: '14px',
+                fontWeight: 800,
+                color: 'var(--text-main)',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '10px'
+              }}>
+                <Settings className="w-4 h-4 text-accent" />
+                Параметры запуска
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={labelStyle}>Название сценария</label>
+                  <input
+                    type="text"
+                    value={scenarioName}
+                    onChange={e => setScenarioName(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={labelStyle}>Круг пауза от (мин)</label>
+                    <input
+                      type="number"
+                      value={defaultMinDelay}
+                      onChange={e => setDefaultMinDelay(Number(e.target.value))}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Круг пауза до (мин)</label>
+                    <input
+                      type="number"
+                      value={defaultMaxDelay}
+                      onChange={e => setDefaultMaxDelay(Number(e.target.value))}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Лимит повторений круга</label>
+                  <select style={inputStyle} defaultValue="infinite">
+                    <option value="infinite">Бесконечный цикл</option>
+                    <option value="once">Выполнить 1 раз и остановиться</option>
+                    <option value="daily">Запускать ежедневно</option>
+                  </select>
+                </div>
+
+                <div>
+                  <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-запуск при публикации" />
+                </div>
+
+                <button
+                  onClick={() => updateScenarioMutation.mutate()}
+                  disabled={updateScenarioMutation.isPending}
+                  style={{
+                    backgroundColor: 'var(--accent)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '10px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    opacity: updateScenarioMutation.isPending ? 0.5 : 1
+                  }}
+                >
+                  {updateScenarioMutation.isPending ? 'Сохранение...' : 'Сохранить настройки'}
+                </button>
+              </div>
+            </div>
+
+            {/* Telegram Live Preview */}
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '20px',
+            }}>
+              <h3 style={{
+                fontSize: '14px',
+                fontWeight: 800,
+                color: 'var(--text-main)',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}>
+                <Play className="w-4 h-4 text-emerald-500" />
+                Симуляция чата
+              </h3>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: '1.4' }}>
+                Интерактивная визуализация порядка реплик в реальном времени.
+              </p>
+
+              <div style={{
+                backgroundColor: 'var(--bg-main)',
+                borderRadius: '12px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                border: '1px solid var(--border-color)',
+              }}>
+                {replicas.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', padding: '20px 0' }}>
+                    Нет сообщений
+                  </div>
+                ) : (
+                  replicas.map((r, i) => {
+                    const replyReplicaIndex = r.type === 'reply' ? replicas.findIndex(o => o.id === r.replyToId) : -1;
+                    const replyText = replyReplicaIndex !== -1 ? replicas[replyReplicaIndex].text : '';
+
+                    const finalRole = r.role || (commentingAccounts[0] ? String(commentingAccounts[0].id) : '');
+                    const currentAccount = commentingAccounts.find((a: any) => String(a.id) === finalRole);
+                    const displayName = currentAccount?.username ? `@${currentAccount.username}` : `Аккаунт ${r.role || '?'}`;
+
+                    return (
+                      <div key={r.id} style={{
+                        backgroundColor: 'var(--bg-card)',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontSize: '12px',
+                        borderLeft: `3px solid ${r.role === '1' ? '#38bdf8' : r.role === '2' ? '#a78bfa' : '#34d399'}`,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ fontWeight: 600, color: r.role === '1' ? '#38bdf8' : r.role === '2' ? '#a78bfa' : '#34d399' }}>
+                            {displayName}
+                          </span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>#{i + 1}</span>
+                        </div>
+
+                        {r.type === 'reply' && replyText && (
+                          <div style={{
+                            backgroundColor: 'rgba(255,255,255,0.03)',
+                            borderLeft: '2px solid var(--text-muted)',
+                            padding: '2px 6px',
+                            marginBottom: '4px',
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            borderRadius: '2px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            Ответ на #{replyReplicaIndex + 1}: {replyText}
+                          </div>
+                        )}
+
+                        <div style={{ color: 'var(--text-main)', wordBreak: 'break-word' }}>
+                          {r.text || <em style={{ color: 'var(--text-muted)' }}>Пустое сообщение</em>}
+                        </div>
+
+                        {r.reactions && (
+                          <div style={{ display: 'flex', gap: '3px', marginTop: '6px', fontSize: '10px' }}>
+                            <span style={{
+                              backgroundColor: 'rgba(255,255,255,0.04)',
+                              borderRadius: '4px',
+                              padding: '1px 4px',
+                              color: 'var(--text-muted)'
+                            }}>
+                              {r.reactions} {r.reactionCount > 0 ? `×${r.reactionCount}` : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

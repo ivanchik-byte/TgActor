@@ -41,45 +41,47 @@ export default function Pools() {
     fontSize: '14px',
   };
 
-  // Custom checkbox inline
-  const PoolCheckbox = ({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) => (
-    <label
-      style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
-      onMouseEnter={e => {
-        const span = e.currentTarget.querySelector('span');
-        if (span) span.style.color = 'var(--text-main)';
-      }}
-      onMouseLeave={e => {
-        const span = e.currentTarget.querySelector('span');
-        if (span) span.style.color = 'var(--text-muted)';
+  // Custom Toggle Switch component to fix label double-trigger bug and look premium
+  const PoolSwitch = ({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) => (
+    <div
+      onClick={() => onChange(!checked)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        cursor: 'pointer',
+        userSelect: 'none',
       }}
     >
       <div
-        onClick={(e) => { e.preventDefault(); onChange(!checked); }}
         style={{
-          width: '16px',
-          height: '16px',
-          borderRadius: '4px',
-          border: checked ? 'none' : '1px solid var(--border-color)',
+          width: '36px',
+          height: '20px',
+          borderRadius: '10px',
           backgroundColor: checked ? 'var(--accent)' : 'var(--bg-main)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'all 0.15s',
-          flexShrink: 0,
-          cursor: 'pointer',
+          border: '1px solid var(--border-color)',
+          position: 'relative',
+          transition: 'background-color 0.2s',
         }}
       >
-        {checked && (
-          <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
-            <path d="M3 8L6 11L11 3.5" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" stroke="white" />
-          </svg>
-        )}
+        <div
+          style={{
+            width: '14px',
+            height: '14px',
+            borderRadius: '50%',
+            backgroundColor: '#fff',
+            position: 'absolute',
+            top: '2px',
+            left: checked ? '18px' : '3px',
+            transition: 'left 0.2s',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+          }}
+        />
       </div>
-      <span style={{ fontSize: '13px', color: 'var(--text-muted)', transition: 'color 0.15s' }}>
+      <span style={{ fontSize: '13px', color: checked ? 'var(--text-main)' : 'var(--text-muted)', transition: 'color 0.2s' }}>
         {label}
       </span>
-    </label>
+    </div>
   );
 
   return (
@@ -89,7 +91,7 @@ export default function Pools() {
           Пулы аккаунтов
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
-          Кто пишет реплики сценариев (комментирование) и кто ставит реакции. Аккаунт может быть в обоих пулах, в одном или ни в одном. Сохраняется сразу.
+          Укажите роли участников: кто пишет сообщения (комментирование), а кто ставит лайки/реакции. Изменения сохраняются автоматически.
         </p>
       </div>
 
@@ -99,7 +101,7 @@ export default function Pools() {
             <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
               <th style={thStyle}>АККАУНТ</th>
               <th style={{ ...thStyle, width: '140px', textAlign: 'center' }}>СТАТУС</th>
-              <th style={{ ...thStyle, width: '300px' }}>ПУЛЫ</th>
+              <th style={{ ...thStyle, width: '320px' }}>АКТИВНЫЕ ПУЛЫ</th>
             </tr>
           </thead>
           <tbody>
@@ -127,13 +129,13 @@ export default function Pools() {
                   </span>
                 </td>
                 <td style={tdStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <PoolCheckbox
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+                    <PoolSwitch
                       checked={acc.in_commenting_pool}
                       onChange={(val) => togglePool.mutate({ id: acc.id, pool: 'comment', val })}
                       label="Комментирование"
                     />
-                    <PoolCheckbox
+                    <PoolSwitch
                       checked={acc.in_reaction_pool}
                       onChange={(val) => togglePool.mutate({ id: acc.id, pool: 'reaction', val })}
                       label="Реакции"
