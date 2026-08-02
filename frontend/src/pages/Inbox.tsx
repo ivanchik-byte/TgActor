@@ -1,86 +1,178 @@
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import { Send } from 'lucide-react';
+import { useState } from 'react';
+import { Paperclip } from 'lucide-react';
 
 export default function Inbox() {
-  const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
-  
-  const { data: initialMessages = [] } = useQuery({
-    queryKey: ['inbox'],
-    queryFn: async () => (await axios.get('/api/inbox/messages')).data
-  });
-
-  useEffect(() => {
-    if (initialMessages.length > 0 && messages.length === 0) {
-      setMessages([...initialMessages].reverse());
-    }
-  }, [initialMessages]);
-
-  useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws/inbox');
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      setMessages(prev => [...prev, msg]);
-    };
-    return () => ws.close();
-  }, []);
-
-  const sendMsg = async () => {
-    if (!text.trim()) return;
-    try {
-      await axios.post('/api/inbox/send', {
-        account_id: 1, // Mocked for demo
-        peer_id: 123, 
-        text
-      });
-      setText("");
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   return (
-    <div className="h-[80vh] flex bg-card border border-border rounded-lg shadow-sm overflow-hidden">
-      <div className="w-1/3 border-r border-border flex flex-col">
-        <div className="p-4 border-b border-border font-bold">Активные диалоги</div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4 border-b border-border hover:bg-background/50 cursor-pointer bg-background">
-             <div className="font-semibold">User 123 (via Acc #1)</div>
-             <div className="text-sm text-muted truncate">Нажмите для просмотра</div>
-          </div>
+    <div className="max-w-7xl mx-auto flex flex-col h-[85vh]">
+      <div className="flex justify-between items-end mb-2">
+        <h2 className="text-2xl font-bold">Инбокс — все ЛС со всех аккаунтов</h2>
+        <div className="flex space-x-3">
+          <button className="bg-background border border-border hover:text-primary px-4 py-2 rounded-md text-sm transition-colors">
+            Обновить сейчас
+          </button>
+          <button className="bg-background border border-border hover:text-primary px-4 py-2 rounded-md text-sm transition-colors">
+            Очистить всё
+          </button>
         </div>
       </div>
-      <div className="flex-1 flex flex-col bg-background/30">
-        <div className="p-4 border-b border-border font-bold bg-card">User 123</div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((m: any, idx) => (
-             <div key={idx} className={`flex ${m.is_incoming ? 'justify-start' : 'justify-end'}`}>
-               <div className={`max-w-[70%] rounded-lg p-3 text-sm ${m.is_incoming ? 'bg-card border border-border' : 'bg-accent text-white'}`}>
-                 {m.text}
-                 <div className={`text-xs mt-1 ${m.is_incoming ? 'text-muted' : 'text-white/70'}`}>
-                   {new Date(m.timestamp || m.received_at).toLocaleTimeString()}
-                 </div>
-               </div>
-             </div>
-          ))}
+      <p className="text-muted text-xs mb-6">
+        Старые диалоги из tdata-аккаунтов не подтягиваются — только сообщения, пришедшие после первого обнаружения собеседника. Очистить можно весь инбокс или конкретный диалог.
+      </p>
+
+      <div className="flex-1 flex bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-[320px] border-r border-border flex flex-col">
+          <div className="flex-1 overflow-y-auto">
+            
+            {/* Account Group 1 */}
+            <div className="px-4 py-2 bg-[#0B0914] border-y border-border/50 flex justify-between items-center sticky top-0 z-10">
+              <span className="text-xs font-semibold text-[#0ea5e9]">acc #13</span>
+              <span className="text-[10px] text-muted">8 диалог(а)</span>
+            </div>
+            <div className="divide-y divide-border/30">
+              {/* Chat Item */}
+              <div className="p-3 hover:bg-background/40 cursor-pointer flex items-center space-x-3 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-[#059669] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                  1
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <div className="font-medium text-[15px] truncate text-white">19254888041</div>
+                    <div className="text-[11px] text-muted">07-13 19:11</div>
+                  </div>
+                  <div className="text-xs text-muted truncate">—</div>
+                </div>
+                <div className="bg-accent text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">1</div>
+              </div>
+
+              {/* Chat Item */}
+              <div className="p-3 hover:bg-background/40 cursor-pointer flex items-center space-x-3 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-[#059669] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                  1
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <div className="font-medium text-[15px] truncate text-white">19496306812</div>
+                    <div className="text-[11px] text-muted">07-13 02:27</div>
+                  </div>
+                  <div className="text-xs text-muted truncate">—</div>
+                </div>
+                <div className="bg-accent text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">1</div>
+              </div>
+            </div>
+
+            {/* Account Group 2 */}
+            <div className="px-4 py-2 bg-[#0B0914] border-y border-border/50 flex justify-between items-center sticky top-0 z-10">
+              <span className="text-xs font-semibold text-[#3b82f6]">acc #9</span>
+              <span className="text-[10px] text-muted">1 диалог(а)</span>
+            </div>
+            <div className="divide-y divide-border/30">
+              {/* Chat Item (Telegram) */}
+              <div className="p-3 bg-background/20 cursor-pointer flex items-center space-x-3 border-l-2 border-accent">
+                <div className="w-10 h-10 rounded-full bg-[#3b82f6] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                  T
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <div className="font-medium text-[15px] truncate text-white">Telegram</div>
+                    <div className="text-[11px] text-muted">07-07 10:33</div>
+                  </div>
+                  <div className="text-xs text-muted truncate">Two-Step Verification disabled. Dear S...</div>
+                </div>
+                <div className="bg-accent text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">3</div>
+              </div>
+            </div>
+
+            {/* Account Group 3 */}
+            <div className="px-4 py-2 bg-[#0B0914] border-y border-border/50 flex justify-between items-center sticky top-0 z-10">
+              <span className="text-xs font-semibold text-[#84cc16]">acc #7</span>
+              <span className="text-[10px] text-muted">2 диалог(а)</span>
+            </div>
+            <div className="divide-y divide-border/30">
+              {/* Chat Item */}
+              <div className="p-3 hover:bg-background/40 cursor-pointer flex items-center space-x-3 transition-colors">
+                <div className="w-10 h-10 rounded-full bg-[#84cc16] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                  L
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline mb-0.5">
+                    <div className="font-medium text-[15px] truncate text-white">Leyla Khale</div>
+                    <div className="text-[11px] text-muted">07-07 02:26</div>
+                  </div>
+                  <div className="text-xs text-muted truncate">—</div>
+                </div>
+                <div className="bg-accent text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">1</div>
+              </div>
+            </div>
+
+          </div>
         </div>
-        <div className="p-4 border-t border-border flex space-x-2 bg-card">
-          <input 
-            type="text" 
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendMsg()}
-            className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-shadow"
-            placeholder="Написать сообщение..."
-          />
-          <button 
-            onClick={sendMsg}
-            className="bg-accent hover:bg-accent-hover text-white px-4 py-2 rounded-md flex items-center transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+
+        {/* Chat Panel */}
+        <div className="flex-1 flex flex-col bg-[#13111c]">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-card">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-[#3b82f6] flex items-center justify-center text-white font-medium text-lg">
+                T
+              </div>
+              <div>
+                <div className="font-bold text-[15px] text-white">Telegram</div>
+                <div className="text-xs text-muted">от acc #2 - tg id 777000</div>
+              </div>
+            </div>
+            <button className="bg-background border border-border hover:text-primary px-4 py-1.5 rounded-md text-xs transition-colors">
+              Очистить
+            </button>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            
+            {/* Date divider */}
+            <div className="flex justify-center my-4">
+              <span className="text-[10px] text-muted bg-card px-2 py-0.5 rounded-full">13 июля</span>
+            </div>
+
+            {/* Incoming Message Bubble */}
+            <div className="flex justify-start">
+              <div className="max-w-[75%] rounded-2xl rounded-tl-sm p-4 text-[15px] bg-[#1e1b2e] border border-border/50 text-white shadow-sm">
+                <div className="mb-4">
+                  Login code: 32889. Do not give this code to anyone, even if they say they are from Telegram!
+                </div>
+                <div className="mb-4">
+                  <span className="text-red-400 mr-1">!</span> 
+                  This code can be used to log in to your Telegram account. We never ask it for anything else.
+                </div>
+                <div>
+                  If you didn't request this code by trying to log in on another device, simply ignore this message.
+                </div>
+                <div className="text-[10px] text-muted mt-2 text-right">
+                  06-20 21:43
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Input Area */}
+          <div className="p-4 bg-card border-t border-border flex items-center space-x-3">
+            <button className="text-muted hover:text-primary transition-colors p-2">
+              <Paperclip className="w-5 h-5" />
+            </button>
+            <input 
+              type="text" 
+              value={text}
+              onChange={e => setText(e.target.value)}
+              className="flex-1 bg-[#13111c] border border-border rounded-md px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors text-white"
+              placeholder="Ответить от acc #2..."
+            />
+            <button className="bg-accent hover:bg-accent-hover text-white px-6 py-3 rounded-md text-sm font-medium transition-colors">
+              Отправить
+            </button>
+          </div>
         </div>
       </div>
     </div>

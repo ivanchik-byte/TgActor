@@ -12,6 +12,16 @@
 
 @layer base {
   :root {
+    --bg-main: #13111c;
+    --bg-card: #1b1928;
+    --text-main: #f8fafc;
+    --text-muted: #8b87a1;
+    --border-color: #2d293e;
+    --accent: #7c3aed; /* Vibrant Purple */
+    --accent-hover: #6d28d9;
+  }
+
+  .dark-crimson {
     --bg-main: #0c0a09;
     --bg-card: #1c1917;
     --text-main: #fafaf9;
@@ -22,13 +32,13 @@
   }
 
   .dark-charcoal {
-    --bg-main: #0f172a;
-    --bg-card: #1e293b;
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
-    --border-color: #334155;
-    --accent: #3b82f6; /* Blue 500 */
-    --accent-hover: #2563eb;
+    --bg-main: #000000;
+    --bg-card: #171717;
+    --text-main: #f5f5f5;
+    --text-muted: #a3a3a3;
+    --border-color: #262626;
+    --accent: #52525b; /* Gray/Zinc */
+    --accent-hover: #3f3f46;
   }
 
   .light {

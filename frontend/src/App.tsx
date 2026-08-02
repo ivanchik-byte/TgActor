@@ -6,6 +6,7 @@ import axios from 'axios';
 
 // Component imports
 import Dashboard from './pages/Dashboard';
+import Pools from './pages/Pools';
 import Scenarios from './pages/Scenarios';
 import Inbox from './pages/Inbox';
 
@@ -48,6 +49,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </h1>
           <nav className="flex space-x-6">
             <Link to="/" className="text-sm font-medium text-muted hover:text-primary transition-colors">Аккаунты</Link>
+            <Link to="/pools" className="text-sm font-medium text-muted hover:text-primary transition-colors">Пулы</Link>
             <Link to="/scenarios" className="text-sm font-medium text-muted hover:text-primary transition-colors">Сценарии</Link>
             <Link to="/inbox" className="text-sm font-medium text-muted hover:text-primary transition-colors">Инбокс</Link>
           </nav>
@@ -59,6 +61,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             onChange={(e) => setTheme(e.target.value as any)}
             className="bg-background border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-shadow"
           >
+            <option value="deep-indigo">Telegram Dark</option>
             <option value="dark-crimson">Dark Crimson</option>
             <option value="dark-charcoal">Dark Charcoal</option>
             <option value="light">Clean Light</option>
@@ -80,6 +83,7 @@ export default function App() {
           <Layout>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/pools" element={<Pools />} />
               <Route path="/scenarios" element={<Scenarios />} />
               <Route path="/inbox" element={<Inbox />} />
             </Routes>
