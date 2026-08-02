@@ -22,13 +22,13 @@
   }
 
   .dark-crimson {
-    --bg-main: #0c0a09;
-    --bg-card: #1c1917;
+    --bg-main: #1a0b0e;
+    --bg-card: #2d1318;
     --text-main: #fafaf9;
-    --text-muted: #a8a29e;
-    --border-color: #292524;
-    --accent: #e11d48; /* Rose 600 */
-    --accent-hover: #be123c;
+    --text-muted: #d6b7b9;
+    --border-color: #431d24;
+    --accent: #ef4444; /* Red 500 */
+    --accent-hover: #dc2626;
   }
 
   .dark-charcoal {

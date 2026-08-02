@@ -214,10 +214,82 @@ async def get_scenario_steps(scenario_id: int):
         result = await session.execute(stmt)
         return result.scalars().all()
 
-# -- Inbox (GET) --
-@router.get("/api/inbox/messages")
-async def get_inbox_messages(limit: int = 50):
+from pydantic import BaseModel
+
+class SendMessageRequest(BaseModel):
+    account_id: int
+    peer_id: int
+    text: str
+
+@router.get("/api/inbox/chats")
+async def get_inbox_chats():
     async with async_session() as session:
-        stmt = select(InboxMessage).order_by(InboxMessage.received_at.desc()).limit(limit)
+        # Get latest message for each (account_id, peer_id)
+        stmt = """
+            SELECT DISTINCT ON (account_id, peer_id) 
+                account_id, peer_id, sender_username, text, received_at, is_incoming
+            FROM inbox_messages 
+            ORDER BY account_id, peer_id, received_at DESC
+        """
+        from sqlalchemy import text
+        result = await session.execute(text(stmt))
+        chats = []
+        for row in result:
+            chats.append({
+                "account_id": row[0],
+                "peer_id": row[1],
+                "sender_username": row[2],
+                "last_message": row[3],
+                "updated_at": row[4],
+                "is_incoming": row[5]
+            })
+        
+        # Sort all chats by updated_at globally
+        chats.sort(key=lambda x: x["updated_at"], reverse=True)
+        return chats
+
+@router.get("/api/inbox/messages/{account_id}/{peer_id}")
+async def get_chat_messages(account_id: int, peer_id: int, limit: int = 50):
+    async with async_session() as session:
+        stmt = select(InboxMessage).where(
+            InboxMessage.account_id == account_id,
+            InboxMessage.peer_id == peer_id
+        ).order_by(InboxMessage.received_at.asc()).limit(limit)
         result = await session.execute(stmt)
         return result.scalars().all()
+
+from inbox_listener import active_clients
+
+@router.post("/api/inbox/send")
+async def send_inbox_message(req: SendMessageRequest):
+    client = active_clients.get(req.account_id)
+    if not client:
+        return {"error": "Account is not active or client is offline"}, 400
+    
+    try:
+        await client.send_message(req.peer_id, req.text)
+        # Store in DB as outgoing
+        async with async_session() as session:
+            msg = InboxMessage(
+                account_id=req.account_id,
+                peer_id=req.peer_id,
+                message_id=0, # outgoing, maybe unknown id if client wrapper doesn't return it immediately
+                sender_username="Me",
+                text=req.text,
+                is_incoming=False
+            )
+            session.add(msg)
+            await session.commit()
+            
+        return {"status": "sent"}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@router.delete("/api/accounts/{account_id}")
+async def delete_account(account_id: int):
+    async with async_session() as session:
+        account = await session.get(Account, account_id)
+        if account:
+            await session.delete(account)
+            await session.commit()
+        return {"status": "deleted"}
