@@ -189,6 +189,14 @@ async def sign_in_phone(req: PhoneSignInRequest):
             )
             session.add(new_acc)
             await session.commit()
+            
+            # Start background listener for the new account
+            from inbox_listener import start_account_listener
+            from sqlalchemy.orm import selectinload
+            stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == new_acc.id)
+            acc_with_proxy = (await session.execute(stmt)).scalar_one()
+            await start_account_listener(acc_with_proxy)
+            
             return {"ok": True, "account_id": new_acc.id}
             
     except SessionPasswordNeeded:
@@ -208,8 +216,77 @@ async def sign_in_phone(req: PhoneSignInRequest):
 
 @router.post("/api/accounts/upload-tdata")
 async def upload_tdata(file: UploadFile = File(...)):
-    # This is a stub for opentele conversion logic.
-    return {"status": "uploaded", "filename": file.filename}
+    import tempfile
+    import shutil
+    import logging
+    import datetime
+    from tdata_converter import convert_tdata_zip_to_encrypted_session
+    from models import Account, Proxy
+    from security import decrypt_session
+    from hydrogram import Client
+    from inbox_listener import start_account_listener
+    from sqlalchemy.orm import selectinload
+    
+    # Save upload to a temp zip file
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_file:
+        shutil.copyfileobj(file.file, temp_file)
+        temp_path = temp_file.name
+        
+    try:
+        success, encrypted_session = await convert_tdata_zip_to_encrypted_session(temp_path)
+        if not success:
+            raise HTTPException(status_code=400, detail="Неверный или поврежденный tdata-архив.")
+            
+        session_string = decrypt_session(encrypted_session)
+        
+        # Test client to fetch profile details
+        client = Client(
+            name="temp_tdata_check",
+            session_string=session_string,
+            in_memory=True
+        )
+        await client.connect()
+        me = await client.get_me()
+        await client.disconnect()
+        
+        async with async_session() as session:
+            # Find free proxy
+            stmt = select(Proxy).where(~Proxy.id.in_(
+                select(Account.proxy_id).where(Account.proxy_id != None)
+            )).limit(1)
+            proxy_res = await session.execute(stmt)
+            free_proxy = proxy_res.scalar_one_or_none()
+            proxy_id = free_proxy.id if free_proxy else None
+            
+            new_acc = Account(
+                phone=me.phone,
+                telegram_id=me.id,
+                first_name=me.first_name,
+                last_name=me.last_name,
+                username=me.username,
+                encrypted_session=encrypted_session,
+                proxy_id=proxy_id,
+                status="active",
+                source_type="tdata",
+                created_at=datetime.datetime.utcnow()
+            )
+            session.add(new_acc)
+            await session.commit()
+            
+            # Start background listener for the new account
+            stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == new_acc.id)
+            acc_with_proxy = (await session.execute(stmt)).scalar_one()
+            await start_account_listener(acc_with_proxy)
+            
+            return {"ok": True, "account_id": new_acc.id}
+            
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Error in upload_tdata: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка обработки tdata: {str(e)}")
+    finally:
+        import os
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 # -- Proxies --
 class ProxyCreate(BaseModel):
@@ -446,6 +523,10 @@ async def send_inbox_message(req: SendMessageRequest):
 @router.delete("/api/accounts/{account_id}")
 async def delete_account(account_id: int):
     from models import TaskLog, InboxMessage
+    from inbox_listener import stop_account_listener
+    # Stop background listener first
+    await stop_account_listener(account_id)
+    
     async with async_session() as session:
         account = await session.get(Account, account_id)
         if account:
@@ -457,13 +538,50 @@ async def delete_account(account_id: int):
 
 @router.post("/api/accounts/{account_id}/test")
 async def test_account_connection(account_id: int):
+    from inbox_listener import active_clients, start_account_listener
+    from client import TelegramSessionClient
+    from sqlalchemy.orm import selectinload
+    
     async with async_session() as session:
-        account = await session.get(Account, account_id)
+        stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
+        res = await session.execute(stmt)
+        account = res.scalar_one_or_none()
         if not account:
             raise HTTPException(404, "Account not found")
-        import asyncio
-        await asyncio.sleep(1.0) # simulate telegram api call ping
-        if account.status == "active":
-            return {"status": "ok", "message": f"Соединение с Telegram успешно установлено! Сессия +{account.phone} активна."}
+            
+        client = active_clients.get(account_id)
+        if client:
+            try:
+                me = await client.client.get_me()
+                return {"status": "ok", "message": f"Соединение успешно установлено! Аккаунт: @{me.username or me.first_name}."}
+            except Exception as e:
+                account.status = "disconnected"
+                await session.commit()
+                return {"status": "error", "message": f"Ошибка соединения: {str(e)}"}
         else:
-            return {"status": "error", "message": "Сессия неактивна, требуется повторная авторизация."}
+            proxy_dict = None
+            if account.proxy:
+                proxy_dict = {
+                    "scheme": account.proxy.protocol,
+                    "hostname": account.proxy.ip,
+                    "port": account.proxy.port,
+                }
+                if account.proxy.username:
+                    proxy_dict["username"] = account.proxy.username
+                    proxy_dict["password"] = account.proxy.password
+                    
+            try:
+                temp_client = TelegramSessionClient(encrypted_session=account.encrypted_session, proxy=proxy_dict)
+                await temp_client.start()
+                me = await temp_client.client.get_me()
+                await temp_client.stop()
+                
+                account.status = "active"
+                await session.commit()
+                
+                await start_account_listener(account)
+                return {"status": "ok", "message": f"Соединение успешно установлено! Аккаунт: @{me.username or me.first_name}."}
+            except Exception as e:
+                account.status = "disconnected"
+                await session.commit()
+                return {"status": "error", "message": f"Не удалось подключиться: {str(e)}"}
