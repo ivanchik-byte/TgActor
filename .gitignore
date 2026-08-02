@@ -1,5 +1,38 @@
-Project.md
-__pycache__/
-venv/
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment
 .env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+ENV/
+
+# Temporary files & uploads
+uploads/
+*.zip
+*.tar.gz
+*.rar
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation / personal logs
+Project.md
 COMMANDS_DEV.md
+FRONTEND_CHANGES.md

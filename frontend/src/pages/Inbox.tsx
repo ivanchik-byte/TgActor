@@ -45,6 +45,19 @@ export default function Inbox() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Support pre-selecting inbox account from dashboard
+  useEffect(() => {
+    const preselectedAccountIdStr = localStorage.getItem('selected_inbox_account_id');
+    if (preselectedAccountIdStr && chats.length > 0) {
+      const preselectedId = Number(preselectedAccountIdStr);
+      const firstChat = chats.find((c: any) => c.account_id === preselectedId);
+      if (firstChat) {
+        setSelectedChat(firstChat);
+      }
+      localStorage.removeItem('selected_inbox_account_id');
+    }
+  }, [chats]);
+
   // Group chats by account_id
   const groupedChats = useMemo(() => {
     const groups: Record<number, typeof chats> = {};
@@ -78,10 +91,15 @@ export default function Inbox() {
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: '85vh' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '6px' }}>
-        <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-main)' }}>
-          Инбокс — все ЛС со всех аккаунтов
-        </h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)' }}>
+            Централизованный инбокс диалогов
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
+            Лента прямых сообщений собирается автоматически с момента первой активности. История переписок с tdata-аккаунтов синхронизируется в реальном времени при получении новых уведомлений.
+          </p>
+        </div>
         <button
           onClick={() => refetch()}
           style={btnSecondary}
@@ -97,9 +115,6 @@ export default function Inbox() {
           Обновить сейчас
         </button>
       </div>
-      <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '16px' }}>
-        Старые диалоги из tdata-аккаунтов не подтягиваются — только сообщения, пришедшие после первого обнаружения собеседника.
-      </p>
 
       {/* Chat Layout */}
       <div

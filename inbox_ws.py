@@ -32,8 +32,20 @@ class SendMessageRequest(BaseModel):
     peer_id: int
     text: str
 
+import hmac
+import hashlib
+import os
+
 @app.websocket("/ws/inbox")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
+    admin_pwd = os.environ.get("ADMIN_PASSWORD", "1723")
+    enc_key = os.environ.get("ENCRYPTION_KEY", "fallback")
+    expected_token = hmac.new(enc_key.encode(), admin_pwd.encode(), hashlib.sha256).hexdigest()
+    
+    if not token or not hmac.compare_digest(token.encode('utf-8'), expected_token.encode('utf-8')):
+        await websocket.close(code=4001)
+        return
+        
     await websocket.accept()
     pubsub = redis_pubsub_client.pubsub()
     await pubsub.subscribe("inbox_events")

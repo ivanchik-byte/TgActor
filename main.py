@@ -1,10 +1,37 @@
 import os
-from fastapi import FastAPI
+import hmac
+import hashlib
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from inbox_ws import app as main_app
 from api_routes import router as api_router
+
+# Auth helper
+def get_auth_token():
+    admin_pwd = os.environ.get("ADMIN_PASSWORD", "1723")
+    enc_key = os.environ.get("ENCRYPTION_KEY", "fallback")
+    return hmac.new(enc_key.encode(), admin_pwd.encode(), hashlib.sha256).hexdigest()
+
+@main_app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Skip check for static SPA, auth endpoint, and health check/proxies (if needed)
+    if path.startswith("/api/auth/login") or not path.startswith("/api"):
+        return await call_next(request)
+        
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+    token = auth_header.split(" ")[1]
+    expected_token = get_auth_token()
+    if not hmac.compare_digest(token.encode('utf-8'), expected_token.encode('utf-8')):
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+    return await call_next(request)
 
 # Mount the router
 main_app.include_router(api_router)
