@@ -1,0 +1,31 @@
+# Dependencies
+node_modules
+frontend/node_modules
+venv
+__pycache__
+.pytest_cache
+
+# Build artifacts
+frontend/dist
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.sw?
+
+# Env & docs
+.env
+Project.md
+COMMANDS_DEV.md
+*.md
+!README.md
+!COMMANDS.md
+
+# Tests
+test_*.py
+conftest.py
+pytest.ini

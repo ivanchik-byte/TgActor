@@ -1,63 +1,118 @@
 @import "tailwindcss";
 
+/* ======================================================
+   TgCast Design System — CSS-first Tailwind v4 config
+   ====================================================== */
+
 @theme {
   --color-background: var(--bg-main);
   --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
   --color-primary: var(--text-main);
   --color-muted: var(--text-muted);
   --color-border: var(--border-color);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-surface: var(--bg-surface);
+  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-@layer base {
-  :root {
-    --bg-main: #13111c;
-    --bg-card: #1b1928;
-    --text-main: #f8fafc;
-    --text-muted: #8b87a1;
-    --border-color: #2d293e;
-    --accent: #7c3aed; /* Vibrant Purple */
-    --accent-hover: #6d28d9;
-  }
+/* ===== Theme: Deep Indigo (default :root) ===== */
+:root {
+  --bg-main: #0f0d1a;
+  --bg-card: #181527;
+  --bg-card-hover: #1f1b33;
+  --bg-surface: #131020;
+  --text-main: #e8e6f0;
+  --text-muted: #7a7593;
+  --border-color: #2a2641;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-soft: rgba(139, 92, 246, 0.12);
+  --accent-text: #a78bfa;
+}
 
-  .dark-crimson {
-    --bg-main: #1a0b0e;
-    --bg-card: #2d1318;
-    --text-main: #fafaf9;
-    --text-muted: #d6b7b9;
-    --border-color: #431d24;
-    --accent: #ef4444; /* Red 500 */
-    --accent-hover: #dc2626;
-  }
+/* ===== Theme: Dark Crimson ===== */
+.dark-crimson {
+  --bg-main: #110a0c;
+  --bg-card: #1c1114;
+  --bg-card-hover: #261a1e;
+  --bg-surface: #150d10;
+  --text-main: #ede5e7;
+  --text-muted: #8a7175;
+  --border-color: #352228;
+  --accent: #b91c3d;
+  --accent-hover: #9f1735;
+  --accent-soft: rgba(185, 28, 61, 0.12);
+  --accent-text: #e8455e;
+}
 
-  .dark-charcoal {
-    --bg-main: #000000;
-    --bg-card: #171717;
-    --text-main: #f5f5f5;
-    --text-muted: #a3a3a3;
-    --border-color: #262626;
-    --accent: #52525b; /* Gray/Zinc */
-    --accent-hover: #3f3f46;
-  }
+/* ===== Theme: Dark Charcoal ===== */
+.dark-charcoal {
+  --bg-main: #0a0a0a;
+  --bg-card: #141414;
+  --bg-card-hover: #1c1c1c;
+  --bg-surface: #0f0f0f;
+  --text-main: #e5e5e5;
+  --text-muted: #737373;
+  --border-color: #262626;
+  --accent: #525252;
+  --accent-hover: #404040;
+  --accent-soft: rgba(82, 82, 82, 0.15);
+  --accent-text: #a3a3a3;
+}
 
-  .light {
-    --bg-main: #f8fafc;
-    --bg-card: #ffffff;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
-    --accent: #e11d48; /* Rose 600 */
-    --accent-hover: #be123c;
-  }
+/* ===== Theme: Light ===== */
+.light {
+  --bg-main: #f5f5f4;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafaf9;
+  --bg-surface: #f0efed;
+  --text-main: #1c1917;
+  --text-muted: #78716c;
+  --border-color: #d6d3d1;
+  --accent: #b91c3d;
+  --accent-hover: #9f1735;
+  --accent-soft: rgba(185, 28, 61, 0.08);
+  --accent-text: #b91c3d;
+}
 
-  body {
-    background-color: var(--bg-main);
-    color: var(--text-main);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 200ms;
-  }
+/* ===== Base Styles ===== */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ===== Selection ===== */
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
