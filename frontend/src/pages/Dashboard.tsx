@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -23,6 +23,7 @@ export default function Dashboard() {
   // TData state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Profile Details Modal State
   const [selectedProfileAccount, setSelectedProfileAccount] = useState<any | null>(null);
@@ -161,6 +162,49 @@ export default function Dashboard() {
       setSelectedFiles(Array.from(e.target.files));
     }
   };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const zipFiles = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.zip'));
+      if (zipFiles.length > 0) {
+        setSelectedFiles(zipFiles);
+        showToast(`Перетащено файлов: ${zipFiles.length} шт.`, 'info');
+      } else {
+        showToast('Пожалуйста, перетаскивайте только файлы в формате .zip!', 'error');
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (activeTab !== 'tdata') return;
+      
+      const files = e.clipboardData?.files;
+      if (files && files.length > 0) {
+        const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip'));
+        if (zipFiles.length > 0) {
+          setSelectedFiles(zipFiles);
+          showToast(`Файлы вставлены из буфера обмена: ${zipFiles.length} шт.`, 'info');
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => {
+      window.removeEventListener('paste', handleGlobalPaste);
+    };
+  }, [activeTab]);
 
   // Shared Styles
   const cardStyle: React.CSSProperties = {
@@ -560,10 +604,33 @@ export default function Dashboard() {
 
         {/* Tab 1: TData Zip Uploader */}
         {activeTab === 'tdata' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: '1.5' }}>
-              Выберите один или несколько .zip архивов, содержащих папки tdata от Telegram Desktop. Система автоматически переконвертирует их в Telethon сессии.
-            </p>
+          <div 
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '14px',
+              border: isDragging ? '2px dashed var(--accent)' : '2px dashed var(--border-color)',
+              borderRadius: '12px',
+              padding: '20px',
+              backgroundColor: isDragging ? 'var(--accent-soft)' : 'transparent',
+              transition: 'all 0.2s ease',
+              textAlign: 'center',
+              cursor: 'pointer'
+            }}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload style={{ width: '40px', height: '40px', color: isDragging ? 'var(--accent)' : 'var(--text-muted)', margin: '0 auto' }} />
+            <div>
+              <p style={{ color: 'var(--text-main)', fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>
+                Перетащите сюда .zip файлы или нажмите для выбора
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
+                Также можно скопировать .zip в проводнике (Ctrl+C) и просто вставить здесь (Ctrl+V)
+              </p>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -572,7 +639,45 @@ export default function Dashboard() {
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px' }}>
+            
+            {/* Show Selected Files list if any */}
+            {selectedFiles.length > 0 && (
+              <div 
+                style={{
+                  textAlign: 'left',
+                  backgroundColor: 'var(--bg-main)',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  marginTop: '10px'
+                }}
+                onClick={(e) => e.stopPropagation()} // Prevent file picker
+              >
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
+                  Выбранные файлы:
+                </div>
+                {selectedFiles.map((file, i) => (
+                  <div key={i} style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span>{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                    <button 
+                      onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '11px'
+                      }}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px' }} onClick={(e) => e.stopPropagation()}>
               <button
                 style={{
                   ...btnAccent,
@@ -591,25 +696,6 @@ export default function Dashboard() {
                 )}
                 {uploadTdata.isPending ? 'Загрузка...' : 'Импортировать'}
               </button>
-              <button
-                style={btnSecondary}
-                onClick={() => fileInputRef.current?.click()}
-                onMouseEnter={e => {
-                  e.currentTarget.style.color = 'var(--text-main)';
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.color = 'var(--text-muted)';
-                  e.currentTarget.style.borderColor = 'var(--border-color)';
-                }}
-              >
-                Выбрать файлы
-              </button>
-              <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                {selectedFiles.length > 0
-                  ? `Выбрано файлов: ${selectedFiles.length}`
-                  : 'Файлы не выбраны.'}
-              </span>
             </div>
           </div>
         )}
