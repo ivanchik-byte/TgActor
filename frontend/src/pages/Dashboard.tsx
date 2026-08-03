@@ -33,6 +33,10 @@ export default function Dashboard() {
   // Toast notification state
   const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
 
+  // Edit proxy state
+  const [editingProxyAccount, setEditingProxyAccount] = useState<any | null>(null);
+  const [selectedProxyId, setSelectedProxyId] = useState<number | null>(null);
+
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts(prev => [...prev, { id, text, type }]);
@@ -45,6 +49,26 @@ export default function Dashboard() {
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await axios.get('/api/accounts')).data
+  });
+
+  // Fetch proxies
+  const { data: proxies = [] } = useQuery({
+    queryKey: ['proxies'],
+    queryFn: async () => (await axios.get('/api/proxies')).data
+  });
+
+  const updateProxy = useMutation({
+    mutationFn: async ({ accountId, proxyId }: { accountId: number, proxyId: number | null }) => {
+      await axios.patch(`/api/accounts/${accountId}/proxy`, { proxy_id: proxyId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setEditingProxyAccount(null);
+      showToast('Прокси успешно обновлен!', 'success');
+    },
+    onError: (err: any) => {
+      showToast(err?.response?.data?.detail || 'Не удалось обновить прокси!', 'error');
+    }
   });
 
   const requestPhoneCode = useMutation({
@@ -351,6 +375,72 @@ export default function Dashboard() {
             <button onClick={() => setSelectedProfileAccount(null)} style={btnAccent}>
               Закрыть
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Proxy Modal */}
+      {editingProxyAccount && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            ...cardStyle,
+            width: '380px',
+            backgroundColor: 'var(--bg-card)',
+            padding: '28px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+          }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px' }}>
+                Изменение прокси
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                Выберите прокси-сервер для аккаунта {editingProxyAccount.first_name || editingProxyAccount.username || `acc #${editingProxyAccount.id}`}:
+              </p>
+              
+              <select
+                value={selectedProxyId || ""}
+                onChange={(e) => setSelectedProxyId(e.target.value ? Number(e.target.value) : null)}
+                style={inputStyle}
+              >
+                <option value="">Без прокси (Прямое подключение)</option>
+                {proxies.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    ID {p.id}: {p.ip}:{p.port} ({p.protocol})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setEditingProxyAccount(null)}
+                style={{ ...btnSecondary, flex: 1 }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => updateProxy.mutate({ accountId: editingProxyAccount.id, proxyId: selectedProxyId })}
+                disabled={updateProxy.isPending}
+                style={{ ...btnAccent, flex: 1 }}
+              >
+                {updateProxy.isPending ? 'Сохранение...' : 'Сохранить'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -746,11 +836,31 @@ export default function Dashboard() {
                     border: '1px solid var(--border-color)',
                     fontSize: '12px'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Прокси-сервер</span>
-                      <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
-                        {acc.proxy_id ? `ID = ${acc.proxy_id}` : 'Не привязан'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
+                          {acc.proxy_id ? `ID = ${acc.proxy_id}` : 'Не привязан'}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setEditingProxyAccount(acc);
+                            setSelectedProxyId(acc.proxy_id);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--accent)',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            padding: '2px 4px',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          Изменить
+                        </button>
+                      </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--text-muted)' }}>Добавлен</span>

@@ -69,6 +69,30 @@ async def update_pools(account_id: int, req: PoolUpdateRequest):
         await session.commit()
         return {"status": "ok"}
 
+class AccountProxyUpdateRequest(BaseModel):
+    proxy_id: Optional[int] = None
+
+@router.patch("/api/accounts/{account_id}/proxy")
+async def update_account_proxy(account_id: int, req: AccountProxyUpdateRequest):
+    async with async_session() as session:
+        acc = await session.get(Account, account_id)
+        if not acc:
+            raise HTTPException(404, "Account not found")
+        acc.proxy_id = req.proxy_id
+        await session.commit()
+        
+        from inbox_listener import stop_account_listener, start_account_listener
+        from sqlalchemy.orm import selectinload
+        
+        await stop_account_listener(account_id)
+        
+        stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
+        acc_with_proxy = (await session.execute(stmt)).scalar_one()
+        if acc_with_proxy.status == "active":
+            await start_account_listener(acc_with_proxy)
+            
+        return {"status": "ok"}
+
 from pydantic import BaseModel
 
 class PhoneAuthRequest(BaseModel):
@@ -461,10 +485,12 @@ async def get_inbox_chats():
     async with async_session() as session:
         # Get latest message for each (account_id, peer_id)
         stmt = """
-            SELECT DISTINCT ON (account_id, peer_id) 
-                account_id, peer_id, sender_username, text, received_at, is_incoming, media_type, media_path
-            FROM inbox_messages 
-            ORDER BY account_id, peer_id, received_at DESC
+            SELECT DISTINCT ON (im.account_id, im.peer_id) 
+                im.account_id, im.peer_id, im.sender_username, im.text, im.received_at, im.is_incoming, im.media_type, im.media_path,
+                a.username, a.first_name, a.phone
+            FROM inbox_messages im
+            LEFT JOIN accounts a ON im.account_id = a.id
+            ORDER BY im.account_id, im.peer_id, im.received_at DESC
         """
         from sqlalchemy import text
         result = await session.execute(text(stmt))
@@ -478,7 +504,10 @@ async def get_inbox_chats():
                 "updated_at": row[4],
                 "is_incoming": row[5],
                 "media_type": row[6],
-                "media_path": row[7]
+                "media_path": row[7],
+                "account_username": row[8],
+                "account_name": row[9],
+                "account_phone": row[10]
             })
         
         # Sort all chats by updated_at globally
