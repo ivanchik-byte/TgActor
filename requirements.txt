@@ -10,4 +10,4 @@ cryptography==42.0.8
 python-multipart==0.0.9
 pydantic==2.8.2
 pydantic-settings==2.3.4
-opentele>=1.15.0
+opentele2
