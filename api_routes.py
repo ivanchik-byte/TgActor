@@ -167,8 +167,12 @@ async def sign_in_phone(req: PhoneSignInRequest):
     from hydrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PhoneCodeExpired
     
     phone = req.phone.strip().replace(" ", "").replace("-", "")
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Sign-in request received for phone: '{phone}'. Available sessions: {list(auth_clients.keys())}")
     
     if phone not in auth_clients:
+        logger.warning(f"Session not found for phone '{phone}'. Available: {list(auth_clients.keys())}")
         raise HTTPException(status_code=400, detail="Сессия не найдена. Запросите код заново.")
         
     auth_data = auth_clients[phone]
@@ -224,12 +228,16 @@ async def sign_in_phone(req: PhoneSignInRequest):
             return {"ok": True, "account_id": new_acc.id}
             
     except SessionPasswordNeeded:
+        logger.info(f"2FA password required for phone {phone}")
         return {"ok": False, "need_password": True}
     except PhoneCodeInvalid:
+        logger.warning(f"Invalid verification code provided for phone {phone}")
         raise HTTPException(status_code=400, detail="Неверный код подтверждения.")
     except PhoneCodeExpired:
+        logger.warning(f"Verification code expired for phone {phone}")
         raise HTTPException(status_code=400, detail="Код подтверждения истек.")
     except Exception as e:
+        logger.exception(f"Unexpected error in sign_in_phone for phone {phone}: {e}")
         try:
             await client.disconnect()
         except Exception:
