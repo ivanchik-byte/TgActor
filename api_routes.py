@@ -283,7 +283,7 @@ async def upload_tdata(file: UploadFile = File(...)):
             proxy_id = free_proxy.id if free_proxy else None
             
             new_acc = Account(
-                phone=me.phone,
+                phone=me.phone_number,
                 telegram_id=me.id,
                 first_name=me.first_name,
                 last_name=me.last_name,
