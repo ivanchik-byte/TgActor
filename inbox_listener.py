@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy import select
 
