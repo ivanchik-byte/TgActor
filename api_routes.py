@@ -497,6 +497,38 @@ async def get_chat_messages(account_id: int, peer_id: int, limit: int = 50):
 
 from inbox_listener import active_clients
 
+@router.post("/api/inbox/download-media/{inbox_message_id}")
+async def download_media_on_demand(inbox_message_id: int):
+    async with async_session() as session:
+        inbox_msg = await session.get(InboxMessage, inbox_message_id)
+        if not inbox_msg:
+            raise HTTPException(status_code=404, detail="Сообщение не найдено.")
+            
+        if inbox_msg.media_path:
+            return {"media_path": inbox_msg.media_path}
+            
+        client = active_clients.get(inbox_msg.account_id)
+        if not client:
+            raise HTTPException(status_code=400, detail="Сессия аккаунта не активна.")
+            
+        try:
+            tg_msg = await client.client.get_messages(chat_id=inbox_msg.peer_id, message_ids=inbox_msg.message_id)
+            if not tg_msg or getattr(tg_msg, "empty", False):
+                raise HTTPException(status_code=404, detail="Сообщение не найдено в Telegram (возможно, удалено).")
+                
+            from inbox_listener import save_media_if_exists
+            media_type, media_path = await save_media_if_exists(client.client, tg_msg, force=True)
+            
+            if not media_path:
+                raise HTTPException(status_code=500, detail="Не удалось скачать медиа-файл.")
+                
+            inbox_msg.media_path = media_path
+            await session.commit()
+            
+            return {"media_path": media_path}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Ошибка скачивания: {str(e)}")
+
 @router.post("/api/inbox/send")
 async def send_inbox_message(req: SendMessageRequest):
     client = active_clients.get(req.account_id)

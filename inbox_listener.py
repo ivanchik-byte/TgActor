@@ -25,9 +25,10 @@ async_session = async_sessionmaker(engine, expire_on_commit=False)
 active_clients: Dict[int, TelegramSessionClient] = {}
 redis_client = redis.from_url(REDIS_URL)
 
-async def save_media_if_exists(client, message: Message) -> tuple:
+async def save_media_if_exists(client, message: Message, force: bool = False) -> tuple:
     """
     Downloads media from the Telegram message and returns (media_type, relative_media_path).
+    If force is False and media is larger than 2MB, it returns (media_type, None).
     """
     import os
     import shutil
@@ -60,6 +61,12 @@ async def save_media_if_exists(client, message: Message) -> tuple:
     if not media_type or not media_obj:
         return None, None
         
+    # Check file size limit (2 MB)
+    file_size = getattr(media_obj, "file_size", 0) or 0
+    if file_size > 2 * 1024 * 1024 and not force:
+        logger.info(f"Media file size ({file_size} bytes) exceeds limit, skipping auto-download for message {message.id}")
+        return media_type, None
+
     try:
         os.makedirs("/app/media", exist_ok=True)
         file_path = await client.download_media(message)
@@ -71,7 +78,7 @@ async def save_media_if_exists(client, message: Message) -> tuple:
     except Exception as e:
         logger.error(f"Error downloading media for message {message.id}: {e}")
         
-    return None, None
+    return media_type, None
 
 async def _message_handler(client: TelegramSessionClient, account_id: int, message: Message):
     """
@@ -228,11 +235,70 @@ async def stop_account_listener(account_id: int):
         except Exception as e:
             logger.error(f"Ошибка при остановке слушателя {account_id}: {e}")
 
+cleanup_task: Optional[asyncio.Task] = None
+
+async def media_cleanup_task():
+    """
+    Background loop that runs daily to delete downloaded media files older than 7 days
+    and resets their paths in the database.
+    """
+    from datetime import datetime, timedelta
+    import os
+    
+    logger.info("Запуск фоновой службы очистки медиафайлов...")
+    while True:
+        try:
+            # Run every 24 hours
+            await asyncio.sleep(86400)
+            
+            cutoff_date = datetime.utcnow() - timedelta(days=7)
+            logger.info(f"Запуск очистки медиа. Порог: {cutoff_date}")
+            
+            async with async_session() as session:
+                # Select all inbox messages older than 7 days with downloaded media
+                stmt = select(InboxMessage).where(
+                    InboxMessage.received_at < cutoff_date,
+                    InboxMessage.media_path.is_not(None)
+                )
+                res = await session.execute(stmt)
+                old_messages = res.scalars().all()
+                
+                cleaned_count = 0
+                for msg in old_messages:
+                    if msg.media_path:
+                        filename = os.path.basename(msg.media_path)
+                        full_path = os.path.join("/app/media", filename)
+                        
+                        try:
+                            if os.path.exists(full_path):
+                                os.remove(full_path)
+                                logger.info(f"Удален файл медиа: {full_path}")
+                        except Exception as file_err:
+                            logger.error(f"Не удалось удалить файл {full_path}: {file_err}")
+                        
+                        msg.media_path = None
+                        cleaned_count += 1
+                
+                if cleaned_count > 0:
+                    await session.commit()
+                    logger.info(f"Очищено {cleaned_count} медиафайлов старше 7 дней.")
+                    
+        except asyncio.CancelledError:
+            logger.info("Фоновая служба очистки медиа остановлена.")
+            break
+        except Exception as e:
+            logger.error(f"Ошибка в фоновой службе очистки медиа: {e}")
+            await asyncio.sleep(60)
+
 async def start_listeners():
     """
     Starts listening on all active accounts.
     """
+    global cleanup_task
     logger.info("Запуск слушателей Inbox Daemon...")
+    
+    if not cleanup_task:
+        cleanup_task = asyncio.create_task(media_cleanup_task())
     
     async with async_session() as session:
         from sqlalchemy.orm import selectinload
@@ -246,7 +312,17 @@ async def stop_listeners():
     """
     Stops all active listeners gracefully.
     """
+    global cleanup_task
     logger.info("Остановка слушателей Inbox Daemon...")
+    
+    if cleanup_task:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        cleanup_task = None
+        
     for acc_id, client in active_clients.items():
         try:
             await client.stop()
