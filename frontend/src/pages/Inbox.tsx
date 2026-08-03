@@ -52,6 +52,9 @@ export default function Inbox() {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const [selectedChat, setSelectedChat] = useState<any | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: chats = [], refetch } = useQuery({
@@ -73,14 +76,24 @@ export default function Inbox() {
   const sendMessage = useMutation({
     mutationFn: async () => {
       if (!selectedChat) return;
-      await axios.post('/api/inbox/send', {
-        account_id: selectedChat.account_id,
-        peer_id: selectedChat.peer_id,
-        text
+      
+      const formData = new FormData();
+      formData.append('account_id', selectedChat.account_id.toString());
+      formData.append('peer_id', selectedChat.peer_id.toString());
+      formData.append('text', text);
+      if (attachedFile) {
+        formData.append('file', attachedFile);
+      }
+      
+      await axios.post('/api/inbox/send', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
     },
     onSuccess: () => {
       setText('');
+      setAttachedFile(null);
       queryClient.invalidateQueries({ queryKey: ['inboxMessages'] });
     }
   });
@@ -102,6 +115,49 @@ export default function Inbox() {
       localStorage.removeItem('selected_inbox_account_id');
     }
   }, [chats]);
+
+  const handleMediaDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleMediaDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMediaDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setAttachedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleMediaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setAttachedFile(e.target.files[0]);
+    }
+  };
+
+  const handlePaperclipClick = () => {
+    mediaFileInputRef.current?.click();
+  };
+
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (!selectedChat) return;
+      
+      const files = e.clipboardData?.files;
+      if (files && files.length > 0) {
+        setAttachedFile(files[0]);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => {
+      window.removeEventListener('paste', handleGlobalPaste);
+    };
+  }, [selectedChat]);
 
   const [filterAccountId, setFilterAccountId] = useState<number | null>(null);
 
@@ -392,11 +448,16 @@ export default function Inbox() {
 
         {/* Chat Panel */}
         <div
+          onDragOver={handleMediaDragOver}
+          onDragLeave={handleMediaDragLeave}
+          onDrop={handleMediaDrop}
           style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
             backgroundColor: 'var(--bg-main)',
+            border: isDragging ? '2px dashed var(--accent)' : 'none',
+            boxSizing: 'border-box'
           }}
         >
           {selectedChat ? (
@@ -527,6 +588,37 @@ export default function Inbox() {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* Attached file preview */}
+              {attachedFile && (
+                <div style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'var(--bg-card)',
+                  borderTop: '1px solid var(--border-color)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-main)' }}>
+                    <Paperclip style={{ width: '14px', height: '14px', color: 'var(--accent)' }} />
+                    <span>Прикреплен файл: <strong>{attachedFile.name}</strong> ({(attachedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                  </div>
+                  <button
+                    onClick={() => setAttachedFile(null)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ef4444',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}
+                  >
+                    Удалить
+                  </button>
+                </div>
+              )}
+
               {/* Input */}
               <div
                 style={{
@@ -538,7 +630,14 @@ export default function Inbox() {
                   gap: '10px',
                 }}
               >
+                <input 
+                  type="file"
+                  ref={mediaFileInputRef}
+                  onChange={handleMediaFileChange}
+                  style={{ display: 'none' }}
+                />
                 <button
+                  onClick={handlePaperclipClick}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -556,7 +655,7 @@ export default function Inbox() {
                   type="text"
                   value={text}
                   onChange={e => setText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && text.trim() && sendMessage.mutate()}
+                  onKeyDown={e => e.key === 'Enter' && (text.trim() || attachedFile) && sendMessage.mutate()}
                   style={{
                     flex: 1,
                     backgroundColor: 'var(--bg-main)',
@@ -574,7 +673,7 @@ export default function Inbox() {
                 />
                 <button
                   onClick={() => sendMessage.mutate()}
-                  disabled={sendMessage.isPending || !text.trim()}
+                  disabled={sendMessage.isPending || (!text.trim() && !attachedFile)}
                   style={{
                     backgroundColor: 'var(--accent)',
                     color: '#fff',
@@ -585,7 +684,7 @@ export default function Inbox() {
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
-                    opacity: sendMessage.isPending || !text.trim() ? 0.5 : 1,
+                    opacity: sendMessage.isPending || (!text.trim() && !attachedFile) ? 0.5 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',

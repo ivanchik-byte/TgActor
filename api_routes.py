@@ -2,7 +2,7 @@ import os
 import jwt
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
@@ -559,22 +559,74 @@ async def download_media_on_demand(inbox_message_id: int):
             raise HTTPException(status_code=500, detail=f"Ошибка скачивания: {str(e)}")
 
 @router.post("/api/inbox/send")
-async def send_inbox_message(req: SendMessageRequest):
-    client = active_clients.get(req.account_id)
+async def send_inbox_message(
+    account_id: int = Form(...),
+    peer_id: int = Form(...),
+    text: str = Form(""),
+    file: Optional[UploadFile] = File(None)
+):
+    import shutil
+    import uuid
+    from inbox_listener import active_clients
+    
+    client = active_clients.get(account_id)
     if not client:
         return {"error": "Account is not active or client is offline"}, 400
     
+    media_path = None
+    media_type = None
+    
+    if file:
+        try:
+            os.makedirs("/app/media", exist_ok=True)
+            ext = os.path.splitext(file.filename)[1]
+            filename = f"{uuid.uuid4()}{ext}"
+            media_path = f"/app/media/{filename}"
+            with open(media_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+                
+            ext_lower = ext.lower()
+            if ext_lower in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
+                media_type = 'photo'
+            elif ext_lower in ['.mp4', '.avi', '.mov', '.mkv']:
+                media_type = 'video'
+            elif ext_lower in ['.ogg', '.opus']:
+                media_type = 'voice'
+            elif ext_lower in ['.mp3', '.wav', '.m4a']:
+                media_type = 'audio'
+            else:
+                media_type = 'document'
+        except Exception as ex:
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {str(ex)}")
+
     try:
-        await client.send_message(req.peer_id, req.text)
+        # Send via Hydrogram Client
+        if file:
+            caption = text if text.strip() else None
+            if media_type == 'photo':
+                await client.client.send_photo(chat_id=peer_id, photo=media_path, caption=caption)
+            elif media_type == 'video':
+                await client.client.send_video(chat_id=peer_id, video=media_path, caption=caption)
+            elif media_type == 'voice':
+                await client.client.send_voice(chat_id=peer_id, voice=media_path, caption=caption)
+            elif media_type == 'audio':
+                await client.client.send_audio(chat_id=peer_id, audio=media_path, caption=caption)
+            else:
+                await client.client.send_document(chat_id=peer_id, document=media_path, caption=caption)
+        else:
+            await client.client.send_message(peer_id, text)
+            
         # Store in DB as outgoing
         async with async_session() as session:
             msg = InboxMessage(
-                account_id=req.account_id,
-                peer_id=req.peer_id,
-                message_id=0, # outgoing, maybe unknown id if client wrapper doesn't return it immediately
+                account_id=account_id,
+                peer_id=peer_id,
+                message_id=0, # outgoing
                 sender_username="Me",
-                text=req.text,
-                is_incoming=False
+                text=text,
+                is_incoming=False,
+                media_type=media_type,
+                media_path=f"/media/{os.path.basename(media_path)}" if file else None
             )
             session.add(msg)
             await session.commit()

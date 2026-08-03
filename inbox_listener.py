@@ -61,7 +61,12 @@ async def save_media_if_exists(client, message: Message, force: bool = False) ->
     if not media_type or not media_obj:
         return None, None
         
-    # Check file size limit (2 MB)
+    # Skip auto-download for outgoing media to save server disk space (can download on-demand)
+    if message.outgoing and not force:
+        logger.info(f"Skipping auto-download for outgoing media in message {message.id}")
+        return media_type, None
+        
+    # Check file size limit (2 MB) for incoming media
     file_size = getattr(media_obj, "file_size", 0) or 0
     if file_size > 2 * 1024 * 1024 and not force:
         logger.info(f"Media file size ({file_size} bytes) exceeds limit, skipping auto-download for message {message.id}")
