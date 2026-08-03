@@ -3,6 +3,51 @@ import { Paperclip, Send } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
+function DownloadMediaButton({ messageId, mediaType, isIncoming }: { messageId: number, mediaType: string, isIncoming: boolean }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    setError(null);
+    try {
+      await axios.post(`/api/inbox/download-media/${messageId}`);
+      queryClient.invalidateQueries({ queryKey: ['inboxMessages'] });
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Ошибка");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={downloading}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        backgroundColor: isIncoming ? 'var(--bg-main)' : 'rgba(255, 255, 255, 0.2)',
+        color: isIncoming ? 'var(--text-main)' : '#fff',
+        border: '1px solid var(--border-color)',
+        padding: '6px 12px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        cursor: 'pointer',
+        fontWeight: 600,
+        opacity: downloading ? 0.7 : 1,
+        transition: 'all 0.15s'
+      }}
+    >
+      <Paperclip style={{ width: '14px', height: '14px' }} />
+      {downloading ? 'Загрузка...' : `Скачать ${mediaType}`}
+      {error && <span style={{ color: '#ef4444', marginLeft: '6px' }}>({error})</span>}
+    </button>
+  );
+}
+
 export default function Inbox() {
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
@@ -403,48 +448,54 @@ export default function Inbox() {
                       <div>{renderMessageText(msg.text, msg.is_incoming)}</div>
                       
                       {/* Media Files Rendering */}
-                      {msg.media_path && (
+                      {msg.media_type && (
                         <div style={{ marginTop: '8px' }}>
-                          {(msg.media_type === 'photo' || msg.media_type === 'sticker' || msg.media_type === 'animation') && (
-                            <div style={{ maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
-                              <img src={msg.media_path} alt={msg.media_type} style={{ width: '100%', height: 'auto', display: 'block' }} />
-                            </div>
-                          )}
-                          {msg.media_type === 'video' && (
-                            <div style={{ maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
-                              <video src={msg.media_path} controls style={{ width: '100%', height: 'auto', display: 'block' }} />
-                            </div>
-                          )}
-                          {(msg.media_type === 'voice' || msg.media_type === 'audio') && (
-                            <div style={{ maxWidth: '280px' }}>
-                              <audio src={msg.media_path} controls style={{ width: '100%' }} />
-                            </div>
-                          )}
-                          {msg.media_type === 'document' && (
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              backgroundColor: msg.is_incoming ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.15)',
-                              padding: '8px 12px',
-                              borderRadius: '6px',
-                              marginTop: '4px'
-                            }}>
-                              <Paperclip style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-                              <a
-                                href={msg.media_path}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  fontSize: '12px',
-                                  color: msg.is_incoming ? 'var(--accent)' : '#fff',
-                                  textDecoration: 'underline',
-                                  wordBreak: 'break-all'
-                                }}
-                              >
-                                Открыть документ
-                              </a>
-                            </div>
+                          {msg.media_path ? (
+                            <>
+                              {(msg.media_type === 'photo' || msg.media_type === 'sticker' || msg.media_type === 'animation') && (
+                                <div style={{ maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
+                                  <img src={msg.media_path} alt={msg.media_type} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                                </div>
+                              )}
+                              {msg.media_type === 'video' && (
+                                <div style={{ maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
+                                  <video src={msg.media_path} controls style={{ width: '100%', height: 'auto', display: 'block' }} />
+                                </div>
+                              )}
+                              {(msg.media_type === 'voice' || msg.media_type === 'audio') && (
+                                <div style={{ maxWidth: '280px' }}>
+                                  <audio src={msg.media_path} controls style={{ width: '100%' }} />
+                                </div>
+                              )}
+                              {msg.media_type === 'document' && (
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  backgroundColor: msg.is_incoming ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.15)',
+                                  padding: '8px 12px',
+                                  borderRadius: '6px',
+                                  marginTop: '4px'
+                                }}>
+                                  <Paperclip style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                                  <a
+                                    href={msg.media_path}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      fontSize: '12px',
+                                      color: msg.is_incoming ? 'var(--accent)' : '#fff',
+                                      textDecoration: 'underline',
+                                      wordBreak: 'break-all'
+                                    }}
+                                  >
+                                    Открыть документ
+                                  </a>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <DownloadMediaButton messageId={msg.id} mediaType={msg.media_type} isIncoming={msg.is_incoming} />
                           )}
                         </div>
                       )}
