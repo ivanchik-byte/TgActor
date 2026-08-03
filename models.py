@@ -92,6 +92,8 @@ class InboxMessage(Base):
     text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_incoming: Mapped[bool] = mapped_column(Boolean, default=True)
     received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    media_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    media_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class SystemConfig(Base):

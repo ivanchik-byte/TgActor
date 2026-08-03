@@ -25,20 +25,68 @@ async_session = async_sessionmaker(engine, expire_on_commit=False)
 active_clients: Dict[int, TelegramSessionClient] = {}
 redis_client = redis.from_url(REDIS_URL)
 
+async def save_media_if_exists(client, message: Message) -> tuple:
+    """
+    Downloads media from the Telegram message and returns (media_type, relative_media_path).
+    """
+    import os
+    import shutil
+    
+    media_type = None
+    media_obj = None
+    
+    if message.photo:
+        media_type = "photo"
+        media_obj = message.photo
+    elif message.video:
+        media_type = "video"
+        media_obj = message.video
+    elif message.voice:
+        media_type = "voice"
+        media_obj = message.voice
+    elif message.audio:
+        media_type = "audio"
+        media_obj = message.audio
+    elif message.sticker:
+        media_type = "sticker"
+        media_obj = message.sticker
+    elif message.animation:
+        media_type = "animation"
+        media_obj = message.animation
+    elif message.document:
+        media_type = "document"
+        media_obj = message.document
+        
+    if not media_type or not media_obj:
+        return None, None
+        
+    try:
+        os.makedirs("/app/media", exist_ok=True)
+        file_path = await client.download_media(message)
+        if file_path and os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            dest_path = os.path.join("/app/media", filename)
+            shutil.move(file_path, dest_path)
+            return media_type, f"/media/{filename}"
+    except Exception as e:
+        logger.error(f"Error downloading media for message {message.id}: {e}")
+        
+    return None, None
+
 async def _message_handler(client: TelegramSessionClient, account_id: int, message: Message):
     """
-    Handles incoming messages for a specific account.
+    Handles incoming/outgoing messages for a specific account.
     Filters out groups/channels, except private messages.
     """
-    # Private check
     if hasattr(message.chat, 'type') and message.chat.type != hydrogram.enums.ChatType.PRIVATE:
         return
     
+    is_incoming = not message.outgoing
     sender_id = message.from_user.id if message.from_user else message.chat.id
     sender_username = message.from_user.username if message.from_user else None
     text = message.text or message.caption or ""
     
-    # We want to catch all DMs including 777000 (Telegram)
+    media_type, media_path = await save_media_if_exists(client.client, message)
     
     async with async_session() as session:
         inbox_msg = InboxMessage(
@@ -47,7 +95,9 @@ async def _message_handler(client: TelegramSessionClient, account_id: int, messa
             message_id=message.id,
             sender_username=sender_username,
             text=text,
-            is_incoming=True
+            is_incoming=is_incoming,
+            media_type=media_type,
+            media_path=media_path
         )
         session.add(inbox_msg)
         await session.commit()
@@ -59,12 +109,14 @@ async def _message_handler(client: TelegramSessionClient, account_id: int, messa
             "message_id": message.id,
             "sender_username": sender_username,
             "text": text,
-            "is_incoming": True,
-            "timestamp": inbox_msg.received_at.isoformat()
+            "is_incoming": is_incoming,
+            "timestamp": inbox_msg.received_at.isoformat(),
+            "media_type": media_type,
+            "media_path": media_path
         }
         
         await redis_client.publish("inbox_events", json.dumps(payload))
-        logger.info(f"Аккаунт {account_id} получил ЛС от {sender_id}. Сохранено и отправлено в Redis.")
+        logger.info(f"Аккаунт {account_id} обновил ЛС от {sender_id}. Направление: {'входящее' if is_incoming else 'исходящее'}. Медиа: {media_type}")
 
 
 async def sync_recent_dialogs(client, account_id: int):
@@ -79,33 +131,47 @@ async def sync_recent_dialogs(client, account_id: int):
             peer_id = dialog.chat.id
             username = dialog.chat.username or dialog.chat.first_name or str(peer_id)
             
-            last_msg = dialog.top_message
-            if last_msg:
-                text = last_msg.text or last_msg.caption or ""
-                is_incoming = last_msg.outgoing is False
-                received_at = last_msg.date or datetime.utcnow()
+            try:
+                # Fetch last 20 messages from latest to oldest
+                messages = []
+                async for message in client.get_chat_history(chat_id=peer_id, limit=20):
+                    messages.append(message)
                 
-                async with async_session() as session:
-                    stmt = select(InboxMessage).where(
-                        InboxMessage.account_id == account_id,
-                        InboxMessage.peer_id == peer_id,
-                        InboxMessage.message_id == last_msg.id
-                    )
-                    res = await session.execute(stmt)
-                    existing = res.scalar_one_or_none()
+                # Reverse list to process oldest first (chronological order)
+                messages.reverse()
+                
+                for message in messages:
+                    text = message.text or message.caption or ""
+                    is_incoming = not message.outgoing
+                    received_at = message.date or datetime.utcnow()
                     
-                    if not existing:
-                        inbox_msg = InboxMessage(
-                            account_id=account_id,
-                            peer_id=peer_id,
-                            message_id=last_msg.id,
-                            sender_username=username,
-                            text=text,
-                            is_incoming=is_incoming,
-                            received_at=received_at
+                    async with async_session() as session:
+                        stmt = select(InboxMessage).where(
+                            InboxMessage.account_id == account_id,
+                            InboxMessage.peer_id == peer_id,
+                            InboxMessage.message_id == message.id
                         )
-                        session.add(inbox_msg)
-                        await session.commit()
+                        res = await session.execute(stmt)
+                        existing = res.scalar_one_or_none()
+                        
+                        if not existing:
+                            media_type, media_path = await save_media_if_exists(client, message)
+                            inbox_msg = InboxMessage(
+                                account_id=account_id,
+                                peer_id=peer_id,
+                                message_id=message.id,
+                                sender_username=username,
+                                text=text,
+                                is_incoming=is_incoming,
+                                received_at=received_at,
+                                media_type=media_type,
+                                media_path=media_path
+                            )
+                            session.add(inbox_msg)
+                            await session.commit()
+            except Exception as chat_err:
+                logger.error(f"Ошибка при синхронизации истории чата с {peer_id} для аккаунта {account_id}: {chat_err}")
+                
         logger.info(f"Диалоги для аккаунта {account_id} успешно синхронизированы.")
     except Exception as e:
         logger.error(f"Ошибка при синхронизации диалогов для {account_id}: {e}")
