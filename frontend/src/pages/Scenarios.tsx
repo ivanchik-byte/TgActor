@@ -32,6 +32,30 @@ export default function Scenarios() {
   // Toast notification state
   const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
 
+  // Execution modal state
+  const [executingScenarioId, setExecutingScenarioId] = useState<number | null>(null);
+  const [execTarget, setExecTarget] = useState('');
+  const [execPostId, setExecPostId] = useState('');
+
+  const executeScenarioMutation = useMutation({
+    mutationFn: async () => {
+      if (!executingScenarioId || !execTarget.trim()) return;
+      await axios.post(`/api/scenarios/${executingScenarioId}/execute`, {
+        target: execTarget.trim(),
+        post_id: execPostId.trim() ? parseInt(execPostId.trim()) : null
+      });
+    },
+    onSuccess: () => {
+      showToast('Сценарий успешно запущен в Telegram!', 'success');
+      setExecutingScenarioId(null);
+      setExecTarget('');
+      setExecPostId('');
+    },
+    onError: (err: any) => {
+      showToast(err?.response?.data?.detail || 'Ошибка запуска сценария!', 'error');
+    }
+  });
+
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts(prev => [...prev, { id, text, type }]);
@@ -501,6 +525,114 @@ export default function Scenarios() {
         </div>
       )}
 
+      {/* Execute Scenario Modal */}
+      {executingScenarioId && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '480px',
+            width: '90%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+          }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Play className="w-5 h-5 text-emerald-500 fill-current" />
+                Запуск сценария в Telegram
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
+                Укажите username группы/канала или вставьте прямую ссылку на пост в канале, под которым нужно устроить обсуждение.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Канал / Чат / Ссылка на пост</label>
+                <input
+                  type="text"
+                  placeholder="Например: @mychannel или https://t.me/mychannel/45"
+                  value={execTarget}
+                  onChange={e => setExecTarget(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>ID поста (необязательно)</label>
+                <input
+                  type="text"
+                  placeholder="Заполнится автоматически, если вставить ссылку"
+                  value={execPostId}
+                  onChange={e => setExecPostId(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button
+                onClick={() => executeScenarioMutation.mutate()}
+                disabled={!execTarget.trim() || executeScenarioMutation.isPending}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#10b981',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  opacity: (!execTarget.trim() || executeScenarioMutation.isPending) ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Play className="w-4 h-4 fill-current" />
+                {executeScenarioMutation.isPending ? 'Запуск...' : 'Старт сценария'}
+              </button>
+              <button
+                onClick={() => {
+                  setExecutingScenarioId(null);
+                  setExecTarget('');
+                  setExecPostId('');
+                }}
+                style={{
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  padding: '12px 18px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -512,6 +644,29 @@ export default function Scenarios() {
             Управление сценариями и автоматизация цепочек ответов с прокси-аккаунтов.
           </p>
         </div>
+        {activeScenarioId && (
+          <button
+            onClick={() => setExecutingScenarioId(activeScenarioId)}
+            style={{
+              backgroundColor: '#10b981',
+              color: '#fff',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: 700,
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+              transition: 'all 0.15s'
+            }}
+          >
+            <Play className="w-4 h-4 fill-current" />
+            Запустить в Telegram
+          </button>
+        )}
       </div>
 
       <div style={pageContainerStyle}>
