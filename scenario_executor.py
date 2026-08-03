@@ -12,6 +12,17 @@ from preflight_checker import check_chat_availability
 
 logger = logging.getLogger(__name__)
 
+def proxy_to_dict(proxy) -> Optional[dict]:
+    if not proxy or getattr(proxy, 'status', None) != "active":
+        return None
+    return {
+        "scheme": proxy.protocol.lower(),
+        "hostname": proxy.ip,
+        "port": proxy.port,
+        "username": proxy.username,
+        "password": proxy.password
+    }
+
 async def execute_scenario(
     session: AsyncSession, 
     scenario_id: int, 
@@ -19,7 +30,7 @@ async def execute_scenario(
     discussion_message_id: Optional[int] = None
 ):
     """
-    Executes a scenario in a specific chat.
+    Executes a scenario in a specific chat or channel post comments.
     If discussion_message_id is provided, it means we are commenting under a specific post.
     """
     # 1. Fetch Scenario & Steps
@@ -56,18 +67,18 @@ async def execute_scenario(
     for role_id in roles_needed:
         role_account_map[role_id] = commenting_pool.pop()
 
-    # 4. Initialize Clients
+    # 4. Initialize Clients with Proxy
     clients: Dict[int, TelegramSessionClient] = {}
     for role_id, account in role_account_map.items():
         client = TelegramSessionClient(
             encrypted_session=account.encrypted_session,
+            proxy=proxy_to_dict(account.proxy)
         )
         try:
             await client.start()
             clients[role_id] = client
         except Exception as e:
             logger.error(f"Не удалось запустить клиент для аккаунта {account.id}: {e}")
-            # If one fails, we should gracefully abort or reassign. Aborting for now.
             for c in clients.values():
                 await c.stop()
             log = TaskLog(account_id=account.id, scenario_id=scenario_id, status="error", error_message=f"Init client failed: {e}")
@@ -75,7 +86,7 @@ async def execute_scenario(
             await session.commit()
             return
 
-    # 5. Preflight Checker
+    # 5. Preflight Checker & Discussion Resolution
     first_client = next(iter(clients.values()))
     requires_media = any(step.media_path for step in steps)
     
@@ -90,6 +101,20 @@ async def execute_scenario(
             await c.stop()
         return
 
+    target_chat_id = chat_id
+    default_reply_to = discussion_message_id
+
+    # If post ID provided, resolve discussion thread (channel comments)
+    if discussion_message_id:
+        try:
+            disc_msg = await first_client.client.get_discussion_message(chat_id, discussion_message_id)
+            if disc_msg and getattr(disc_msg, 'chat', None):
+                target_chat_id = disc_msg.chat.id
+                default_reply_to = disc_msg.id
+                logger.info(f"Resolved discussion for channel post {discussion_message_id}: group={target_chat_id}, header_id={default_reply_to}")
+        except Exception as ex:
+            logger.warning(f"Could not resolve discussion message for post {discussion_message_id}: {ex}")
+
     # 6. Execute Steps
     step_msg_map: Dict[int, int] = {}
     
@@ -100,21 +125,25 @@ async def execute_scenario(
         delay_min = step.delay_before_min if step.delay_before_min is not None else scenario.min_delay
         delay_max = step.delay_before_max if step.delay_before_max is not None else scenario.max_delay
         
-        reply_to = discussion_message_id
+        reply_to = default_reply_to
         if step.reply_to_step_id and step.reply_to_step_id in step_msg_map:
             reply_to = step_msg_map[step.reply_to_step_id]
 
         try:
+            # Join chat if not joined
+            try:
+                await client.client.join_chat(target_chat_id)
+            except Exception:
+                pass
+
             msg = await client.send_human_message(
-                chat_id=chat_id,
+                chat_id=target_chat_id,
                 text=step.text or "",
                 reply_to_message_id=reply_to,
                 delay_range=(delay_min, delay_max)
             )
             
             if msg:
-                # Hydrogram Message object has an 'id' attribute
-                # In tests, it might be a mocked object
                 msg_id = getattr(msg, 'id', None) or getattr(msg, 'message_id', 0)
                 step_msg_map[step.id] = msg_id
                 
@@ -124,20 +153,20 @@ async def execute_scenario(
                 
                 # Handle Reactions
                 if step.reactions and reaction_pool:
-                    # In DB it might be space separated string e.g. "👍 🔥"
                     reactions = step.reactions.split() 
                     count = step.reaction_count or 1
                     reactors = random.sample(reaction_pool, min(count, len(reaction_pool)))
                     
                     for r_acc in reactors:
-                        r_client = TelegramSessionClient(encrypted_session=r_acc.encrypted_session)
+                        r_client = TelegramSessionClient(
+                            encrypted_session=r_acc.encrypted_session,
+                            proxy=proxy_to_dict(r_acc.proxy)
+                        )
                         try:
                             await r_client.start()
                             emoji = random.choice(reactions)
                             await asyncio.sleep(random.uniform(0.5, 2.0))
-                            
-                            # In Pyrogram/Hydrogram, send_reaction is on the Client class
-                            await r_client.client.send_reaction(chat_id, msg_id, emoji)
+                            await r_client.client.send_reaction(target_chat_id, msg_id, emoji)
                             logger.info(f"Аккаунт {r_acc.id} поставил реакцию {emoji}")
                         except Exception as e:
                             logger.error(f"Ошибка постановки реакции аккаунтом {r_acc.id}: {e}")

@@ -426,6 +426,46 @@ async def delete_scenario(scenario_id: int):
         await session.commit()
         return {"status": "ok"}
 
+class ScenarioExecuteRequest(BaseModel):
+    target: str
+    post_id: Optional[int] = None
+
+@router.post("/api/scenarios/{scenario_id}/execute")
+async def run_scenario_endpoint(scenario_id: int, req: ScenarioExecuteRequest):
+    import re
+    import asyncio
+    from scenario_executor import execute_scenario
+    
+    target = req.target.strip()
+    post_id = req.post_id
+    
+    # Parse Telegram link if user pasted a full URL like https://t.me/channel_username/123
+    if "t.me/" in target:
+        match = re.search(r"t\.me/([^/]+)/?(\d+)?", target)
+        if match:
+            channel_part = match.group(1)
+            parsed_post_id = match.group(2)
+            if channel_part != "c":
+                target = f"@{channel_part}" if not channel_part.startswith("@") else channel_part
+            if parsed_post_id and not post_id:
+                post_id = int(parsed_post_id)
+                
+    if not target.startswith("@") and not target.startswith("-") and not target.lstrip('-').isdigit():
+        target = f"@{target}"
+        
+    async with async_session() as session:
+        scenario = await session.get(Scenario, scenario_id)
+        if not scenario:
+            raise HTTPException(404, detail="Сценарий не найден.")
+            
+    # Launch execution in background task
+    async def _runner():
+        async with async_session() as s:
+            await execute_scenario(s, scenario_id, target, post_id)
+            
+    asyncio.create_task(_runner())
+    return {"status": "started", "target": target, "post_id": post_id}
+
 class ScenarioStepBulkItem(BaseModel):
     step_order: int
     role_id: int
