@@ -3,8 +3,8 @@ import zipfile
 import tempfile
 import logging
 from typing import Tuple
-from opentele.td import TDesktop
-from opentele.api import CreateNewSession
+from opentele2.td import TDesktop
+from opentele2.api import CreateNewSession
 from security import encrypt_session
 
 logger = logging.getLogger(__name__)
@@ -44,35 +44,27 @@ async def convert_tdata_zip_to_encrypted_session(zip_path: str) -> Tuple[bool, s
             try:
                 td = TDesktop(tdata_path)
                 
-                if not td.isLoaded():
-                    logger.error("opentele failed to load tdata (no valid auth keys found).")
+                if not td.isLoaded() or not td.accounts:
+                    logger.error("opentele failed to load tdata (no valid auth keys found or no accounts).")
                     return False, "failed_invalid_tdata"
 
-                # Generate Pyrogram StringSession. 
-                # CreateNewSession API uses default API ID and Hash.
-                pyrogram_session = await td.ToPyrogram(create_new_session=True)
+                # Generate Pyrogram-compatible session string for the main account
+                # Format: ">BI?256sQ?"
+                import struct
+                import base64
+                acc = td.mainAccount or td.accounts[0]
                 
-                # ToPyrogram returns a Pyrogram Client. We can extract the session string.
-                # Actually, opentele Pyrogram integration:
-                # string_session = td.ToPyrogramSession() # this might not exist.
-                # We can use Pyrogram's export_session_string() on the client if it starts, 
-                # or there's an API in opentele. Let's try Pyrogram export.
-                # Wait, ToPyrogram returns a Pyrogram Client instance.
-                # In Pyrogram, you can get the session string by `await client.export_session_string()`
-                # ONLY if the client is connected. 
-                # Let's check opentele docs via generic exception handler if it fails.
+                packed = struct.pack(
+                    ">BI?256sQ?",
+                    acc.MainDcId,
+                    acc.api.api_id,
+                    False, # test_mode
+                    acc.authKey.key,
+                    acc.UserId,
+                    False # is_bot
+                )
+                string_session = base64.urlsafe_b64encode(packed).decode().rstrip("=")
                 
-                try:
-                    # In opentele >= 1.15, you can often do this:
-                    string_session = td.ToPyrogramSession() 
-                except AttributeError:
-                    logger.error("ToPyrogramSession not found on TDesktop instance.")
-                    return False, "failed_invalid_tdata"
-
-                if not string_session:
-                    logger.error("Failed to generate Pyrogram session from tdata.")
-                    return False, "failed_invalid_tdata"
-                    
                 encrypted_session = encrypt_session(string_session)
                 return True, encrypted_session
                 
