@@ -27,50 +27,7 @@ async def convert_tdata_zip_to_encrypted_session(zip_path: str) -> Tuple[bool, s
                 logger.error("Failed to extract tdata: Bad zip file.")
                 return False, "failed_invalid_tdata"
             
-            # Log files before sanitization
-            all_extracted_before = []
-            for root, dirs, files in os.walk(temp_dir):
-                for f in files:
-                    all_extracted_before.append(os.path.relpath(os.path.join(root, f), temp_dir))
-            logger.error(f"Extracted files before sanitization: {all_extracted_before}")
-            
-            # Sanitize files that have trailing 's' added by backup panels
-            import re
-            for root, dirs, files in os.walk(temp_dir, topdown=False):
-                for filename in files:
-                    new_name = None
-                    if filename == "key_datas":
-                        new_name = "key_data"
-                    elif filename == "settingss":
-                        new_name = "settings"
-                    elif re.match(r'^[A-Fa-f0-9]{16}s$', filename):
-                        new_name = filename[:-1]
-                        
-                    if new_name:
-                        old_path = os.path.join(root, filename)
-                        new_path = os.path.join(root, new_name)
-                        if not os.path.exists(new_path):
-                            os.rename(old_path, new_path)
-                            logger.error(f"Sanitized filename: {filename} -> {new_name}")
-                            
-                for dirname in dirs:
-                    new_name = None
-                    if re.match(r'^[A-Fa-f0-9]{16}s$', dirname):
-                        new_name = dirname[:-1]
-                        
-                    if new_name:
-                        old_path = os.path.join(root, dirname)
-                        new_path = os.path.join(root, new_name)
-                        if not os.path.exists(new_path):
-                            os.rename(old_path, new_path)
-                            logger.error(f"Sanitized directory: {dirname} -> {new_name}")
-            
-            # Log files after sanitization
-            all_extracted_after = []
-            for root, dirs, files in os.walk(temp_dir):
-                for f in files:
-                    all_extracted_after.append(os.path.relpath(os.path.join(root, f), temp_dir))
-            logger.error(f"Extracted files after sanitization: {all_extracted_after}")
+
             
             # Find tdata folder (often it's inside a subfolder in the zip)
             tdata_path = None
