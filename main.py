@@ -45,6 +45,11 @@ main_app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount media directory
+media_dir = os.path.join(os.path.dirname(__file__), "media")
+os.makedirs(media_dir, exist_ok=True)
+main_app.mount("/media", StaticFiles(directory=media_dir), name="media")
+
 # Serve SPA from frontend/dist
 frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
@@ -60,8 +65,8 @@ if os.path.exists(frontend_path):
     # Catch-all route to serve index.html for client-side routing
     @main_app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        # Don't intercept API or WS routes
-        if full_path.startswith("api/") or full_path.startswith("ws/"):
+        # Don't intercept API, WS, or media routes
+        if full_path.startswith("api/") or full_path.startswith("ws/") or full_path.startswith("media/"):
             # returning None lets FastAPI handle the 404
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Not Found")

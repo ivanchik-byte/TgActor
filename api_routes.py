@@ -462,7 +462,7 @@ async def get_inbox_chats():
         # Get latest message for each (account_id, peer_id)
         stmt = """
             SELECT DISTINCT ON (account_id, peer_id) 
-                account_id, peer_id, sender_username, text, received_at, is_incoming
+                account_id, peer_id, sender_username, text, received_at, is_incoming, media_type, media_path
             FROM inbox_messages 
             ORDER BY account_id, peer_id, received_at DESC
         """
@@ -476,7 +476,9 @@ async def get_inbox_chats():
                 "sender_username": row[2],
                 "last_message": row[3],
                 "updated_at": row[4],
-                "is_incoming": row[5]
+                "is_incoming": row[5],
+                "media_type": row[6],
+                "media_path": row[7]
             })
         
         # Sort all chats by updated_at globally

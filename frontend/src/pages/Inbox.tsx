@@ -58,15 +58,55 @@ export default function Inbox() {
     }
   }, [chats]);
 
+  const [filterAccountId, setFilterAccountId] = useState<number | null>(null);
+
+  // Extract unique account IDs from active chats
+  const accountIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const chat of chats) {
+      ids.add(chat.account_id);
+    }
+    return Array.from(ids).sort((a, b) => a - b);
+  }, [chats]);
+
   // Group chats by account_id
   const groupedChats = useMemo(() => {
     const groups: Record<number, typeof chats> = {};
     for (const chat of chats) {
+      if (filterAccountId !== null && chat.account_id !== filterAccountId) continue;
       if (!groups[chat.account_id]) groups[chat.account_id] = [];
       groups[chat.account_id].push(chat);
     }
     return groups;
-  }, [chats]);
+  }, [chats, filterAccountId]);
+
+  // Helper to parse links and render as clickable components
+  const renderMessageText = (text: string, isIncoming: boolean) => {
+    if (!text) return '';
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: isIncoming ? 'var(--accent)' : '#fff',
+              textDecoration: 'underline',
+              fontWeight: 500,
+              wordBreak: 'break-all'
+            }}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
 
   // Generate avatar color from string
   const avatarColor = (str: string) => {
@@ -137,6 +177,55 @@ export default function Inbox() {
             flexShrink: 0,
           }}
         >
+          {/* Account Filter Pills */}
+          <div
+            style={{
+              padding: '10px 14px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              gap: '6px',
+              overflowX: 'auto',
+              whiteSpace: 'nowrap',
+              backgroundColor: 'var(--bg-surface)'
+            }}
+          >
+            <button
+              onClick={() => setFilterAccountId(null)}
+              style={{
+                padding: '4px 10px',
+                borderRadius: '16px',
+                fontSize: '11px',
+                fontWeight: 600,
+                border: '1px solid var(--border-color)',
+                cursor: 'pointer',
+                backgroundColor: filterAccountId === null ? 'var(--accent)' : 'var(--bg-card)',
+                color: filterAccountId === null ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.15s'
+              }}
+            >
+              Все
+            </button>
+            {accountIds.map(id => (
+              <button
+                key={id}
+                onClick={() => setFilterAccountId(id)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '16px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  backgroundColor: filterAccountId === id ? 'var(--accent)' : 'var(--bg-card)',
+                  color: filterAccountId === id ? '#fff' : 'var(--text-muted)',
+                  transition: 'all 0.15s'
+                }}
+              >
+                acc #{id}
+              </button>
+            ))}
+          </div>
+
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {Object.keys(groupedChats).length === 0 && (
               <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
@@ -310,7 +399,57 @@ export default function Inbox() {
                         border: msg.is_incoming ? '1px solid var(--border-color)' : 'none',
                       }}
                     >
-                      <div>{msg.text}</div>
+                      {/* Message Text with clickable links */}
+                      <div>{renderMessageText(msg.text, msg.is_incoming)}</div>
+                      
+                      {/* Media Files Rendering */}
+                      {msg.media_path && (
+                        <div style={{ marginTop: '8px' }}>
+                          {(msg.media_type === 'photo' || msg.media_type === 'sticker' || msg.media_type === 'animation') && (
+                            <div style={{ maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
+                              <img src={msg.media_path} alt={msg.media_type} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                            </div>
+                          )}
+                          {msg.media_type === 'video' && (
+                            <div style={{ maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
+                              <video src={msg.media_path} controls style={{ width: '100%', height: 'auto', display: 'block' }} />
+                            </div>
+                          )}
+                          {(msg.media_type === 'voice' || msg.media_type === 'audio') && (
+                            <div style={{ maxWidth: '280px' }}>
+                              <audio src={msg.media_path} controls style={{ width: '100%' }} />
+                            </div>
+                          )}
+                          {msg.media_type === 'document' && (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              backgroundColor: msg.is_incoming ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.15)',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              marginTop: '4px'
+                            }}>
+                              <Paperclip style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                              <a
+                                href={msg.media_path}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  fontSize: '12px',
+                                  color: msg.is_incoming ? 'var(--accent)' : '#fff',
+                                  textDecoration: 'underline',
+                                  wordBreak: 'break-all'
+                                }}
+                              >
+                                Открыть документ
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Timestamp */}
                       <div style={{
                         fontSize: '10px',
                         marginTop: '6px',
