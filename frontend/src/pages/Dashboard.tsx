@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Upload, Loader2, Phone, Folder, RefreshCw, Trash2, User, X } from 'lucide-react';
+import { Upload, Loader2, Phone, Folder, RefreshCw, Trash2, User, X, Shield, Plus } from 'lucide-react';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
@@ -38,6 +38,12 @@ export default function Dashboard() {
   const [editingProxyAccount, setEditingProxyAccount] = useState<any | null>(null);
   const [selectedProxyId, setSelectedProxyId] = useState<number | null>(null);
 
+  // Proxy management state
+  const [showAddProxy, setShowAddProxy] = useState(false);
+  const [proxyInput, setProxyInput] = useState('');
+  const [proxyProtocol, setProxyProtocol] = useState('socks5');
+  const [confirmDeleteProxyId, setConfirmDeleteProxyId] = useState<number | null>(null);
+
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts(prev => [...prev, { id, text, type }]);
@@ -69,6 +75,46 @@ export default function Dashboard() {
     },
     onError: (err: any) => {
       showToast(err?.response?.data?.detail || 'Не удалось обновить прокси!', 'error');
+    }
+  });
+
+  const addProxy = useMutation({
+    mutationFn: async () => {
+      // Parse proxy lines: ip:port, ip:port:user:pass, or ip:port:protocol:user:pass
+      const lines = proxyInput.split('\n').map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split(':');
+        if (parts.length < 2) continue;
+        const ip = parts[0];
+        const port = parseInt(parts[1]);
+        let username = null, password = null;
+        let protocol = proxyProtocol;
+        if (parts.length === 4) {
+          username = parts[2];
+          password = parts[3];
+        } else if (parts.length >= 5) {
+          protocol = parts[2];
+          username = parts[3];
+          password = parts[4];
+        }
+        await axios.post('/api/proxies', { ip, port, protocol, username, password });
+      }
+    },
+    onSuccess: () => {
+      setProxyInput('');
+      setShowAddProxy(false);
+      queryClient.invalidateQueries({ queryKey: ['proxies'] });
+      showToast('Прокси успешно добавлены!', 'success');
+    },
+    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка!', 'error')
+  });
+
+  const deleteProxy = useMutation({
+    mutationFn: async (id: number) => axios.delete(`/api/proxies/${id}`),
+    onSuccess: () => {
+      setConfirmDeleteProxyId(null);
+      queryClient.invalidateQueries({ queryKey: ['proxies'] });
+      showToast('Прокси удалён.', 'info');
     }
   });
 
@@ -1048,6 +1094,185 @@ export default function Dashboard() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* ===== PROXY MANAGEMENT SECTION ===== */}
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Shield className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>Управление прокси</h2>
+            <span style={{
+              fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+              backgroundColor: 'var(--accent-soft)', color: 'var(--accent-text)'
+            }}>{proxies.length}</span>
+          </div>
+          <button
+            onClick={() => setShowAddProxy(!showAddProxy)}
+            style={{
+              backgroundColor: showAddProxy ? 'var(--bg-main)' : 'var(--accent)',
+              color: showAddProxy ? 'var(--text-muted)' : '#fff',
+              border: showAddProxy ? '1px solid var(--border-color)' : 'none',
+              padding: '8px 14px', borderRadius: '8px', fontSize: '12px',
+              fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+              transition: 'all 0.15s'
+            }}
+          >
+            {showAddProxy ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            {showAddProxy ? 'Скрыть' : 'Добавить прокси'}
+          </button>
+        </div>
+
+        {/* Add Proxy Form */}
+        {showAddProxy && (
+          <div style={{
+            backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+            borderRadius: '12px', padding: '16px', marginBottom: '16px',
+            display: 'flex', flexDirection: 'column', gap: '10px'
+          }}>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                Прокси (по одному на строку)
+              </label>
+              <textarea
+                placeholder={"ip:port\nip:port:user:pass\n192.168.1.1:1080:admin:secret"}
+                value={proxyInput}
+                onChange={e => setProxyInput(e.target.value)}
+                rows={4}
+                style={{
+                  ...inputStyle,
+                  resize: 'vertical',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.6'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                  Протокол
+                </label>
+                <select
+                  value={proxyProtocol}
+                  onChange={e => setProxyProtocol(e.target.value)}
+                  style={{ ...inputStyle, cursor: 'pointer', appearance: 'none' as const }}
+                >
+                  <option value="socks5">SOCKS5</option>
+                  <option value="http">HTTP</option>
+                </select>
+              </div>
+              <button
+                onClick={() => addProxy.mutate()}
+                disabled={!proxyInput.trim() || addProxy.isPending}
+                style={{
+                  ...btnAccent,
+                  opacity: (!proxyInput.trim() || addProxy.isPending) ? 0.5 : 1,
+                  display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+              >
+                {addProxy.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {addProxy.isPending ? 'Добавляем...' : 'Добавить'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Proxy Confirm */}
+        {confirmDeleteProxyId && (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+              borderRadius: '16px', padding: '24px', maxWidth: '400px', width: '90%',
+              display: 'flex', flexDirection: 'column', gap: '16px',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
+            }}>
+              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>
+                Удалить этот прокси?
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => deleteProxy.mutate(confirmDeleteProxyId)}
+                  style={{
+                    flex: 1, backgroundColor: '#ef4444', color: '#fff', border: 'none',
+                    borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >Удалить</button>
+                <button
+                  onClick={() => setConfirmDeleteProxyId(null)}
+                  style={{
+                    backgroundColor: 'var(--bg-main)', color: 'var(--text-muted)',
+                    border: '1px solid var(--border-color)', borderRadius: '10px',
+                    padding: '10px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                  }}
+                >Отмена</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Proxy List */}
+        {proxies.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '13px'
+          }}>
+            <Shield className="w-8 h-8" style={{ color: 'var(--border-color)', margin: '0 auto 8px' }} />
+            <p style={{ fontWeight: 600 }}>Прокси не добавлены</p>
+            <p style={{ fontSize: '12px', marginTop: '4px' }}>Нажмите «Добавить прокси» для импорта</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {proxies.map((p: any) => (
+              <div
+                key={p.id}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '10px 14px', borderRadius: '8px',
+                  backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                  transition: 'all 0.15s'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    backgroundColor: p.status === 'active' ? '#10b981' : '#ef4444'
+                  }} />
+                  <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)' }}>
+                    {p.ip}:{p.port}
+                  </span>
+                  <span style={{
+                    fontSize: '9px', fontWeight: 700, padding: '1px 5px',
+                    borderRadius: '4px', backgroundColor: 'rgba(99,102,241,0.1)',
+                    color: '#818cf8', textTransform: 'uppercase' as const
+                  }}>
+                    {p.protocol}
+                  </span>
+                  {p.username && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {p.username}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setConfirmDeleteProxyId(p.id)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-muted)', padding: '4px', display: 'flex', alignItems: 'center',
+                    transition: 'color 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>

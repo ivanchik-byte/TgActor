@@ -69,6 +69,7 @@ export default function Scenarios() {
   const [isActive, setIsActive] = useState(true);
   const [defaultMinDelay, setDefaultMinDelay] = useState(30);
   const [defaultMaxDelay, setDefaultMaxDelay] = useState(60);
+  const [scenarioWeight, setScenarioWeight] = useState(1);
 
   // Replica steps state
   const [replicas, setReplicas] = useState<Replica[]>([]);
@@ -114,6 +115,7 @@ export default function Scenarios() {
         setIsActive(activeScen.is_active);
         setDefaultMinDelay(activeScen.min_delay);
         setDefaultMaxDelay(activeScen.max_delay);
+        setScenarioWeight(activeScen.weight ?? 1);
       }
     }
   }, [activeScenarioId, scenarios]);
@@ -187,7 +189,8 @@ export default function Scenarios() {
         title: scenarioName,
         is_active: isActive,
         min_delay: defaultMinDelay,
-        max_delay: defaultMaxDelay
+        max_delay: defaultMaxDelay,
+        weight: scenarioWeight
       });
     },
     onSuccess: () => {
@@ -1227,6 +1230,22 @@ export default function Scenarios() {
 
                 <div>
                   <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-запуск при публикации" />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Вес сценария (рандомайзер): {scenarioWeight}</label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
+                    value={scenarioWeight}
+                    onChange={e => setScenarioWeight(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--accent)' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
+                    <span>1 (редко)</span>
+                    <span>10 (часто)</span>
+                  </div>
                 </div>
 
                 <button

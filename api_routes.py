@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 
-from models import Account, Proxy, Scenario, ScenarioStep, SystemConfig, InboxMessage
+from models import Account, Proxy, Scenario, ScenarioStep, SystemConfig, InboxMessage, MonitoredChannel
 from inbox_listener import async_session
 
 router = APIRouter()
@@ -381,12 +381,14 @@ class ScenarioCreate(BaseModel):
     is_active: bool = False
     min_delay: float = 30.0
     max_delay: float = 60.0
+    weight: int = 1
 
 class ScenarioUpdate(BaseModel):
     title: str
     is_active: bool
     min_delay: float
     max_delay: float
+    weight: int = 1
 
 @router.get("/api/scenarios")
 async def get_scenarios():
@@ -412,6 +414,7 @@ async def update_scenario(scenario_id: int, sc: ScenarioUpdate):
         scenario.is_active = sc.is_active
         scenario.min_delay = sc.min_delay
         scenario.max_delay = sc.max_delay
+        scenario.weight = sc.weight
         await session.commit()
         return {"status": "ok"}
 
@@ -748,3 +751,98 @@ async def test_account_connection(account_id: int):
                 account.status = "disconnected"
                 await session.commit()
                 return {"status": "error", "message": f"Не удалось подключиться: {str(e)}"}
+
+# -- Monitored Channels --
+class ChannelCreate(BaseModel):
+    channel_identifier: str  # supports comma-separated or newline-separated batch input
+    min_delay_seconds: int = 60
+    max_delay_seconds: int = 300
+    no_repeat_scenarios: bool = True
+
+class ChannelUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    no_repeat_scenarios: Optional[bool] = None
+    min_delay_seconds: Optional[int] = None
+    max_delay_seconds: Optional[int] = None
+    display_name: Optional[str] = None
+
+@router.get("/api/channels")
+async def get_channels():
+    async with async_session() as session:
+        result = await session.execute(select(MonitoredChannel).order_by(MonitoredChannel.created_at.desc()))
+        return result.scalars().all()
+
+@router.post("/api/channels")
+async def create_channels(req: ChannelCreate):
+    import re
+    # Support batch: split by comma, newline, or semicolon
+    identifiers = re.split(r'[,;\n]+', req.channel_identifier)
+    identifiers = [i.strip() for i in identifiers if i.strip()]
+    
+    created = []
+    async with async_session() as session:
+        for ident in identifiers:
+            # Normalize: extract @username from t.me links
+            if 't.me/' in ident:
+                match = re.search(r't\.me/([^/\s]+)', ident)
+                if match and match.group(1) != 'c':
+                    ident = f"@{match.group(1)}"
+            if not ident.startswith('@') and not ident.startswith('-') and not ident.lstrip('-').isdigit():
+                ident = f"@{ident}"
+            
+            ch = MonitoredChannel(
+                channel_identifier=ident,
+                min_delay_seconds=req.min_delay_seconds,
+                max_delay_seconds=req.max_delay_seconds,
+                no_repeat_scenarios=req.no_repeat_scenarios
+            )
+            session.add(ch)
+            created.append(ident)
+        await session.commit()
+    return {"status": "ok", "created": created, "count": len(created)}
+
+@router.delete("/api/channels/{channel_id}")
+async def delete_channel(channel_id: int):
+    async with async_session() as session:
+        ch = await session.get(MonitoredChannel, channel_id)
+        if ch:
+            await session.delete(ch)
+            await session.commit()
+        return {"status": "deleted"}
+
+@router.patch("/api/channels/{channel_id}")
+async def update_channel(channel_id: int, req: ChannelUpdate):
+    async with async_session() as session:
+        ch = await session.get(MonitoredChannel, channel_id)
+        if not ch:
+            raise HTTPException(404, detail="Канал не найден.")
+        if req.is_active is not None:
+            ch.is_active = req.is_active
+        if req.no_repeat_scenarios is not None:
+            ch.no_repeat_scenarios = req.no_repeat_scenarios
+        if req.min_delay_seconds is not None:
+            ch.min_delay_seconds = req.min_delay_seconds
+        if req.max_delay_seconds is not None:
+            ch.max_delay_seconds = req.max_delay_seconds
+        if req.display_name is not None:
+            ch.display_name = req.display_name
+        await session.commit()
+        return {"status": "updated"}
+
+@router.post("/api/channels/monitor/start")
+async def start_channel_monitor():
+    from channel_monitor import start_monitor
+    import asyncio
+    asyncio.create_task(start_monitor())
+    return {"status": "started"}
+
+@router.post("/api/channels/monitor/stop")
+async def stop_channel_monitor():
+    from channel_monitor import stop_monitor
+    await stop_monitor()
+    return {"status": "stopped"}
+
+@router.get("/api/channels/monitor/status")
+async def channel_monitor_status():
+    from channel_monitor import is_monitor_running
+    return {"running": is_monitor_running()}
