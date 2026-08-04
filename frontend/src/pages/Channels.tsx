@@ -411,15 +411,10 @@ export default function Channels() {
                           <Clock className="w-3.5 h-3.5" />
                           <span>пауза: от</span>
                           <input
+                            id={"min_delay_" + ch.id}
                             key={ch.id + "_min_" + ch.min_delay_seconds}
                             type="number"
                             defaultValue={ch.min_delay_seconds}
-                            onBlur={e => {
-                              const val = Number(e.target.value);
-                              if (val !== ch.min_delay_seconds) {
-                                updateChannelSettings.mutate({ id: ch.id, minDelay: val });
-                              }
-                            }}
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.currentTarget.blur();
@@ -439,15 +434,10 @@ export default function Channels() {
                           />
                           <span>до</span>
                           <input
+                            id={"max_delay_" + ch.id}
                             key={ch.id + "_max_" + ch.max_delay_seconds}
                             type="number"
                             defaultValue={ch.max_delay_seconds}
-                            onBlur={e => {
-                              const val = Number(e.target.value);
-                              if (val !== ch.max_delay_seconds) {
-                                updateChannelSettings.mutate({ id: ch.id, maxDelay: val });
-                              }
-                            }}
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.currentTarget.blur();
@@ -466,6 +456,34 @@ export default function Channels() {
                             }}
                           />
                           <span>с</span>
+                          <button
+                            onClick={() => {
+                              const minEl = document.getElementById("min_delay_" + ch.id) as HTMLInputElement;
+                              const maxEl = document.getElementById("max_delay_" + ch.id) as HTMLInputElement;
+                              if (minEl && maxEl) {
+                                updateChannelSettings.mutate({
+                                  id: ch.id,
+                                  minDelay: Number(minEl.value),
+                                  maxDelay: Number(maxEl.value)
+                                });
+                                showToast('Паузы для канала сохранены!', 'success');
+                              }
+                            }}
+                            style={{
+                              backgroundColor: 'var(--accent)',
+                              border: 'none',
+                              color: '#fff',
+                              borderRadius: '6px',
+                              padding: '2px 8px',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              marginLeft: '4px',
+                              transition: 'opacity 0.15s'
+                            }}
+                          >
+                            Сохранить
+                          </button>
                         </div>
                         {ch.no_repeat_scenarios && (
                           <span style={{
