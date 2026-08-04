@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save } from 'lucide-react';
@@ -75,6 +75,7 @@ export default function Scenarios() {
 
   // Replica steps state
   const [replicas, setReplicas] = useState<Replica[]>([]);
+  const [activeEmojiPickerId, setActiveEmojiPickerId] = useState<string | null>(null);
 
   // Fetch accounts from API
   const { data: accounts = [] } = useQuery({
@@ -83,7 +84,7 @@ export default function Scenarios() {
   });
 
   // Filter only accounts in commenting pool
-  const commentingAccounts = accounts.filter((a: any) => a.in_commenting_pool);
+  const commentingAccounts = useMemo(() => accounts.filter((a: any) => a.in_commenting_pool), [accounts]);
 
   // Fetch scenarios list
   const { data: scenarios = [] } = useQuery({
@@ -160,7 +161,7 @@ export default function Scenarios() {
     } else {
       setReplicas([]);
     }
-  }, [dbSteps, commentingAccounts]);
+  }, [dbSteps]);
 
   // Mutation: Create Scenario
   const createScenarioMutation = useMutation({
@@ -1078,39 +1079,55 @@ export default function Scenarios() {
                           </div>
 
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
-                            <label style={labelStyle}>Набор реакций (нажмите для выбора)</label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
-                              {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
-                                const currentList = (replica.reactions || '').split(/\s+/).filter(Boolean);
-                                const isActive = currentList.includes(emoji);
-                                return (
-                                  <button
-                                    key={emoji}
-                                    type="button"
-                                    onClick={() => {
-                                      let newList;
-                                      if (isActive) {
-                                        newList = currentList.filter(e => e !== emoji);
-                                      } else {
-                                        newList = [...currentList, emoji];
-                                      }
-                                      handleUpdateReplica(replica.id, 'reactions', newList.join(' '));
-                                    }}
-                                    style={{
-                                      fontSize: '14px',
-                                      padding: '6px 10px',
-                                      borderRadius: '8px',
-                                      border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                                      backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-main)',
-                                      cursor: 'pointer',
-                                      transition: 'all 0.15s',
-                                    }}
-                                  >
-                                    {emoji}
-                                  </button>
-                                );
-                              })}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <label style={labelStyle}>Набор реакций</label>
+                              <button
+                                type="button"
+                                onClick={() => setActiveEmojiPickerId(activeEmojiPickerId === replica.id ? null : replica.id)}
+                                style={{
+                                  background: 'none', border: '1px solid var(--border-color)', borderRadius: '6px',
+                                  color: 'var(--accent-text)', padding: '2px 8px', fontSize: '11px', cursor: 'pointer',
+                                  backgroundColor: activeEmojiPickerId === replica.id ? 'var(--accent-soft)' : 'transparent',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                {activeEmojiPickerId === replica.id ? 'Скрыть выбор' : 'Выбрать эмодзи ⚡'}
+                              </button>
                             </div>
+                            {activeEmojiPickerId === replica.id && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px', backgroundColor: 'var(--bg-main)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
+                                  const currentList = (replica.reactions || '').split(/\s+/).filter(Boolean);
+                                  const isActive = currentList.includes(emoji);
+                                  return (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => {
+                                        let newList;
+                                        if (isActive) {
+                                          newList = currentList.filter(e => e !== emoji);
+                                        } else {
+                                          newList = [...currentList, emoji];
+                                        }
+                                        handleUpdateReplica(replica.id, 'reactions', newList.join(' '));
+                                      }}
+                                      style={{
+                                        fontSize: '14px',
+                                        padding: '6px 10px',
+                                        borderRadius: '8px',
+                                        border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                                        backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-main)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                      }}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                             <input
                               type="text"
                               value={replica.reactions}
