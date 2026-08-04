@@ -183,10 +183,6 @@ async def execute_scenario(
                             await asyncio.sleep(random.uniform(0.5, 2.0))
                             await r_client.client.send_reaction(target_chat_id, msg_id, emoji)
                             logger.info(f"Аккаунт {r_acc.id} поставил реакцию {emoji}")
-                            try:
-                                await r_client.client.leave_chat(target_chat_id)
-                            except Exception:
-                                pass
                         except Exception as e:
                             logger.error(f"Ошибка постановки реакции аккаунтом {r_acc.id}: {e}")
                         finally:
@@ -199,13 +195,9 @@ async def execute_scenario(
             await session.commit()
             break
 
-    # Stop all clients and leave target discussion group/channel
+    # Stop all clients
     for c in clients.values():
         try:
-            try:
-                await c.client.leave_chat(target_chat_id)
-            except Exception:
-                pass
             await c.stop()
         except Exception:
             pass
