@@ -56,6 +56,14 @@ export default function Inbox() {
   const [isDragging, setIsDragging] = useState(false);
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Toast notifications
+  const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts(prev => [...prev, { id, text, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  };
 
   const { data: chats = [], refetch } = useQuery({
     queryKey: ['inboxChats'],
@@ -91,6 +99,9 @@ export default function Inbox() {
       setText('');
       setAttachedFile(null);
       queryClient.invalidateQueries({ queryKey: ['inboxMessages'] });
+    },
+    onError: (err: any) => {
+      showToast(err?.response?.data?.detail || 'Не удалось отправить сообщение!', 'error');
     }
   });
 
@@ -712,6 +723,26 @@ export default function Inbox() {
             </div>
           )}
         </div>
+      </div>
+      
+      {/* Toast Notifications */}
+      <div style={{ position: 'fixed', bottom: '20px', right: '20px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 9999 }}>
+        {toasts.map(t => (
+          <div
+            key={t.id}
+            style={{
+              padding: '12px 20px',
+              borderRadius: '10px',
+              color: '#fff',
+              fontSize: '13px',
+              fontWeight: 600,
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+              backgroundColor: t.type === 'success' ? '#10b981' : t.type === 'error' ? '#ef4444' : '#3b82f6',
+            }}
+          >
+            {t.text}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -62,7 +62,10 @@ class TelegramSessionClient:
             return None
 
         try:
-            await self.client.send_chat_action(chat_id, ChatAction.TYPING)
+            try:
+                await self.client.send_chat_action(chat_id, ChatAction.TYPING)
+            except Exception as e:
+                logger.warning(f"Could not send typing action: {e}")
             
             delay = random.uniform(*delay_range)
             logger.info(f"Typing for {delay:.2f} seconds...")
