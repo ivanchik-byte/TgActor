@@ -64,6 +64,46 @@ export default function Dashboard() {
     queryFn: async () => (await axios.get('/api/proxies')).data
   });
 
+  const [renamingAccountId, setRenamingAccountId] = useState<number | null>(null);
+  const [renamingName, setRenamingName] = useState('');
+
+  const updateAccountName = useMutation({
+    mutationFn: async ({ id, name }: { id: number; name: string }) => {
+      await axios.patch(`/api/accounts/${id}/name`, { custom_name: name || null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setRenamingAccountId(null);
+      setRenamingName('');
+      showToast('Имя аккаунта изменено!', 'success');
+    },
+    onError: (err: any) => {
+      showToast(err?.response?.data?.detail || 'Не удалось изменить имя!', 'error');
+    }
+  });
+
+  const reorderAccounts = useMutation({
+    mutationFn: async (orderedIds: number[]) => {
+      await axios.post('/api/accounts/reorder', { ids: orderedIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    }
+  });
+
+  const handleMoveAccount = (index: number, direction: 'left' | 'right') => {
+    const newAccounts = [...accounts];
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= accounts.length) return;
+    
+    const temp = newAccounts[index];
+    newAccounts[index] = newAccounts[targetIndex];
+    newAccounts[targetIndex] = temp;
+    
+    const orderedIds = newAccounts.map((a: any) => a.id);
+    reorderAccounts.mutate(orderedIds);
+  };
+
   const updateProxy = useMutation({
     mutationFn: async ({ accountId, proxyId }: { accountId: number, proxyId: number | null }) => {
       await axios.patch(`/api/accounts/${accountId}/proxy`, { proxy_id: proxyId });
@@ -410,11 +450,11 @@ export default function Dashboard() {
                 justifyContent: 'center',
                 border: '1px solid var(--border-color)',
               }}>
-                {(selectedProfileAccount.first_name || selectedProfileAccount.username || '?')[0]?.toUpperCase()}
+                {(selectedProfileAccount.custom_name || selectedProfileAccount.first_name || selectedProfileAccount.username || '?')[0]?.toUpperCase()}
               </div>
               <div>
                 <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                  {selectedProfileAccount.first_name || selectedProfileAccount.username || 'Без имени'}
+                  {selectedProfileAccount.custom_name || selectedProfileAccount.first_name || selectedProfileAccount.username || 'Без имени'}
                 </h4>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   {selectedProfileAccount.username ? `@${selectedProfileAccount.username}` : 'Юзернейм отсутствует'}
@@ -499,7 +539,7 @@ export default function Dashboard() {
                 Изменение прокси
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                Выберите прокси-сервер для аккаунта {editingProxyAccount.first_name || editingProxyAccount.username || `acc #${editingProxyAccount.id}`}:
+                Выберите прокси-сервер для аккаунта {editingProxyAccount.custom_name || editingProxyAccount.first_name || editingProxyAccount.username || `acc #${editingProxyAccount.id}`}:
               </p>
               
               <select
@@ -876,8 +916,8 @@ export default function Dashboard() {
             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
             gap: '16px'
           }}>
-            {accounts.map((acc: any) => {
-              const name = acc.first_name || acc.username || 'Без имени';
+            {accounts.map((acc: any, index: number) => {
+              const name = acc.custom_name || acc.first_name || acc.username || 'Без имени';
               const initial = name[0]?.toUpperCase() || '?';
               const statusColor = acc.status === 'active' ? '#22c55e' : '#ef4444';
 
@@ -926,34 +966,122 @@ export default function Dashboard() {
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <h4 style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        color: 'var(--text-main)',
-                        margin: 0,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {name}
-                      </h4>
+                      {renamingAccountId === acc.id ? (
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            value={renamingName}
+                            onChange={e => setRenamingName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                updateAccountName.mutate({ id: acc.id, name: renamingName });
+                              } else if (e.key === 'Escape') {
+                                setRenamingAccountId(null);
+                              }
+                            }}
+                            autoFocus
+                            style={{
+                              width: '100%',
+                              backgroundColor: 'var(--bg-main)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '6px',
+                              padding: '2px 6px',
+                              fontSize: '12px',
+                              color: 'var(--text-main)',
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            onClick={() => updateAccountName.mutate({ id: acc.id, name: renamingName })}
+                            style={{
+                              fontSize: '11px', color: '#10b981', background: 'none', border: 'none', cursor: 'pointer', padding: '2px'
+                            }}
+                            title="Сохранить"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => setRenamingAccountId(null)}
+                            style={{
+                              fontSize: '11px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '2px'
+                            }}
+                            title="Отмена"
+                          >
+                            ✗
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                          <h4 
+                            onClick={() => {
+                              setRenamingAccountId(acc.id);
+                              setRenamingName(acc.custom_name || name);
+                            }}
+                            title="Кликните, чтобы изменить отображаемое имя"
+                            style={{
+                              fontSize: '14px',
+                              fontWeight: 700,
+                              color: 'var(--text-main)',
+                              margin: 0,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              cursor: 'pointer',
+                              borderBottom: '1px dashed var(--text-muted)'
+                            }}
+                          >
+                            {name}
+                          </h4>
+                        </div>
+                      )}
                       <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
                         {acc.phone || '—'}
                       </p>
                     </div>
 
-                    {/* Status Badge */}
-                    <div style={{
-                      backgroundColor: `${statusColor}15`,
-                      border: `1px solid ${statusColor}30`,
-                      color: statusColor,
-                      padding: '3px 8px',
-                      borderRadius: '20px',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      textTransform: 'uppercase'
-                    }}>
-                      {acc.status}
+                    {/* Status & Reordering Actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                      <div style={{
+                        backgroundColor: `${statusColor}15`,
+                        border: `1px solid ${statusColor}30`,
+                        color: statusColor,
+                        padding: '3px 8px',
+                        borderRadius: '20px',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase'
+                      }}>
+                        {acc.status}
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          onClick={() => handleMoveAccount(index, 'left')}
+                          disabled={index === 0}
+                          style={{
+                            background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px',
+                            color: index === 0 ? 'var(--border-color)' : 'var(--text-muted)',
+                            padding: '2px 4px', fontSize: '10px', cursor: index === 0 ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center'
+                          }}
+                          title="Сдвинуть влево"
+                        >
+                          ←
+                        </button>
+                        <button
+                          onClick={() => handleMoveAccount(index, 'right')}
+                          disabled={index === accounts.length - 1}
+                          style={{
+                            background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px',
+                            color: index === accounts.length - 1 ? 'var(--border-color)' : 'var(--text-muted)',
+                            padding: '2px 4px', fontSize: '10px', cursor: index === accounts.length - 1 ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center'
+                          }}
+                          title="Сдвинуть вправо"
+                        >
+                          →
+                        </button>
+                      </div>
                     </div>
                   </div>
 

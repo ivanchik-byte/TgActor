@@ -81,6 +81,16 @@ export default function Channels() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['channels'] })
   });
 
+  const updateChannelSettings = useMutation({
+    mutationFn: async ({ id, minDelay, maxDelay }: { id: number; minDelay?: number; maxDelay?: number }) => {
+      await axios.patch(`/api/channels/${id}`, {
+        min_delay_seconds: minDelay,
+        max_delay_seconds: maxDelay
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['channels'] })
+  });
+
   const startMonitor = useMutation({
     mutationFn: async () => axios.post('/api/channels/monitor/start'),
     onSuccess: () => {
@@ -397,10 +407,64 @@ export default function Channels() {
                         {ch.channel_identifier}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <Clock className="w-3 h-3" />
-                          {ch.min_delay_seconds}–{ch.max_delay_seconds}с
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>пауза: от</span>
+                          <input
+                            type="number"
+                            defaultValue={ch.min_delay_seconds}
+                            onBlur={e => {
+                              const val = Number(e.target.value);
+                              if (val !== ch.min_delay_seconds) {
+                                updateChannelSettings.mutate({ id: ch.id, minDelay: val });
+                              }
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            style={{
+                              width: '45px',
+                              backgroundColor: 'var(--bg-card)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              padding: '1px 3px',
+                              fontSize: '11px',
+                              color: 'var(--text-main)',
+                              textAlign: 'center',
+                              outline: 'none'
+                            }}
+                          />
+                          <span>до</span>
+                          <input
+                            type="number"
+                            defaultValue={ch.max_delay_seconds}
+                            onBlur={e => {
+                              const val = Number(e.target.value);
+                              if (val !== ch.max_delay_seconds) {
+                                updateChannelSettings.mutate({ id: ch.id, maxDelay: val });
+                              }
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            style={{
+                              width: '45px',
+                              backgroundColor: 'var(--bg-card)',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              padding: '1px 3px',
+                              fontSize: '11px',
+                              color: 'var(--text-main)',
+                              textAlign: 'center',
+                              outline: 'none'
+                            }}
+                          />
+                          <span>с</span>
+                        </div>
                         {ch.no_repeat_scenarios && (
                           <span style={{
                             fontSize: '9px', fontWeight: 700, padding: '1px 5px',

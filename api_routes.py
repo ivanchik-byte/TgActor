@@ -55,8 +55,21 @@ class PoolUpdateRequest(BaseModel):
 @router.get("/api/accounts")
 async def get_accounts():
     async with async_session() as session:
-        result = await session.execute(select(Account).order_by(Account.id.asc()))
+        result = await session.execute(select(Account).order_by(Account.position.asc(), Account.id.asc()))
         return result.scalars().all()
+
+class ReorderAccountsRequest(BaseModel):
+    ids: list[int]
+
+@router.post("/api/accounts/reorder")
+async def reorder_accounts(req: ReorderAccountsRequest):
+    async with async_session() as session:
+        for idx, acc_id in enumerate(req.ids):
+            acc = await session.get(Account, acc_id)
+            if acc:
+                acc.position = idx
+        await session.commit()
+        return {"status": "ok"}
 
 @router.patch("/api/accounts/{account_id}/pools")
 async def update_pools(account_id: int, req: PoolUpdateRequest):
@@ -68,7 +81,18 @@ async def update_pools(account_id: int, req: PoolUpdateRequest):
         acc.in_reaction_pool = req.in_reaction_pool
         await session.commit()
         return {"status": "ok"}
+class AccountNameUpdateRequest(BaseModel):
+    custom_name: Optional[str] = None
 
+@router.patch("/api/accounts/{account_id}/name")
+async def update_account_name(account_id: int, req: AccountNameUpdateRequest):
+    async with async_session() as session:
+        acc = await session.get(Account, account_id)
+        if not acc:
+            raise HTTPException(404, "Account not found")
+        acc.custom_name = req.custom_name
+        await session.commit()
+        return {"status": "ok", "custom_name": acc.custom_name}
 class AccountProxyUpdateRequest(BaseModel):
     proxy_id: Optional[int] = None
 
@@ -549,7 +573,7 @@ async def get_inbox_chats():
         stmt = """
             SELECT DISTINCT ON (im.account_id, im.peer_id) 
                 im.account_id, im.peer_id, im.sender_username, im.text, im.received_at, im.is_incoming, im.media_type, im.media_path,
-                a.username, a.first_name, a.phone
+                a.username, a.first_name, a.phone, a.custom_name
             FROM inbox_messages im
             LEFT JOIN accounts a ON im.account_id = a.id
             ORDER BY im.account_id, im.peer_id, im.received_at DESC
@@ -569,7 +593,8 @@ async def get_inbox_chats():
                 "media_path": row[7],
                 "account_username": row[8],
                 "account_name": row[9],
-                "account_phone": row[10]
+                "account_phone": row[10],
+                "account_custom_name": row[11]
             })
         
         # Sort all chats by updated_at globally

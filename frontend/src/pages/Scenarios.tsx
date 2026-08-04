@@ -998,7 +998,7 @@ export default function Scenarios() {
                               >
                                 {commentingAccounts.map((a: any) => (
                                   <option key={a.id} value={String(a.id)}>
-                                    {a.username ? `@${a.username}` : `Аккаунт #${a.id}`} ({a.phone})
+                                    {a.custom_name ? a.custom_name : (a.username ? `@${a.username}` : (a.first_name || `Персонаж #${a.id}`))} ({a.phone})
                                   </option>
                                 ))}
                               </select>
@@ -1362,9 +1362,11 @@ export default function Scenarios() {
 
                      const finalRole = r.role || (commentingAccounts[0] ? String(commentingAccounts[0].id) : '');
                      const currentAccount = commentingAccounts.find((a: any) => String(a.id) === finalRole);
-                     const displayName = currentAccount?.username 
-                       ? `@${currentAccount.username}` 
-                       : (currentAccount?.first_name ? currentAccount.first_name : `Аккаунт ${r.role || '?'}`);
+                     const displayName = currentAccount?.custom_name 
+                       ? currentAccount.custom_name 
+                       : (currentAccount?.username 
+                         ? `@${currentAccount.username}` 
+                         : (currentAccount?.first_name || `Персонаж ${r.role || '?'}`));
 
                      return (
                        <div key={r.id} style={{
