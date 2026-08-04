@@ -1167,42 +1167,48 @@ export default function Scenarios() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
                               <label style={labelStyle}>Выберите персонажей для реакции</label>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {Array.from(new Set(replicas.map(r => r.role))).filter(Boolean).map(roleId => {
-                                  const acc = commentingAccounts.find((a: any) => String(a.id) === roleId);
-                                  const name = acc?.username ? `@${acc.username}` : (acc?.first_name || `Персонаж ${roleId}`);
-                                  const currentRoles = (replica.reactionRoles || '').split(/\s+/).filter(Boolean);
-                                  const isSelected = currentRoles.includes(roleId);
-                                  
-                                  return (
-                                    <button
-                                      key={roleId}
-                                      type="button"
-                                      onClick={() => {
-                                        let newList;
-                                        if (isSelected) {
-                                          newList = currentRoles.filter(r => r !== roleId);
-                                        } else {
-                                          newList = [...currentRoles, roleId];
-                                        }
-                                        handleUpdateReplica(replica.id, 'reactionRoles', newList.join(' '));
-                                        handleUpdateReplica(replica.id, 'reactionCount', newList.length);
-                                      }}
-                                      style={{
-                                        fontSize: '11px',
-                                        fontWeight: 600,
-                                        padding: '5px 8px',
-                                        borderRadius: '6px',
-                                        border: `1px solid ${isSelected ? getRoleColor(roleId) : 'var(--border-color)'}`,
-                                        backgroundColor: isSelected ? 'rgba(255,255,255,0.03)' : 'var(--bg-main)',
-                                        color: isSelected ? getRoleColor(roleId) : 'var(--text-muted)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                      }}
-                                    >
-                                      {name}
-                                    </button>
-                                  );
-                                })}
+                                {commentingAccounts.length === 0 ? (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    Нет аккаунтов в пуле комментирования
+                                  </span>
+                                ) : (
+                                  commentingAccounts.map((acc: any) => {
+                                    const roleId = String(acc.id);
+                                    const name = acc.username ? `@${acc.username}` : (acc.first_name || `Аккаунт ${roleId}`);
+                                    const currentRoles = (replica.reactionRoles || '').split(/\s+/).filter(Boolean);
+                                    const isSelected = currentRoles.includes(roleId);
+                                    
+                                    return (
+                                      <button
+                                        key={roleId}
+                                        type="button"
+                                        onClick={() => {
+                                          let newList;
+                                          if (isSelected) {
+                                            newList = currentRoles.filter(r => r !== roleId);
+                                          } else {
+                                            newList = [...currentRoles, roleId];
+                                          }
+                                          handleUpdateReplica(replica.id, 'reactionRoles', newList.join(' '));
+                                          handleUpdateReplica(replica.id, 'reactionCount', newList.length);
+                                        }}
+                                        style={{
+                                          fontSize: '11px',
+                                          fontWeight: 600,
+                                          padding: '5px 8px',
+                                          borderRadius: '6px',
+                                          border: `1px solid ${isSelected ? getRoleColor(roleId) : 'var(--border-color)'}`,
+                                          backgroundColor: isSelected ? 'rgba(255,255,255,0.03)' : 'var(--bg-main)',
+                                          color: isSelected ? getRoleColor(roleId) : 'var(--text-muted)',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s',
+                                        }}
+                                      >
+                                        {name}
+                                      </button>
+                                    );
+                                  })
+                                )}
                               </div>
                             </div>
                           )}

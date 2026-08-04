@@ -658,7 +658,7 @@ async def send_inbox_message(
     
     client = active_clients.get(account_id)
     if not client:
-        return {"error": "Account is not active or client is offline"}, 400
+        raise HTTPException(status_code=400, detail="Account is not active or client is offline")
     
     media_path = None
     media_type = None
@@ -687,28 +687,29 @@ async def send_inbox_message(
             raise HTTPException(status_code=500, detail=f"Failed to save file: {str(ex)}")
 
     try:
+        tg_msg = None
         # Send via Hydrogram Client
         if file:
             caption = text if text.strip() else None
             if media_type == 'photo':
-                await client.client.send_photo(chat_id=peer_id, photo=media_path, caption=caption)
+                tg_msg = await client.client.send_photo(chat_id=peer_id, photo=media_path, caption=caption)
             elif media_type == 'video':
-                await client.client.send_video(chat_id=peer_id, video=media_path, caption=caption)
+                tg_msg = await client.client.send_video(chat_id=peer_id, video=media_path, caption=caption)
             elif media_type == 'voice':
-                await client.client.send_voice(chat_id=peer_id, voice=media_path, caption=caption)
+                tg_msg = await client.client.send_voice(chat_id=peer_id, voice=media_path, caption=caption)
             elif media_type == 'audio':
-                await client.client.send_audio(chat_id=peer_id, audio=media_path, caption=caption)
+                tg_msg = await client.client.send_audio(chat_id=peer_id, audio=media_path, caption=caption)
             else:
-                await client.client.send_document(chat_id=peer_id, document=media_path, caption=caption)
+                tg_msg = await client.client.send_document(chat_id=peer_id, document=media_path, caption=caption)
         else:
-            await client.client.send_message(peer_id, text)
+            tg_msg = await client.client.send_message(peer_id, text)
             
-        # Store in DB as outgoing
+        # Store in DB as outgoing only after successful confirmation from Telegram
         async with async_session() as session:
             msg = InboxMessage(
                 account_id=account_id,
                 peer_id=peer_id,
-                message_id=0, # outgoing
+                message_id=tg_msg.id if tg_msg else 0,
                 sender_username="Me",
                 text=text,
                 is_incoming=False,
@@ -718,9 +719,9 @@ async def send_inbox_message(
             session.add(msg)
             await session.commit()
             
-        return {"status": "sent"}
+        return {"status": "sent", "message_id": tg_msg.id if tg_msg else 0}
     except Exception as e:
-        return {"error": str(e)}, 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/accounts/{account_id}")
 async def delete_account(account_id: int):
