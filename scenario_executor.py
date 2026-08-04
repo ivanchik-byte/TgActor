@@ -152,11 +152,26 @@ async def execute_scenario(
                 await session.commit()
                 
                 # Handle Reactions
-                if step.reactions and reaction_pool:
-                    reactions = step.reactions.split() 
-                    count = step.reaction_count or 1
-                    reactors = random.sample(reaction_pool, min(count, len(reaction_pool)))
+                if step.reactions:
+                    reactors = []
+                    source = getattr(step, 'reaction_source', 'pool')
                     
+                    if source == 'roles' and getattr(step, 'reaction_roles', None):
+                        # Use specific scenario roles/accounts
+                        try:
+                            target_roles = [int(r.strip()) for r in step.reaction_roles.split() if r.strip()]
+                            for r_id in target_roles:
+                                if r_id in role_account_map:
+                                    reactors.append(role_account_map[r_id])
+                        except Exception as e:
+                            logger.error(f"Ошибка парсинга reaction_roles: {e}")
+                    
+                    # Fallback or default to reaction pool
+                    if not reactors and reaction_pool:
+                        count = step.reaction_count or 1
+                        reactors = random.sample(reaction_pool, min(count, len(reaction_pool)))
+                    
+                    reactions = step.reactions.split()
                     for r_acc in reactors:
                         r_client = TelegramSessionClient(
                             encrypted_session=r_acc.encrypted_session,

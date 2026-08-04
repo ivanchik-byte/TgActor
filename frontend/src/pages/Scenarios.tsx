@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { ArrowUp, ArrowDown, Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save } from 'lucide-react';
+import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save } from 'lucide-react';
 
 interface Replica {
   id: string; // React local temporary ID or database ID
@@ -14,6 +14,8 @@ interface Replica {
   maxDelay: string;
   reactions: string;
   reactionCount: number;
+  reactionSource?: 'pool' | 'roles';
+  reactionRoles?: string; // space separated role/account IDs
   fileName: string;
   noAttachmentIfForbidden: boolean;
 }
@@ -137,6 +139,8 @@ export default function Scenarios() {
           maxDelay: s.delay_before_max !== null ? String(s.delay_before_max) : '',
           reactions: s.reactions || '',
           reactionCount: s.reaction_count || 0,
+          reactionSource: s.reaction_source || 'pool',
+          reactionRoles: s.reaction_roles || '',
           fileName: s.media_path || '',
           noAttachmentIfForbidden: false,
         };
@@ -156,7 +160,7 @@ export default function Scenarios() {
     } else {
       setReplicas([]);
     }
-  }, [dbSteps]);
+  }, [dbSteps, commentingAccounts]);
 
   // Mutation: Create Scenario
   const createScenarioMutation = useMutation({
@@ -221,6 +225,8 @@ export default function Scenarios() {
           delay_before_max: r.maxDelay !== '' ? Number(r.maxDelay) : null,
           reactions: r.reactions || null,
           reaction_count: r.reactionCount,
+          reaction_source: r.reactionSource || 'pool',
+          reaction_roles: r.reactionRoles || null,
           reply_to_index: replyToIndex
         };
       });
@@ -238,6 +244,30 @@ export default function Scenarios() {
   // File input refs map
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
+  const getRoleColor = (roleId: string) => {
+    const colors = [
+      '#3b82f6', // blue-500
+      '#10b981', // emerald-500
+      '#8b5cf6', // violet-500
+      '#ec4899', // pink-500
+      '#f59e0b', // amber-500
+      '#ef4444', // red-500
+      '#14b8a6', // teal-500
+      '#f97316', // orange-500
+      '#06b6d4', // cyan-500
+      '#6366f1', // indigo-500
+    ];
+    const num = parseInt(roleId) || 0;
+    if (isNaN(num)) {
+      let hash = 0;
+      for (let i = 0; i < roleId.length; i++) {
+        hash = roleId.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    }
+    return colors[num % colors.length];
+  };
+
   const generateUniqueId = () => {
     return Math.random().toString(36).substr(2, 9);
   };
@@ -252,10 +282,12 @@ export default function Scenarios() {
       type: 'normal',
       replyToId: '',
       text: '',
-      minDelay: '',
-      maxDelay: '',
+      minDelay: '5',
+      maxDelay: '10',
       reactions: '🔥',
       reactionCount: 1,
+      reactionSource: 'pool',
+      reactionRoles: '',
       fileName: '',
       noAttachmentIfForbidden: false,
     };
@@ -274,25 +306,7 @@ export default function Scenarios() {
     setReplicas(adjusted);
   };
 
-  // Move replica up
-  const handleMoveUp = (index: number) => {
-    if (index === 0) return;
-    const newReplicas = [...replicas];
-    const temp = newReplicas[index];
-    newReplicas[index] = newReplicas[index - 1];
-    newReplicas[index - 1] = temp;
-    setReplicas(newReplicas);
-  };
 
-  // Move replica down
-  const handleMoveDown = (index: number) => {
-    if (index === replicas.length - 1) return;
-    const newReplicas = [...replicas];
-    const temp = newReplicas[index];
-    newReplicas[index] = newReplicas[index + 1];
-    newReplicas[index + 1] = temp;
-    setReplicas(newReplicas);
-  };
 
   // Update specific replica field
   const handleUpdateReplica = (id: string, field: keyof Replica, value: any) => {
@@ -647,34 +661,9 @@ export default function Scenarios() {
             Управление сценариями и автоматизация цепочек ответов с прокси-аккаунтов.
           </p>
         </div>
-        {activeScenarioId && (
-          <button
-            onClick={() => setExecutingScenarioId(activeScenarioId)}
-            style={{
-              backgroundColor: '#10b981',
-              color: '#fff',
-              padding: '10px 18px',
-              borderRadius: '10px',
-              fontSize: '13px',
-              fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
-              transition: 'all 0.15s'
-            }}
-          >
-            <Play className="w-4 h-4 fill-current" />
-            Запустить в Telegram
-          </button>
-        )}
       </div>
 
       <div style={pageContainerStyle}>
-        
-        {/* COLUMN 1: Scenario list Sidebar (AI Bot Style) */}
         <div style={scenariosSidebarStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Сценарии</span>
@@ -873,10 +862,16 @@ export default function Scenarios() {
               ) : (
                 replicas.map((replica, index) => {
                   const precedingReplicas = replicas.slice(0, index);
-                  const selectedRole = replica.role || (commentingAccounts[0] ? String(commentingAccounts[0].id) : '');
+                  const selectedRole = replica.role || (commentingAccounts.length > 0 ? String(commentingAccounts[0].id) : '');
 
                   return (
-                    <div key={replica.id} style={stepCardStyle}>
+                    <div
+                      key={replica.id}
+                      style={{
+                        ...stepCardStyle,
+                        borderLeft: `4px solid ${getRoleColor(selectedRole)}`,
+                      }}
+                    >
                       {/* Step Header */}
                       <div style={{
                         display: 'flex',
@@ -888,8 +883,8 @@ export default function Scenarios() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{
-                            backgroundColor: 'var(--accent-soft)',
-                            color: 'var(--accent-text)',
+                            backgroundColor: getRoleColor(selectedRole),
+                            color: '#fff',
                             width: '28px',
                             height: '28px',
                             borderRadius: '8px',
@@ -909,40 +904,6 @@ export default function Scenarios() {
                         {/* Step Actions */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <button
-                            onClick={() => handleMoveUp(index)}
-                            disabled={index === 0}
-                            style={{
-                              background: 'none',
-                              border: '1px solid var(--border-color)',
-                              color: index === 0 ? 'var(--border-color)' : 'var(--text-muted)',
-                              padding: '6px',
-                              borderRadius: '8px',
-                              cursor: index === 0 ? 'not-allowed' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              backgroundColor: 'var(--bg-main)',
-                            }}
-                          >
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleMoveDown(index)}
-                            disabled={index === replicas.length - 1}
-                            style={{
-                              background: 'none',
-                              border: '1px solid var(--border-color)',
-                              color: index === replicas.length - 1 ? 'var(--border-color)' : 'var(--text-muted)',
-                              padding: '6px',
-                              borderRadius: '8px',
-                              cursor: index === replicas.length - 1 ? 'not-allowed' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              backgroundColor: 'var(--bg-main)',
-                            }}
-                          >
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button
                             onClick={() => handleDeleteReplica(replica.id)}
                             style={{
                               background: 'none',
@@ -961,11 +922,10 @@ export default function Scenarios() {
                         </div>
                       </div>
 
-                      {/* Custom grid layout */}
                       <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '32px' }}>
-                        {/* Left Column: Text & Files */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', justifyContent: 'space-between' }}>
-                          <div style={{ flex: 1 }}>
+                        {/* Left Column: Text & Attachments */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                          <div>
                             <label style={labelStyle}>Содержимое сообщения</label>
                             <textarea
                               value={replica.text}
@@ -1117,19 +1077,65 @@ export default function Scenarios() {
                             </div>
                           </div>
 
-                          <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '8px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+                            <label style={labelStyle}>Набор реакций (нажмите для выбора)</label>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
+                              {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
+                                const currentList = (replica.reactions || '').split(/\s+/).filter(Boolean);
+                                const isActive = currentList.includes(emoji);
+                                return (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={() => {
+                                      let newList;
+                                      if (isActive) {
+                                        newList = currentList.filter(e => e !== emoji);
+                                      } else {
+                                        newList = [...currentList, emoji];
+                                      }
+                                      handleUpdateReplica(replica.id, 'reactions', newList.join(' '));
+                                    }}
+                                    style={{
+                                      fontSize: '14px',
+                                      padding: '6px 10px',
+                                      borderRadius: '8px',
+                                      border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                                      backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-main)',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s',
+                                    }}
+                                  >
+                                    {emoji}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <input
+                              type="text"
+                              value={replica.reactions}
+                              onChange={e => handleUpdateReplica(replica.id, 'reactions', e.target.value)}
+                              placeholder="Или введите вручную через пробел..."
+                              style={inputStyle}
+                            />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
                             <div>
-                              <label style={labelStyle}>Набор реакций</label>
-                              <input
-                                type="text"
-                                value={replica.reactions}
-                                onChange={e => handleUpdateReplica(replica.id, 'reactions', e.target.value)}
-                                placeholder="👍 🔥 ❤️"
+                              <label style={labelStyle}>Кто реагирует</label>
+                              <select
+                                value={replica.reactionSource || 'pool'}
+                                onChange={e => handleUpdateReplica(replica.id, 'reactionSource', e.target.value)}
                                 style={inputStyle}
-                              />
+                              >
+                                <option value="pool">Пул реакций (рандом)</option>
+                                <option value="roles">Персонажи сценария</option>
+                              </select>
                             </div>
                             <div>
-                              <label style={labelStyle}>Лимит</label>
+                              <label style={labelStyle}>
+                                {replica.reactionSource === 'roles' ? 'Количество' : 'Лимит'}
+                              </label>
                               <input
                                 type="number"
                                 min="0"
@@ -1139,6 +1145,50 @@ export default function Scenarios() {
                               />
                             </div>
                           </div>
+
+                          {replica.reactionSource === 'roles' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                              <label style={labelStyle}>Выберите персонажей для реакции</label>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {Array.from(new Set(replicas.map(r => r.role))).filter(Boolean).map(roleId => {
+                                  const acc = commentingAccounts.find((a: any) => String(a.id) === roleId);
+                                  const name = acc?.username ? `@${acc.username}` : (acc?.first_name || `Персонаж ${roleId}`);
+                                  const currentRoles = (replica.reactionRoles || '').split(/\s+/).filter(Boolean);
+                                  const isSelected = currentRoles.includes(roleId);
+                                  
+                                  return (
+                                    <button
+                                      key={roleId}
+                                      type="button"
+                                      onClick={() => {
+                                        let newList;
+                                        if (isSelected) {
+                                          newList = currentRoles.filter(r => r !== roleId);
+                                        } else {
+                                          newList = [...currentRoles, roleId];
+                                        }
+                                        handleUpdateReplica(replica.id, 'reactionRoles', newList.join(' '));
+                                        handleUpdateReplica(replica.id, 'reactionCount', newList.length);
+                                      }}
+                                      style={{
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        padding: '5px 8px',
+                                        borderRadius: '6px',
+                                        border: `1px solid ${isSelected ? getRoleColor(roleId) : 'var(--border-color)'}`,
+                                        backgroundColor: isSelected ? 'rgba(255,255,255,0.03)' : 'var(--bg-main)',
+                                        color: isSelected ? getRoleColor(roleId) : 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                      }}
+                                    >
+                                      {name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1306,31 +1356,33 @@ export default function Scenarios() {
                     Нет сообщений
                   </div>
                 ) : (
-                  replicas.map((r, i) => {
-                    const replyReplicaIndex = r.type === 'reply' ? replicas.findIndex(o => o.id === r.replyToId) : -1;
-                    const replyText = replyReplicaIndex !== -1 ? replicas[replyReplicaIndex].text : '';
+                   replicas.map((r, i) => {
+                     const replyReplicaIndex = r.type === 'reply' ? replicas.findIndex(o => o.id === r.replyToId) : -1;
+                     const replyText = replyReplicaIndex !== -1 ? replicas[replyReplicaIndex].text : '';
 
-                    const finalRole = r.role || (commentingAccounts[0] ? String(commentingAccounts[0].id) : '');
-                    const currentAccount = commentingAccounts.find((a: any) => String(a.id) === finalRole);
-                    const displayName = currentAccount?.username ? `@${currentAccount.username}` : `Аккаунт ${r.role || '?'}`;
+                     const finalRole = r.role || (commentingAccounts[0] ? String(commentingAccounts[0].id) : '');
+                     const currentAccount = commentingAccounts.find((a: any) => String(a.id) === finalRole);
+                     const displayName = currentAccount?.username 
+                       ? `@${currentAccount.username}` 
+                       : (currentAccount?.first_name ? currentAccount.first_name : `Аккаунт ${r.role || '?'}`);
 
-                    return (
-                      <div key={r.id} style={{
-                        backgroundColor: 'var(--bg-card)',
-                        borderRadius: '8px',
-                        padding: '8px 10px',
-                        fontSize: '12px',
-                        borderLeft: `3px solid ${r.role === '1' ? '#38bdf8' : r.role === '2' ? '#a78bfa' : '#34d399'}`,
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ fontWeight: 600, color: r.role === '1' ? '#38bdf8' : r.role === '2' ? '#a78bfa' : '#34d399' }}>
-                            {displayName}
-                          </span>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>#{i + 1}</span>
-                        </div>
+                     return (
+                       <div key={r.id} style={{
+                         backgroundColor: 'var(--bg-card)',
+                         borderRadius: '8px',
+                         padding: '8px 10px',
+                         fontSize: '12px',
+                         borderLeft: `3px solid ${getRoleColor(finalRole)}`,
+                       }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                           <span style={{ fontWeight: 600, color: getRoleColor(finalRole) }}>
+                             {displayName}
+                           </span>
+                           <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>#{i + 1}</span>
+                         </div>
 
-                        {r.type === 'reply' && replyText && (
-                          <div style={{
+                         {r.type === 'reply' && replyText && (
+                           <div style={{
                             backgroundColor: 'rgba(255,255,255,0.03)',
                             borderLeft: '2px solid var(--text-muted)',
                             padding: '2px 6px',

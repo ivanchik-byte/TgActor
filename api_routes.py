@@ -487,6 +487,8 @@ class ScenarioStepBulkItem(BaseModel):
     reactions: Optional[str] = None
     reaction_count: Optional[int] = None
     reply_to_index: Optional[int] = None
+    reaction_source: Optional[str] = 'pool'
+    reaction_roles: Optional[str] = None
 
 class ScenarioStepsBulkRequest(BaseModel):
     steps: List[ScenarioStepBulkItem]
@@ -517,6 +519,8 @@ async def save_scenario_steps_bulk(scenario_id: int, req: ScenarioStepsBulkReque
                 delay_before_max=item.delay_before_max,
                 reactions=item.reactions,
                 reaction_count=item.reaction_count,
+                reaction_source=item.reaction_source or 'pool',
+                reaction_roles=item.reaction_roles,
                 reply_to_step_id=None
             )
             session.add(db_step)
