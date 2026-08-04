@@ -18,10 +18,20 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Start the daemon in the background
     task = asyncio.create_task(start_listeners())
+    
+    # Auto-start channel monitor on startup
+    from channel_monitor import start_monitor, stop_monitor
+    monitor_task = asyncio.create_task(start_monitor())
+    
     yield
     # Stop the daemon
     await stop_listeners()
+    await stop_monitor()
     await task
+    try:
+        await monitor_task
+    except Exception:
+        pass
 
 app = FastAPI(lifespan=lifespan)
 # Independent redis client for the FastAPI app
