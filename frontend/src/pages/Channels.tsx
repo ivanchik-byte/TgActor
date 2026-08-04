@@ -16,8 +16,8 @@ export default function Channels() {
 
   // Add channel form
   const [newChannels, setNewChannels] = useState('');
-  const [minDelay, setMinDelay] = useState(60);
-  const [maxDelay, setMaxDelay] = useState(300);
+  const [minDelay, setMinDelay] = useState(5);
+  const [maxDelay, setMaxDelay] = useState(10);
   const [noRepeat, setNoRepeat] = useState(true);
 
   // Confirm delete

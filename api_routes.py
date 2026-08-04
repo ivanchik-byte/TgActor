@@ -410,8 +410,8 @@ async def get_proxy_mode():
 class ScenarioCreate(BaseModel):
     title: str
     is_active: bool = False
-    min_delay: float = 30.0
-    max_delay: float = 60.0
+    min_delay: float = 5.0
+    max_delay: float = 10.0
     weight: int = 1
 
 class ScenarioUpdate(BaseModel):
@@ -791,8 +791,8 @@ async def test_account_connection(account_id: int):
 # -- Monitored Channels --
 class ChannelCreate(BaseModel):
     channel_identifier: str  # supports comma-separated or newline-separated batch input
-    min_delay_seconds: int = 60
-    max_delay_seconds: int = 300
+    min_delay_seconds: int = 5
+    max_delay_seconds: int = 10
     no_repeat_scenarios: bool = True
 
 class ChannelUpdate(BaseModel):

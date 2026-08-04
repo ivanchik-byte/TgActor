@@ -48,8 +48,8 @@ class Scenario(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    min_delay: Mapped[float] = mapped_column(Float, default=3.0)
-    max_delay: Mapped[float] = mapped_column(Float, default=8.0)
+    min_delay: Mapped[float] = mapped_column(Float, default=5.0)
+    max_delay: Mapped[float] = mapped_column(Float, default=10.0)
     weight: Mapped[int] = mapped_column(Integer, default=1, server_default='1')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -116,8 +116,8 @@ class MonitoredChannel(Base):
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default='true')
     no_repeat_scenarios: Mapped[bool] = mapped_column(Boolean, default=True, server_default='true')
-    min_delay_seconds: Mapped[int] = mapped_column(Integer, default=60, server_default='60')
-    max_delay_seconds: Mapped[int] = mapped_column(Integer, default=300, server_default='300')
+    min_delay_seconds: Mapped[int] = mapped_column(Integer, default=5, server_default='5')
+    max_delay_seconds: Mapped[int] = mapped_column(Integer, default=10, server_default='10')
     last_scenario_ids_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array of recently used scenario IDs
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

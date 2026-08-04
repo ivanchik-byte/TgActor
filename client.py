@@ -51,7 +51,7 @@ class TelegramSessionClient:
     async def stop(self):
         await self.client.stop()
 
-    async def send_human_message(self, chat_id: int | str, text: str, reply_to_message_id: Optional[int] = None, delay_range: Tuple[float, float] = (3.0, 8.0)):
+    async def send_human_message(self, chat_id: int | str, text: str, reply_to_message_id: Optional[int] = None, delay_range: Tuple[float, float] = (5.0, 10.0)):
         if self.status != "active":
             logger.warning(f"Cannot send message, session status is: {self.status}")
             return None
