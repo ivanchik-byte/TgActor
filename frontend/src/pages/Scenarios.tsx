@@ -69,8 +69,8 @@ export default function Scenarios() {
   // Scenario config editing state
   const [scenarioName, setScenarioName] = useState('');
   const [isActive, setIsActive] = useState(true);
-  const [defaultMinDelay, setDefaultMinDelay] = useState(30);
-  const [defaultMaxDelay, setDefaultMaxDelay] = useState(60);
+  const [defaultMinDelay, setDefaultMinDelay] = useState(5);
+  const [defaultMaxDelay, setDefaultMaxDelay] = useState(10);
   const [scenarioWeight, setScenarioWeight] = useState(1);
 
   // Replica steps state
@@ -1267,7 +1267,7 @@ export default function Scenarios() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
-                    <label style={labelStyle}>Круг пауза от (мин)</label>
+                    <label style={labelStyle}>Круг пауза от (сек)</label>
                     <input
                       type="number"
                       value={defaultMinDelay}
@@ -1276,7 +1276,7 @@ export default function Scenarios() {
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Круг пауза до (мин)</label>
+                    <label style={labelStyle}>Круг пауза до (сек)</label>
                     <input
                       type="number"
                       value={defaultMaxDelay}
