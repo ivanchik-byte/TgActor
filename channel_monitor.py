@@ -110,6 +110,78 @@ def _get_monitor_account_proxy(account) -> Optional[dict]:
     }
 
 
+async def staggered_join_channels_and_groups(client):
+    """
+    Finds all active monitored channels, resolves their discussion groups,
+    and makes all active accounts join them with staggered delays.
+    """
+    logger.info("Staggered join: starting resolution for all monitored channels and accounts...")
+    async with async_session() as session:
+        # Get active monitored channels
+        ch_result = await session.execute(
+            select(MonitoredChannel).where(MonitoredChannel.is_active == True)
+        )
+        channels = list(ch_result.scalars().all())
+        
+        # Get all active accounts
+        acc_result = await session.execute(
+            select(Account)
+            .options(selectinload(Account.proxy))
+            .where(Account.status == 'active')
+        )
+        accounts = list(acc_result.scalars().all())
+        
+    if not channels or not accounts:
+        logger.info("Staggered join: no active channels or accounts found to join.")
+        return
+
+    # Resolve target chat identifiers (channel username/link + discussion group ID)
+    targets = []
+    for ch in channels:
+        targets.append(ch.channel_identifier) # Join the channel itself
+        try:
+            chat = await client.client.get_chat(ch.channel_identifier)
+            if chat.linked_chat:
+                targets.append(chat.linked_chat.id) # Join the discussion group
+                logger.info(f"Staggered join: found discussion group {chat.linked_chat.id} for {ch.channel_identifier}")
+        except Exception as e:
+            logger.warning(f"Staggered join: could not resolve discussion group for {ch.channel_identifier}: {e}")
+
+    # Deduplicate targets
+    targets = list(set(targets))
+
+    # Helper function to join targets for a specific account after delay
+    async def join_for_account(account, delay_sec):
+        logger.info(f"Staggered join: account {account.id} ({account.custom_name or account.first_name}) scheduled to join in {delay_sec} seconds")
+        await asyncio.sleep(delay_sec)
+        
+        from client import TelegramSessionClient
+        from scenario_executor import proxy_to_dict
+        acc_client = TelegramSessionClient(
+            encrypted_session=account.encrypted_session,
+            proxy=proxy_to_dict(account.proxy)
+        )
+        try:
+            await acc_client.start()
+            for t in targets:
+                try:
+                    await acc_client.client.join_chat(t)
+                    logger.info(f"Staggered join: account {account.id} successfully joined {t}")
+                except Exception as e:
+                    logger.warning(f"Staggered join: account {account.id} failed to join {t}: {e}")
+                await asyncio.sleep(2.0) # small pause between chats
+        except Exception as e:
+            logger.error(f"Staggered join: failed to run client for account {account.id}: {e}")
+        finally:
+            await acc_client.stop()
+
+    # Schedule staggered joins
+    for i, account in enumerate(accounts):
+        # Stagger delay: 20s, 45s, 75s, 110s...
+        delay = 20 + i * 25 + random.randint(0, 10)
+        asyncio.create_task(join_for_account(account, delay))
+
+
 async def start_monitor():
     """
     Main monitor loop:
@@ -149,6 +221,8 @@ async def start_monitor():
                 try:
                     await client.start()
                     logger.info(f"Channel monitor started with account #{monitor_account.id}")
+                    # Start staggered joins for all accounts in background
+                    asyncio.create_task(staggered_join_channels_and_groups(client))
                 except Exception as e:
                     logger.error(f"Channel monitor: failed to start client: {e}")
                     await asyncio.sleep(30)
