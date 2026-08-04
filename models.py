@@ -67,6 +67,8 @@ class ScenarioStep(Base):
     reactions: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reaction_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     reply_to_step_id: Mapped[Optional[int]] = mapped_column(ForeignKey('scenario_steps.id'), nullable=True)
+    reaction_source: Mapped[str] = mapped_column(String(20), default='pool', server_default='pool')
+    reaction_roles: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     scenario: Mapped['Scenario'] = relationship()
 
