@@ -499,34 +499,47 @@ export default function Channels() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
                     {/* Toggle active */}
-                    <button
-                      onClick={() => toggleChannel.mutate({ id: ch.id, active: !ch.is_active })}
-                      title={ch.is_active ? 'Выключить' : 'Включить'}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: ch.is_active ? '#10b981' : 'var(--text-muted)', padding: '4px',
-                        display: 'flex', alignItems: 'center'
-                      }}
-                    >
-                      {ch.is_active
-                        ? <ToggleRight className="w-5 h-5" />
-                        : <ToggleLeft className="w-5 h-5" />
-                      }
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {ch.is_active ? 'Активен' : 'Пауза'}
+                      </span>
+                      <button
+                        onClick={() => toggleChannel.mutate({ id: ch.id, active: !ch.is_active })}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: ch.is_active ? '#10b981' : 'var(--text-muted)', padding: '2px',
+                          display: 'flex', alignItems: 'center'
+                        }}
+                      >
+                        {ch.is_active
+                          ? <ToggleRight className="w-6 h-6" />
+                          : <ToggleLeft className="w-6 h-6" />
+                        }
+                      </button>
+                    </div>
 
                     {/* Toggle no-repeat */}
                     <button
                       onClick={() => toggleNoRepeat.mutate({ id: ch.id, val: !ch.no_repeat_scenarios })}
-                      title={ch.no_repeat_scenarios ? 'Выключить антиповтор' : 'Включить антиповтор'}
                       style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: ch.no_repeat_scenarios ? 'rgba(129,140,248,0.12)' : 'transparent',
                         color: ch.no_repeat_scenarios ? '#818cf8' : 'var(--text-muted)',
-                        padding: '4px', display: 'flex', alignItems: 'center'
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
                       }}
                     >
-                      <Shuffle className="w-4 h-4" />
+                      <Shuffle className="w-3.5 h-3.5" />
+                      Антиповтор: {ch.no_repeat_scenarios ? 'ВКЛ' : 'ВЫКЛ'}
                     </button>
 
                     {/* Delete */}
