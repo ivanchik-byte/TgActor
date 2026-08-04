@@ -141,6 +141,13 @@ async def send_phone_code(req: PhoneAuthRequest):
         await client.connect()
         sent_code = await client.send_code(phone)
         
+        # Log the code type to help the user understand where Telegram sent the code
+        try:
+            code_type = getattr(sent_code.type, "value", str(sent_code.type))
+            logging.getLogger(__name__).info(f"Telegram sent verification code to {phone} via: {code_type}")
+        except Exception:
+            logging.getLogger(__name__).info(f"Telegram sent verification code to {phone}")
+            
         auth_clients[phone] = {
             "client": client,
             "api_id": api_id,
