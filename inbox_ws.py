@@ -63,39 +63,4 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = None):
         await pubsub.unsubscribe("inbox_events")
         await pubsub.close()
 
-@app.post("/api/inbox/send")
-async def send_direct_message(req: SendMessageRequest):
-    client = active_clients.get(req.account_id)
-    if not client:
-        raise HTTPException(status_code=404, detail="Клиент аккаунта не запущен или отключен.")
-        
-    try:
-        msg = await client.client.send_message(chat_id=req.peer_id, text=req.text)
-        
-        async with async_session() as session:
-            out_msg = InboxMessage(
-                account_id=req.account_id,
-                peer_id=req.peer_id,
-                message_id=msg.id if hasattr(msg, 'id') else 0,
-                text=req.text,
-                is_incoming=False
-            )
-            session.add(out_msg)
-            await session.commit()
-            await session.refresh(out_msg)
-            
-            payload = {
-                "account_id": req.account_id,
-                "peer_id": req.peer_id,
-                "message_id": out_msg.message_id,
-                "sender_username": "me",
-                "text": req.text,
-                "is_incoming": False,
-                "timestamp": out_msg.received_at.isoformat()
-            }
-            await redis_pubsub_client.publish("inbox_events", json.dumps(payload))
-            
-        return {"status": "success", "message_id": out_msg.message_id}
-    except Exception as e:
-        logger.error(f"Не удалось отправить ЛС: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+

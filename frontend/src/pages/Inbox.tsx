@@ -85,11 +85,7 @@ export default function Inbox() {
         formData.append('file', attachedFile);
       }
       
-      await axios.post('/api/inbox/send', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      await axios.post('/api/inbox/send', formData);
     },
     onSuccess: () => {
       setText('');
