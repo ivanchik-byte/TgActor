@@ -53,8 +53,8 @@ async def execute_scenario(
     commenting_pool = await get_commenting_pool(session)
     reaction_pool = await get_reaction_pool(session)
     
-    if len(commenting_pool) < len(roles_needed):
-        error_msg = f"NOT_ENOUGH_ACCOUNTS_IN_POOL: Требуется {len(roles_needed)} аккаунтов, доступно {len(commenting_pool)}"
+    if not commenting_pool:
+        error_msg = "NOT_ENOUGH_ACCOUNTS_IN_POOL: Нет активных аккаунтов в пуле комментирования"
         logger.error(error_msg)
         log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
         session.add(log)
@@ -62,10 +62,31 @@ async def execute_scenario(
         return
 
     # 3. Assign Accounts to Roles
-    random.shuffle(commenting_pool)
+    # Try to map exact account IDs. If an account is not in the active pool,
+    # fall back to any other active account. If no unique active accounts are left,
+    # reuse accounts from the pool.
     role_account_map: Dict[int, Account] = {}
+    available_pool = list(commenting_pool)
+    random.shuffle(available_pool) # Shuffle fallback choices
+    
+    # Pass 1: exact matches
+    unassigned_roles = []
     for role_id in roles_needed:
-        role_account_map[role_id] = commenting_pool.pop()
+        match = next((a for a in available_pool if a.id == role_id), None)
+        if match:
+            role_account_map[role_id] = match
+            available_pool.remove(match)
+        else:
+            unassigned_roles.append(role_id)
+            
+    # Pass 2: fallback to other unique active accounts
+    for role_id in unassigned_roles:
+        if available_pool:
+            fallback = available_pool.pop()
+            role_account_map[role_id] = fallback
+        else:
+            # Pass 3: reuse accounts from the active pool to avoid crash
+            role_account_map[role_id] = random.choice(commenting_pool)
 
     # 4. Initialize Clients with Proxy
     clients: Dict[int, TelegramSessionClient] = {}
