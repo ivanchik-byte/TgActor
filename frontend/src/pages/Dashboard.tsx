@@ -24,6 +24,7 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [tdataPassword, setTdataPassword] = useState('');
 
   // Profile Details Modal State
   const [selectedProfileAccount, setSelectedProfileAccount] = useState<any | null>(null);
@@ -199,6 +200,9 @@ export default function Dashboard() {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
+        if (tdataPassword) {
+          formData.append('password', tdataPassword);
+        }
         const res = await axios.post('/api/accounts/upload-tdata', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
@@ -208,6 +212,7 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       setSelectedFiles([]);
+      setTdataPassword('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       showToast('Сессии поставлены в очередь импорта!', 'success');
@@ -762,6 +767,19 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', maxWidth: '280px', margin: '8px auto 14px' }} onClick={(e) => e.stopPropagation()}>
+              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                Пароль 2FA (если установлен)
+              </label>
+              <input
+                type="password"
+                placeholder="Введите облачный пароль..."
+                value={tdataPassword}
+                onChange={e => setTdataPassword(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px' }} onClick={(e) => e.stopPropagation()}>
               <button
