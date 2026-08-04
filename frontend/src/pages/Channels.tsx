@@ -411,6 +411,7 @@ export default function Channels() {
                           <Clock className="w-3.5 h-3.5" />
                           <span>пауза: от</span>
                           <input
+                            key={ch.id + "_min_" + ch.min_delay_seconds}
                             type="number"
                             defaultValue={ch.min_delay_seconds}
                             onBlur={e => {
@@ -438,6 +439,7 @@ export default function Channels() {
                           />
                           <span>до</span>
                           <input
+                            key={ch.id + "_max_" + ch.max_delay_seconds}
                             type="number"
                             defaultValue={ch.max_delay_seconds}
                             onBlur={e => {
