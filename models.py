@@ -28,6 +28,8 @@ class Account(Base):
     first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    custom_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
     encrypted_session: Mapped[str] = mapped_column(Text, nullable=False)
     proxy_id: Mapped[Optional[int]] = mapped_column(ForeignKey('proxies.id'), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default='active')    # active, cooldown, banned, invalid, unassigned_proxy

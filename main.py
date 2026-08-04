@@ -1,3 +1,38 @@
+# Monkey patch Hydrogram to ignore unknown MTProto constructors sent by Telegram server
+import logging
+from io import BytesIO
+from typing import Any
+from hydrogram.raw.core.tl_object import TLObject, objects
+
+_orig_tl_read = TLObject.read
+
+@classmethod
+def patched_tl_read(cls, b: BytesIO, *args: Any) -> Any:
+    current_pos = b.tell()
+    try:
+        constructor_bytes = b.read(4)
+        if len(constructor_bytes) < 4:
+            b.seek(current_pos)
+            return _orig_tl_read(b, *args)
+        constructor_id = int.from_bytes(constructor_bytes, "little")
+        if constructor_id not in objects:
+            logging.getLogger("hydrogram").warning(f"Telegram sent unknown MTProto constructor: {hex(constructor_id)}. Safely ignoring this update packet.")
+            # Return a dummy TLObject placeholder
+            class DummyTLObject(TLObject):
+                ID = constructor_id
+                def write(self, *args): return b""
+                @classmethod
+                def read(cls, b, *args): return DummyTLObject()
+            return DummyTLObject()
+        else:
+            b.seek(current_pos)
+            return _orig_tl_read(b, *args)
+    except Exception:
+        b.seek(current_pos)
+        return _orig_tl_read(b, *args)
+
+TLObject.read = patched_tl_read
+
 import os
 import hmac
 import hashlib

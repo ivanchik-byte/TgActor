@@ -162,9 +162,11 @@ export default function Inbox() {
     const map = new Map<number, { id: number, name: string }>();
     for (const chat of chats) {
       if (!map.has(chat.account_id)) {
-        const displayName = chat.account_username 
-          ? `@${chat.account_username}` 
-          : (chat.account_name || chat.account_phone || `acc #${chat.account_id}`);
+        const displayName = chat.account_custom_name
+          ? chat.account_custom_name
+          : (chat.account_username 
+            ? `@${chat.account_username}` 
+            : (chat.account_name || chat.account_phone || `acc #${chat.account_id}`));
         map.set(chat.account_id, {
           id: chat.account_id,
           name: displayName
@@ -355,9 +357,11 @@ export default function Inbox() {
                   }}
                 >
                   <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-text)' }}>
-                    {accountChats[0]?.account_username 
-                      ? `@${accountChats[0].account_username}` 
-                      : (accountChats[0]?.account_name || accountChats[0]?.account_phone || `acc #${accountId}`)}
+                    {accountChats[0]?.account_custom_name
+                      ? accountChats[0].account_custom_name
+                      : (accountChats[0]?.account_username 
+                        ? `@${accountChats[0].account_username}` 
+                        : (accountChats[0]?.account_name || accountChats[0]?.account_phone || `acc #${accountId}`))}
                   </span>
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
                     {accountChats.length} диалог(а)
@@ -490,9 +494,11 @@ export default function Inbox() {
                     {selectedChat.sender_username || selectedChat.peer_id}
                   </div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    от {selectedChat.account_username 
-                      ? `@${selectedChat.account_username}` 
-                      : (selectedChat.account_name || selectedChat.account_phone || `acc #${selectedChat.account_id}`)} · tg id {selectedChat.peer_id}
+                    от {selectedChat.account_custom_name
+                      ? selectedChat.account_custom_name
+                      : (selectedChat.account_username 
+                        ? `@${selectedChat.account_username}` 
+                        : (selectedChat.account_name || selectedChat.account_phone || `acc #${selectedChat.account_id}`))} · tg id {selectedChat.peer_id}
                   </div>
                 </div>
               </div>
