@@ -278,7 +278,7 @@ async def sign_in_phone(req: PhoneSignInRequest):
         raise HTTPException(status_code=500, detail=f"Ошибка авторизации: {str(e)}")
 
 @router.post("/api/accounts/upload-tdata")
-async def upload_tdata(file: UploadFile = File(...)):
+async def upload_tdata(file: UploadFile = File(...), password: Optional[str] = Form(None)):
     import tempfile
     import shutil
     import logging
@@ -296,7 +296,7 @@ async def upload_tdata(file: UploadFile = File(...)):
         temp_path = temp_file.name
         
     try:
-        success, encrypted_session = await convert_tdata_zip_to_encrypted_session(temp_path)
+        success, encrypted_session = await convert_tdata_zip_to_encrypted_session(temp_path, password)
         if not success:
             raise HTTPException(status_code=400, detail="Неверный или поврежденный tdata-архив.")
             

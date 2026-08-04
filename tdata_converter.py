@@ -9,9 +9,10 @@ from security import encrypt_session
 
 logger = logging.getLogger(__name__)
 
-async def convert_tdata_zip_to_encrypted_session(zip_path: str) -> Tuple[bool, str]:
+async def convert_tdata_zip_to_encrypted_session(zip_path: str, password: str = None) -> Tuple[bool, str]:
     """
-    Extracts tdata from a zip archive, converts it to a Pyrogram-compatible StringSession using opentele,
+    Extracts tdata from a zip archive, converts it to a new Pyrogram-compatible StringSession
+    using opentele (ToTelethon with CreateNewSession to authorize a new device),
     encrypts the session, and returns (success, result_or_error_status).
     
     Returns:
@@ -26,8 +27,6 @@ async def convert_tdata_zip_to_encrypted_session(zip_path: str) -> Tuple[bool, s
             except zipfile.BadZipFile:
                 logger.error("Failed to extract tdata: Bad zip file.")
                 return False, "failed_invalid_tdata"
-            
-
             
             # Find tdata folder (often it's inside a subfolder in the zip)
             tdata_path = None
@@ -48,19 +47,34 @@ async def convert_tdata_zip_to_encrypted_session(zip_path: str) -> Tuple[bool, s
                     logger.error("opentele failed to load tdata (no valid auth keys found or no accounts).")
                     return False, "failed_invalid_tdata"
 
-                # Generate Pyrogram-compatible session string for the main account
-                # Format: ">BI?256sQ?"
+                # Authorize a brand new session key on Telegram server
+                logger.info("Authorizing a new session via opentele to avoid AUTH_KEY_DUPLICATED...")
+                client = await td.ToTelethon(flag=CreateNewSession, password=password)
+                
+                # Fetch user details
+                me = await client.get_me()
+                if not me:
+                    logger.error("Failed to get_me from the new Telethon client.")
+                    return False, "failed_invalid_tdata"
+                    
+                user_id = me.id
+                dc_id = client.session.dc_id
+                auth_key_bytes = client.session.auth_key.key
+                api_id = client.api_id
+                
+                # Disconnect client
+                await client.disconnect()
+                
+                # Generate Pyrogram/Hydrogram compatible session string
                 import struct
                 import base64
-                acc = td.mainAccount or td.accounts[0]
-                
                 packed = struct.pack(
                     ">BI?256sQ?",
-                    acc.MainDcId,
-                    acc.api.api_id,
+                    dc_id,
+                    api_id,
                     False, # test_mode
-                    acc.authKey.key,
-                    acc.UserId,
+                    auth_key_bytes,
+                    user_id,
                     False # is_bot
                 )
                 string_session = base64.urlsafe_b64encode(packed).decode().rstrip("=")
