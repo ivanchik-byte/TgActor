@@ -3,7 +3,7 @@
 *.sqlite
 *.sqlite3
 
-# Environment
+# Environment & Credentials
 .env
 .env.local
 .env.*.local
@@ -16,10 +16,15 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.pytest_cache/
 .venv/
 venv/
 ENV/
+
+# Tests & Cache
+test_*.py
+conftest.py
+pytest.ini
+.pytest_cache/
 
 # Temporary files & uploads
 uploads/
@@ -27,14 +32,16 @@ uploads/
 *.tar.gz
 *.rar
 *.log
+scratch/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Documentation / personal logs
+# Personal / Dev docs
 Project.md
+COMMANDS.md
 COMMANDS_DEV.md
 FRONTEND_CHANGES.md
+Plan.md
 reports/
-images/
