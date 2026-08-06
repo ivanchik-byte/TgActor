@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save } from 'lucide-react';
+import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical } from 'lucide-react';
 
 interface Replica {
   id: string; // React local temporary ID or database ID
@@ -241,6 +241,65 @@ export default function Scenarios() {
       showToast('Диалоговые шаги успешно сохранены!', 'success');
     }
   });
+
+  const jsonInputRef = useRef<HTMLInputElement | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleExportJSON = async (scenarioId: number) => {
+    try {
+      const res = await axios.get(`/api/scenarios/${scenarioId}/export`);
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(res.data, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `scenario_${scenarioId}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Сценарий успешно экспортирован в JSON', 'success');
+    } catch (err) {
+      showToast('Ошибка экспорта сценария', 'error');
+    }
+  };
+
+  const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const json = JSON.parse(e.target?.result as string);
+          const res = await axios.post('/api/scenarios/import', json);
+          queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+          setActiveScenarioId(res.data.id);
+          showToast('Сценарий успешно импортирован из JSON!', 'success');
+        } catch (err: any) {
+          showToast('Ошибка парсинга или импорта JSON-файла', 'error');
+        }
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      showToast('Ошибка чтения файла', 'error');
+    }
+    event.target.value = '';
+  };
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (index: number) => {
+    if (draggedIndex === null || draggedIndex === index) return;
+    const updated = [...replicas];
+    const [movedItem] = updated.splice(draggedIndex, 1);
+    updated.splice(index, 0, movedItem);
+    setReplicas(updated);
+    setDraggedIndex(null);
+  };
 
   // File input refs map
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
@@ -668,13 +727,29 @@ export default function Scenarios() {
         <div style={scenariosSidebarStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Сценарии</span>
-            <button
-              onClick={() => setShowAddScenario(!showAddScenario)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-text)' }}
-              title="Создать сценарий"
-            >
-              <PlusCircle className="w-5 h-5" />
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input
+                type="file"
+                accept=".json"
+                ref={jsonInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImportJSON}
+              />
+              <button
+                onClick={() => jsonInputRef.current?.click()}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                title="Импортировать сценарий из JSON"
+              >
+                <Upload className="w-4 h-4 hover:text-accent" />
+              </button>
+              <button
+                onClick={() => setShowAddScenario(!showAddScenario)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent-text)' }}
+                title="Создать сценарий"
+              >
+                <PlusCircle className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Add Scenario inline widget */}
@@ -759,18 +834,34 @@ export default function Scenarios() {
                     </span>
                   </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDeleteScenarioId(s.id);
-                    }}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      color: 'var(--text-muted)', display: isSelected ? 'block' : 'none'
-                    }}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 hover:text-red-500" />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExportJSON(s.id);
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-muted)', display: isSelected ? 'block' : 'none'
+                      }}
+                      title="Экспорт в JSON"
+                    >
+                      <Download className="w-3.5 h-3.5 hover:text-accent" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteScenarioId(s.id);
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-muted)', display: isSelected ? 'block' : 'none'
+                      }}
+                      title="Удалить сценарий"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 hover:text-red-500" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -868,9 +959,16 @@ export default function Scenarios() {
                   return (
                     <div
                       key={replica.id}
+                      draggable
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e)}
+                      onDrop={() => handleDrop(index)}
                       style={{
                         ...stepCardStyle,
                         borderLeft: `4px solid ${getRoleColor(selectedRole)}`,
+                        cursor: 'grab',
+                        opacity: draggedIndex === index ? 0.4 : 1,
+                        transition: 'opacity 0.15s ease'
                       }}
                     >
                       {/* Step Header */}
@@ -883,6 +981,9 @@ export default function Scenarios() {
                         borderBottom: '1px solid var(--border-color)'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ color: 'var(--text-muted)', cursor: 'grab', display: 'flex', alignItems: 'center' }} title="Перетащите для изменения порядка">
+                            <GripVertical className="w-4 h-4" />
+                          </span>
                           <span style={{
                             backgroundColor: getRoleColor(selectedRole),
                             color: '#fff',

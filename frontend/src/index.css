@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ======================================================
-   TgCast Design System — CSS-first Tailwind v4 config
+   TgCast Design System — Professional Neutral Design
    ====================================================== */
 
 @theme {
@@ -32,6 +32,13 @@
   --accent-hover: #7c3aed;
   --accent-soft: rgba(139, 92, 246, 0.12);
   --accent-text: #a78bfa;
+
+  --toast-err-bg: #2d1618;
+  --toast-err-txt: #f87171;
+  --toast-succ-bg: #16291e;
+  --toast-succ-txt: #4ade80;
+  --toast-info-bg: #1e2430;
+  --toast-info-txt: #60a5fa;
 }
 
 /* ===== Theme: Dark Crimson ===== */
@@ -47,6 +54,13 @@
   --accent-hover: #9f1735;
   --accent-soft: rgba(185, 28, 61, 0.12);
   --accent-text: #e8455e;
+
+  --toast-err-bg: #321319;
+  --toast-err-txt: #f87171;
+  --toast-succ-bg: #16291e;
+  --toast-succ-txt: #4ade80;
+  --toast-info-bg: #1e2430;
+  --toast-info-txt: #60a5fa;
 }
 
 /* ===== Theme: Dark Charcoal ===== */
@@ -62,6 +76,13 @@
   --accent-hover: #404040;
   --accent-soft: rgba(82, 82, 82, 0.15);
   --accent-text: #a3a3a3;
+
+  --toast-err-bg: #261416;
+  --toast-err-txt: #f87171;
+  --toast-succ-bg: #14261b;
+  --toast-succ-txt: #4ade80;
+  --toast-info-bg: #1c222e;
+  --toast-info-txt: #60a5fa;
 }
 
 /* ===== Theme: Light ===== */
@@ -77,6 +98,13 @@
   --accent-hover: #9f1735;
   --accent-soft: rgba(185, 28, 61, 0.08);
   --accent-text: #b91c3d;
+
+  --toast-err-bg: #fef2f2;
+  --toast-err-txt: #dc2626;
+  --toast-succ-bg: #f0fdf4;
+  --toast-succ-txt: #16a34a;
+  --toast-info-bg: #eff6ff;
+  --toast-info-txt: #2563eb;
 }
 
 /* ===== Base Styles ===== */
@@ -93,6 +121,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
 }
 
 /* ===== Scrollbar ===== */
@@ -126,4 +162,3 @@ input::-webkit-inner-spin-button {
 input[type=number] {
   -moz-appearance: textfield;
 }
-
