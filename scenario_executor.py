@@ -48,6 +48,11 @@ async def execute_scenario(
         logger.warning(f"В сценарии {scenario_id} нет шагов.")
         return
 
+    exec_msg = f"Scenario executor: bots engaged chat {chat_id}" + (f" post #{discussion_message_id}" if discussion_message_id else "") + f" with scenario '{scenario.title}' (ID: {scenario_id})"
+    logger.info(exec_msg)
+    session.add(TaskLog(scenario_id=scenario_id, status="bots_engaged", error_message=exec_msg))
+    await session.commit()
+
     # 2. Extract Roles and Check Pool
     roles_needed = set(step.role_id for step in steps)
     commenting_pool = await get_commenting_pool(session)

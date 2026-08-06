@@ -18,7 +18,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from models import MonitoredChannel, Scenario, Account
+from models import MonitoredChannel, Scenario, Account, TaskLog
 from inbox_listener import async_session
 from client import TelegramSessionClient
 
@@ -268,7 +268,14 @@ async def start_monitor():
                         return
                     
                     post_id = message.id
-                    logger.info(f"Channel monitor: new post #{post_id} in {matched_channel.channel_identifier}")
+                    det_msg = f"Channel monitor: post #{post_id} detected in {matched_channel.channel_identifier}"
+                    logger.info(det_msg)
+                    try:
+                        async with async_session() as session:
+                            session.add(TaskLog(status="post_detected", error_message=det_msg))
+                            await session.commit()
+                    except Exception as log_err:
+                        logger.warning(f"Failed to record post_detected log: {log_err}")
                     
                     # Random delay before executing
                     delay = random.uniform(
@@ -295,7 +302,15 @@ async def start_monitor():
                         return
                     
                     # Execute scenario
-                    logger.info(f"Channel monitor: executing scenario #{scenario_id} for post #{post_id} in {matched_channel.channel_identifier}")
+                    att_msg = f"Channel monitor: bots engaged post #{post_id} in {matched_channel.channel_identifier} with scenario #{scenario_id}"
+                    logger.info(att_msg)
+                    try:
+                        async with async_session() as session:
+                            session.add(TaskLog(scenario_id=scenario_id, status="bots_engaged", error_message=att_msg))
+                            await session.commit()
+                    except Exception as log_err:
+                        logger.warning(f"Failed to record bots_engaged log: {log_err}")
+
                     try:
                         from scenario_executor import execute_scenario
                         async with async_session() as session:

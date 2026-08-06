@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 
-from models import Account, Proxy, Scenario, ScenarioStep, SystemConfig, InboxMessage, MonitoredChannel
+from models import Account, Proxy, Scenario, ScenarioStep, SystemConfig, InboxMessage, MonitoredChannel, TaskLog
 from inbox_listener import async_session
 
 router = APIRouter()
@@ -883,3 +883,11 @@ async def stop_channel_monitor():
 async def channel_monitor_status():
     from channel_monitor import is_monitor_running
     return {"running": is_monitor_running()}
+
+@router.get("/api/logs")
+async def get_task_logs(limit: int = 50):
+    async with async_session() as session:
+        stmt = select(TaskLog).order_by(TaskLog.executed_at.desc()).limit(limit)
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
