@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useTheme, ThemeProvider } from './ThemeContext';
-import { AlertTriangle, LayoutDashboard, Server, Route as RouteIcon, Inbox as InboxIcon, Radio, ChevronDown, PanelLeftClose, PanelLeftOpen, Lock } from 'lucide-react';
+import { AlertTriangle, LayoutDashboard, Server, Route as RouteIcon, Inbox as InboxIcon, Radio, ChevronDown, PanelLeftClose, PanelLeftOpen, Lock, Clock } from 'lucide-react';
 import axios from 'axios';
 
 // Component imports
@@ -11,6 +11,8 @@ import Pools from './pages/Pools';
 import Scenarios from './pages/Scenarios';
 import Channels from './pages/Channels';
 import Inbox from './pages/Inbox';
+import { HistoryPage } from './pages/History';
+import { ToastProvider } from './components/ToastContext';
 
 const queryClient = new QueryClient();
 
@@ -69,6 +71,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     { path: '/scenarios', label: 'Сценарии', icon: RouteIcon },
     { path: '/channels', label: 'Каналы', icon: Radio },
     { path: '/inbox', label: 'Входящие', icon: InboxIcon },
+    { path: '/history', label: 'История', icon: Clock },
   ];
 
   const sidebarWidth = collapsed ? 56 : 220;
@@ -415,17 +418,20 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <BrowserRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/pools" element={<Pools />} />
-              <Route path="/scenarios" element={<Scenarios />} />
-              <Route path="/channels" element={<Channels />} />
-              <Route path="/inbox" element={<Inbox />} />
-            </Routes>
-          </Layout>
-        </BrowserRouter>
+        <ToastProvider>
+          <BrowserRouter>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/pools" element={<Pools />} />
+                <Route path="/scenarios" element={<Scenarios />} />
+                <Route path="/channels" element={<Channels />} />
+                <Route path="/inbox" element={<Inbox />} />
+                <Route path="/history" element={<HistoryPage />} />
+              </Routes>
+            </Layout>
+          </BrowserRouter>
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

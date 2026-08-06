@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from inbox_listener import engine
+from app.core.database import engine
 
 @pytest.fixture(scope="session")
 def event_loop():
