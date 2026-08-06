@@ -1271,9 +1271,13 @@ export default function Scenarios() {
                   />
                 </div>
 
+                <div>
+                  <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-участие в ротации ролей" />
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <div>
-                    <label style={labelStyle}>Круг пауза от (сек)</label>
+                    <label style={labelStyle}>Задержка от (сек)</label>
                     <input
                       type="number"
                       value={defaultMinDelay}
@@ -1282,7 +1286,7 @@ export default function Scenarios() {
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Круг пауза до (сек)</label>
+                    <label style={labelStyle}>Задержка до (сек)</label>
                     <input
                       type="number"
                       value={defaultMaxDelay}
@@ -1293,20 +1297,19 @@ export default function Scenarios() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Лимит повторений круга</label>
-                  <select style={inputStyle} defaultValue="infinite">
-                    <option value="infinite">Бесконечный цикл</option>
-                    <option value="once">Выполнить 1 раз и остановиться</option>
-                    <option value="daily">Запускать ежедневно</option>
-                  </select>
-                </div>
-
-                <div>
-                  <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-запуск при публикации" />
-                </div>
-
-                <div>
-                  <label style={labelStyle}>Вес сценария (рандомайзер): {scenarioWeight}</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={labelStyle}>Приоритет в ротации (Вес): {scenarioWeight}</label>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: scenarioWeight >= 8 ? 'rgba(239,68,68,0.15)' : scenarioWeight >= 4 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)',
+                      color: scenarioWeight >= 8 ? '#ef4444' : scenarioWeight >= 4 ? '#f59e0b' : '#10b981'
+                    }}>
+                      {scenarioWeight >= 8 ? 'Высокий' : scenarioWeight >= 4 ? 'Средний' : 'Низкий'}
+                    </span>
+                  </div>
                   <input
                     type="range"
                     min={1}
@@ -1315,9 +1318,33 @@ export default function Scenarios() {
                     onChange={e => setScenarioWeight(Number(e.target.value))}
                     style={{ width: '100%', accentColor: 'var(--accent)' }}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
-                    <span>1 (редко)</span>
-                    <span>10 (часто)</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    <span>1 (редкий выбор)</span>
+                    <span>10 (частый выбор)</span>
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>Статус сценария</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Шагов диалога:</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{replicas.length}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Аккаунтов в пуле:</span>
+                    <span style={{ fontWeight: 700, color: commentingAccounts.length > 0 ? '#10b981' : '#ef4444' }}>
+                      {commentingAccounts.length} активных
+                    </span>
                   </div>
                 </div>
 

@@ -40,6 +40,12 @@ export default function Channels() {
     queryFn: async () => (await axios.get('/api/scenarios')).data
   });
 
+  const { data: logs = [] } = useQuery({
+    queryKey: ['taskLogs'],
+    queryFn: async () => (await axios.get('/api/logs')).data,
+    refetchInterval: 3000
+  });
+
   // Mutations
   const addChannels = useMutation({
     mutationFn: async () => {
@@ -560,6 +566,60 @@ export default function Channels() {
               ))}
             </div>
           )}
+
+          {/* Monitoring Event Logs Widget */}
+          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock className="w-4 h-4 text-accent" />
+                Журнал событий мониторинга
+              </div>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                {logs.length} записей
+              </span>
+            </div>
+
+            {logs.length === 0 ? (
+              <div style={{ padding: '16px', borderRadius: '8px', backgroundColor: 'var(--bg-main)', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                События мониторинга отсутствуют
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                {logs.slice(0, 15).map((log: any) => (
+                  <div
+                    key={log.id}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      fontSize: '11px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{
+                        fontWeight: 700,
+                        marginRight: '6px',
+                        color: log.status === 'post_detected' ? '#818cf8' : log.status === 'bots_engaged' ? '#10b981' : log.status === 'error' ? '#ef4444' : 'var(--text-main)'
+                      }}>
+                        [{log.status}]
+                      </span>
+                      <span style={{ color: 'var(--text-main)' }}>
+                        {log.error_message || log.status}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '9px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      {new Date(log.executed_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
