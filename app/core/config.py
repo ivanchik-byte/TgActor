@@ -6,5 +6,5 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
 SECRET_KEY = os.getenv("SECRET_KEY", "tgactor-secret-key-replace-in-production")
 JWT_SECRET = os.getenv("JWT_SECRET", "jwt-secret-key")
 
-ENABLE_CHANNEL_MONITOR = os.getenv("ENABLE_CHANNEL_MONITOR", "false").lower() == "true"
-ENABLE_INBOX_LISTENER = os.getenv("ENABLE_INBOX_LISTENER", "false").lower() == "true"
+ENABLE_CHANNEL_MONITOR = os.getenv("ENABLE_CHANNEL_MONITOR", "true").lower() == "true"
+ENABLE_INBOX_LISTENER = os.getenv("ENABLE_INBOX_LISTENER", "true").lower() == "true"
