@@ -56,12 +56,12 @@ async def run_channel_monitor():
                                     await asyncio.sleep(delay)
                                     await execute_scenario(session, scenario.id, channel.channel_username)
                             except Exception as ex:
-                                logger.error(f"Error monitoring channel {channel.channel_username}: {ex}")
+                                logger.warning(f"Error monitoring channel {channel.channel_username}: {ex}")
                     finally:
                         await client.stop()
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.error(f"Error in channel monitor loop: {e}")
+            logger.warning(f"Channel monitor status notice: {e}")
 
         await asyncio.sleep(30)
