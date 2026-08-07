@@ -55,6 +55,8 @@ function DownloadMediaButton({ messageId, mediaType, isIncoming }: DownloadMedia
   );
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export default function Inbox() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -70,14 +72,14 @@ export default function Inbox() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Query: Fetch chats list
-  const { data: chats = [], refetch, isRefetching } = useQuery({
+  const { data: chats = EMPTY_ARRAY, refetch, isRefetching } = useQuery({
     queryKey: ['inboxChats'],
     queryFn: async () => (await axios.get('/api/inbox/chats')).data,
     refetchInterval: 5000
   });
 
   // Query: Fetch messages for selected chat
-  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
+  const { data: messages = EMPTY_ARRAY, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['inboxMessages', selectedChat?.account_id, selectedChat?.peer_id],
     queryFn: async () => {
       if (!selectedChat) return [];
