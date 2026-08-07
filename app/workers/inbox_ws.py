@@ -1,8 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import logging
+import os
 from app.core.config import ENABLE_CHANNEL_MONITOR, ENABLE_INBOX_LISTENER
-from app.core.database import redis_client
+from app.core.database import ensure_db_schema_sync, redis_client
 from app.workers.channel_monitor import start_channel_monitor, stop_channel_monitor
 from app.workers.inbox_listener import start_inbox_listeners, stop_inbox_listeners
 
@@ -13,6 +14,15 @@ router = APIRouter()
 active_websockets = set()
 
 async def lifespan(app):
+    port = os.getenv("PORT", "8000")
+    logger.info("==================================================")
+    logger.info(f"TgActor Backend v2.0.0 — Successfully started!")
+    logger.info(f"Dashboard available at: http://localhost:{port}")
+    logger.info("==================================================")
+
+    # Ensure database schema alignment on startup
+    await ensure_db_schema_sync()
+
     if ENABLE_CHANNEL_MONITOR:
         await start_channel_monitor()
     else:
