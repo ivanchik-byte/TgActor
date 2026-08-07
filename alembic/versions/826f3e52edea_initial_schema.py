@@ -76,11 +76,12 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('account_id', sa.Integer(), nullable=False),
     sa.Column('peer_id', sa.BigInteger(), nullable=False),
-    sa.Column('message_id', sa.BigInteger(), nullable=False),
-    sa.Column('sender_username', sa.String(length=100), nullable=True),
+    sa.Column('peer_name', sa.String(length=255), nullable=True),
+    sa.Column('peer_username', sa.String(length=100), nullable=True),
+    sa.Column('incoming', sa.Boolean(), server_default='true', nullable=False),
     sa.Column('text', sa.Text(), nullable=True),
-    sa.Column('is_incoming', sa.Boolean(), nullable=False),
-    sa.Column('received_at', sa.DateTime(), nullable=False),
+    sa.Column('media_path', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['account_id'], ['accounts.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
