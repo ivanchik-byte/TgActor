@@ -20,6 +20,8 @@ interface Replica {
   noAttachmentIfForbidden: boolean;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export default function Scenarios() {
   const queryClient = useQueryClient();
   
@@ -78,7 +80,7 @@ export default function Scenarios() {
   const [activeEmojiPickerId, setActiveEmojiPickerId] = useState<string | null>(null);
 
   // Fetch accounts from API
-  const { data: accounts = [] } = useQuery({
+  const { data: accounts = EMPTY_ARRAY } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await axios.get('/api/accounts')).data
   });
@@ -87,13 +89,13 @@ export default function Scenarios() {
   const commentingAccounts = useMemo(() => accounts.filter((a: any) => a.in_commenting_pool), [accounts]);
 
   // Fetch scenarios list
-  const { data: scenarios = [] } = useQuery({
+  const { data: scenarios = EMPTY_ARRAY } = useQuery({
     queryKey: ['scenarios'],
     queryFn: async () => (await axios.get('/api/scenarios')).data
   });
 
   // Fetch steps for active scenario
-  const { data: dbSteps = [] } = useQuery({
+  const { data: dbSteps = EMPTY_ARRAY } = useQuery({
     queryKey: ['scenarioSteps', activeScenarioId],
     queryFn: async () => {
       if (!activeScenarioId) return [];

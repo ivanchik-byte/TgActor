@@ -272,7 +272,7 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
     try {
       const res = await axios.post('/api/auth/login', { password });
       const token = res.data.access_token;
-      localStorage.setItem('tgcast_token', token);
+      localStorage.setItem('tgactor_token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       onLogin(token);
     } catch (err: any) {

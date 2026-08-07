@@ -13,7 +13,7 @@ from app.models.models import Base, Proxy, Account
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DB_URL = "postgresql+asyncpg://tgcast:tgcast_password@localhost:5433/tgcast_db"
+DB_URL = "postgresql+asyncpg://tgactor:tgactor_password@localhost:5433/tgactor_db"
 
 async def test_database_and_converter():
     engine = create_async_engine(DB_URL, echo=False)
