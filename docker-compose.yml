@@ -3,13 +3,13 @@ services:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-tgcast}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tgcast_password}
-      POSTGRES_DB: ${POSTGRES_DB:-tgcast_db}
+      POSTGRES_USER: ${POSTGRES_USER:-tgactor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tgactor_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tgactor_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tgcast} -d ${POSTGRES_DB:-tgcast_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tgactor} -d ${POSTGRES_DB:-tgactor_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -31,7 +31,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tgcast}:${POSTGRES_PASSWORD:-tgcast_password}@db:5432/${POSTGRES_DB:-tgcast_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-tgactor}:${POSTGRES_PASSWORD:-tgactor_password}@db:5432/${POSTGRES_DB:-tgactor_db}
       - REDIS_URL=redis://redis:6379/0
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
@@ -41,23 +41,6 @@ services:
       redis:
         condition: service_healthy
 
-  caddy:
-    image: caddy:2-alpine
-    restart: always
-    ports:
-      - "${HTTP_PORT:-8080}:80"
-      - "${HTTPS_PORT:-8443}:443"
-    environment:
-      - DOMAIN=${DOMAIN:-localhost}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - backend
-
 volumes:
   postgres_data:
   redis_data:
-  caddy_data:
-  caddy_config:
