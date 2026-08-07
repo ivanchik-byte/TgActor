@@ -26,14 +26,12 @@ def upgrade() -> None:
     op.create_table(
         'monitored_channels',
         sa.Column('id', sa.Integer(), primary_key=True),
-        sa.Column('channel_identifier', sa.String(length=255), nullable=False),
-        sa.Column('display_name', sa.String(length=255), nullable=True),
+        sa.Column('channel_username', sa.String(length=255), nullable=False, unique=True),
         sa.Column('is_active', sa.Boolean(), server_default='true', nullable=False),
-        sa.Column('no_repeat_scenarios', sa.Boolean(), server_default='true', nullable=False),
-        sa.Column('min_delay_seconds', sa.Integer(), server_default='60', nullable=False),
-        sa.Column('max_delay_seconds', sa.Integer(), server_default='300', nullable=False),
-        sa.Column('last_scenario_ids_json', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
+        sa.Column('no_repeat_scenarios', sa.Integer(), server_default='3', nullable=False),
+        sa.Column('min_delay_seconds', sa.Integer(), server_default='10', nullable=False),
+        sa.Column('max_delay_seconds', sa.Integer(), server_default='30', nullable=False),
+        sa.Column('history_json', sa.Text(), server_default='[]', nullable=True),
     )
 
 

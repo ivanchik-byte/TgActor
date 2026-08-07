@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.telegram.patch import apply_hydrogram_patch
 apply_hydrogram_patch()
@@ -59,7 +60,4 @@ if os.path.exists(frontend_dist):
             return FileResponse(file_path)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
 
-@app.on_event("startup")
-async def startup_event():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+
