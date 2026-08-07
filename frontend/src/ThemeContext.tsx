@@ -11,12 +11,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('tgcast-theme');
+    const saved = localStorage.getItem('tgactor-theme');
     return (saved as Theme) || 'dark-crimson';
   });
 
   useEffect(() => {
-    localStorage.setItem('tgcast-theme', theme);
+    localStorage.setItem('tgactor-theme', theme);
     const root = window.document.body;
     root.classList.remove('deep-indigo', 'dark-crimson', 'dark-charcoal', 'light');
     if (theme !== 'deep-indigo') {

@@ -1,6 +1,6 @@
-# Архитектурная документация системы TgCast (Architecture & Technical Specification)
+# Архитектурная документация системы TgActor (Architecture & Technical Specification)
 
-В данном документе описана архитектура системы TgCast, взаимодействие её компонентов, стек технологий, меры безопасности и ключевые архитектурные решения (Architecture Decision Records).
+В данном документе описана архитектура системы TgActor, взаимодействие её компонентов, стек технологий, меры безопасности и ключевые архитектурные решения (Architecture Decision Records).
 
 ---
 
@@ -16,7 +16,7 @@ flowchart TD
         TGPost["Новый пост в канале"]
     end
 
-    subgraph Backend["Ядро системы TgCast"]
+    subgraph Backend["Ядро системы TgActor"]
         CM["Монитор каналов<br/>(channel_monitor.py)"]
         SE["Исполнитель сценариев<br/>(scenario_executor.py)"]
         PM["Менеджер пулов<br/>(pool_manager.py)"]

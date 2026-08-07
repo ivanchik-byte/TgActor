@@ -19,7 +19,7 @@ const queryClient = new QueryClient();
 axios.defaults.baseURL = 'http://localhost:8000';
 
 // Setup token authentication and request headers
-const initialToken = localStorage.getItem('tgcast_token');
+const initialToken = localStorage.getItem('tgactor_token');
 if (initialToken) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${initialToken}`;
 }
@@ -33,7 +33,7 @@ axios.interceptors.response.use(
       if (error.config && error.config.url && error.config.url.includes('/api/auth/login')) {
         return Promise.reject(error);
       }
-      localStorage.removeItem('tgcast_token');
+      localStorage.removeItem('tgactor_token');
       window.location.reload();
     }
     return Promise.reject(error);
@@ -77,7 +77,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const sidebarWidth = collapsed ? 56 : 220;
 
   const handleLogout = () => {
-    localStorage.removeItem('tgcast_token');
+    localStorage.removeItem('tgactor_token');
     window.location.reload();
   };
 
@@ -116,7 +116,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                   borderRadius: '4px', backgroundColor: 'var(--accent)', color: '#fff',
                 }}>B2B</span>
                 <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--accent-text)' }}>
-                  TgCast
+                  TgActor
                 </span>
               </div>
             </div>
@@ -332,7 +332,7 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
               B2B Панель
             </span>
             <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#f4f4f5', marginTop: '8px', marginBottom: '4px' }}>
-              Авторизация TgCast
+              Авторизация TgActor
             </h2>
             <p style={{ fontSize: '12px', color: '#a1a1aa' }}>
               Доступ разрешен только владельцу системы
@@ -399,11 +399,11 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
 }
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('tgcast_token'));
+  const [token, setToken] = useState<string | null>(localStorage.getItem('tgactor_token'));
 
   // Ensure token is checked initially
   useEffect(() => {
-    const curToken = localStorage.getItem('tgcast_token');
+    const curToken = localStorage.getItem('tgactor_token');
     setToken(curToken);
   }, []);
 
