@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, List
+import tempfile
+import os
 
 from app.core.database import async_session
 from app.models.models import Account
@@ -24,31 +26,58 @@ async def create_account(acc: AccountCreate):
         await session.commit()
         return {"status": "ok", "id": account.id}
 
+@router.post("/api/accounts/upload-tdata")
 @router.post("/api/accounts/import-tdata")
-async def import_tdata(
+async def upload_tdata(
     file: UploadFile = File(...),
-    phone: str = Form(...),
+    phone: Optional[str] = Form(None),
     password: Optional[str] = Form(None)
 ):
-    import tempfile
     with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
-    success, result = await convert_tdata_zip_to_encrypted_session(tmp_path, password)
-    import os
+    success, session_or_error, user_info = await convert_tdata_zip_to_encrypted_session(tmp_path, password)
+    
     if os.path.exists(tmp_path):
         os.remove(tmp_path)
 
-    if not success:
-        raise HTTPException(400, detail=result)
+    if not success or not user_info:
+        raise HTTPException(400, detail=session_or_error)
+
+    acc_phone = phone or user_info.get("phone")
+    if not acc_phone:
+        raise HTTPException(400, detail="Could not determine phone number from tdata.")
 
     async with async_session() as session:
-        acc = Account(phone=phone, session_string=result)
-        session.add(acc)
-        await session.commit()
-        return {"status": "ok", "id": acc.id}
+        # Check if account already exists with this phone
+        existing_acc = await session.execute(select(Account).where(Account.phone == acc_phone))
+        existing = existing_acc.scalars().first()
+        if existing:
+            existing.session_string = session_or_error
+            existing.is_active = True
+            if user_info.get("first_name"):
+                existing.first_name = user_info.get("first_name")
+            if user_info.get("last_name"):
+                existing.last_name = user_info.get("last_name")
+            if user_info.get("username"):
+                existing.username = user_info.get("username")
+            await session.commit()
+            return {"status": "ok", "id": existing.id, "message": "Account updated"}
+        else:
+            acc = Account(
+                phone=acc_phone,
+                session_string=session_or_error,
+                first_name=user_info.get("first_name"),
+                last_name=user_info.get("last_name"),
+                username=user_info.get("username"),
+                is_active=True,
+                pool_type="commenting"
+            )
+            session.add(acc)
+            await session.commit()
+            return {"status": "ok", "id": acc.id}
 
 @router.delete("/api/accounts/{account_id}")
 async def delete_account(account_id: int):
