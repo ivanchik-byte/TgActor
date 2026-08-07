@@ -64,4 +64,4 @@ async def run_channel_monitor():
         except Exception as e:
             logger.warning(f"Channel monitor status notice: {e}")
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(10)
