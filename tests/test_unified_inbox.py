@@ -13,7 +13,7 @@ from hydrogram import enums
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DB_URL = "postgresql+asyncpg://tgcast:tgcast_password@localhost:5433/tgcast_db"
+DB_URL = "postgresql+asyncpg://tgactor:tgactor_password@localhost:5433/tgactor_db"
 REDIS_URL = "redis://localhost:6380/0"
 
 async def test_inbox():
