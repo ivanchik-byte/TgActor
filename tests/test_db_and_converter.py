@@ -5,11 +5,10 @@ import zipfile
 import tempfile
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import text, select
-from security import decrypt_session, encrypt_session
-
-from tdata_converter import convert_tdata_zip_to_encrypted_session
-from proxy_service import bind_proxy_to_account, validate_account_proxy_mode
-from models import Base, Proxy, Account
+from app.core.security import decrypt_session, encrypt_session
+from app.telegram.tdata_converter import convert_tdata_zip_to_encrypted_session
+from app.services.proxy_service import bind_proxy_to_account, validate_account_proxy_mode
+from app.models.models import Base, Proxy, Account
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

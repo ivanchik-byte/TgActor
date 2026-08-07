@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import text, select
 import redis.asyncio as redis
 
-from models import Account, InboxMessage
-from security import encrypt_session
+from app.models.models import Account, InboxMessage
+from app.core.security import encrypt_session
 from hydrogram import enums
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

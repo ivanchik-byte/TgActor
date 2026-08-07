@@ -21,7 +21,7 @@ import app.core.config as config
 config.ADMIN_PASSWORD = "testpassword"
 
 from app.core.database import engine
-from models import Base
+from app.models.models import Base
 
 @pytest.fixture(autouse=True)
 async def init_db_tables():

@@ -4,9 +4,9 @@ import logging
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy import text, select
 
-from models import Base, Proxy, Account, Scenario, ScenarioStep, TaskLog
-from scenario_executor import execute_scenario
-from security import encrypt_session
+from app.models.models import Base, Proxy, Account, Scenario, ScenarioStep, TaskLog
+from app.services.scenario_service import execute_scenario
+from app.core.security import encrypt_session
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
