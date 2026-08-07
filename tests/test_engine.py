@@ -2,8 +2,8 @@ import os
 import asyncio
 import logging
 from cryptography.fernet import Fernet
-from client import TelegramSessionClient
-from security import encrypt_session
+from app.telegram.client import get_hydrogram_client
+from app.core.security import encrypt_session
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
