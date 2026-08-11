@@ -26,6 +26,12 @@ class ScenarioBase(BaseModel):
     max_delay: Optional[float] = 10.0
     weight: Optional[int] = 1
 
+    mode: Optional[str] = "manual"
+    ai_prompt: Optional[str] = None
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+    system_instruction: Optional[str] = None
+
 class ScenarioCreate(ScenarioBase):
     pass
 
@@ -37,6 +43,19 @@ class ScenarioResponse(ScenarioBase):
 
     class Config:
         from_attributes = True
+
+class AISettingsSchema(BaseModel):
+    ai_provider: str = "openai" # 'openai', 'deepseek', 'openrouter', 'gemini'
+    ai_api_key: Optional[str] = None
+    ai_default_model: str = "gpt-4o-mini"
+    ai_system_prompt: Optional[str] = "Ты ведешь естественный человеческий диалог в комментариях Telegram."
+
+class AIScenarioGenerateRequest(BaseModel):
+    prompt: str
+    accounts_count: Optional[int] = 3
+    reactions_enabled: Optional[bool] = True
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 class ProxyBase(BaseModel):
     host: str
