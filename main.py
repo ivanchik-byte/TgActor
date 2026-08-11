@@ -17,7 +17,7 @@ from app.workers.inbox_ws import router as ws_router, lifespan
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="TgActor API", version="2.1.1", lifespan=lifespan)
+app = FastAPI(title="TgActor API", version="2.2.2", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
