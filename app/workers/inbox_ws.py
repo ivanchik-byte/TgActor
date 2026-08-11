@@ -16,7 +16,7 @@ active_websockets = set()
 async def lifespan(app):
     port = os.getenv("PORT", "8000")
     logger.info("==================================================")
-    logger.info(f"TgActor Backend v2.1.0 — Successfully started!")
+    logger.info(f"TgActor Backend v2.1.1 — Successfully started!")
     logger.info(f"Dashboard available at: http://localhost:{port}")
     logger.info("==================================================")
 
