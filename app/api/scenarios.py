@@ -8,8 +8,9 @@ from pydantic import BaseModel
 
 from app.core.database import async_session
 from app.models.models import Scenario, ScenarioStep
-from app.models.schemas import ScenarioCreate, ScenarioUpdate, ScenarioResponse
+from app.models.schemas import ScenarioCreate, ScenarioUpdate, ScenarioResponse, AIScenarioGenerateRequest
 from app.services.scenario_service import execute_scenario
+from app.services.ai_service import generate_scenario_from_prompt
 
 router = APIRouter()
 
@@ -30,6 +31,8 @@ class ScenarioStepBulkItem(BaseModel):
     reply_to_index: Optional[int] = None
     reaction_source: Optional[str] = 'pool'
     reaction_roles: Optional[str] = None
+    is_ai_dynamic: Optional[bool] = False
+    ai_prompt: Optional[str] = None
 
 class ScenarioStepsBulkRequest(BaseModel):
     steps: List[ScenarioStepBulkItem]
@@ -88,6 +91,23 @@ async def get_scenario_steps(scenario_id: int):
         result = await session.execute(stmt)
         return result.scalars().all()
 
+@router.post("/api/scenarios/generate-ai")
+async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
+    """Generate scenario steps structure from AI prompt."""
+    async with async_session() as session:
+        try:
+            generated = await generate_scenario_from_prompt(
+                session=session,
+                prompt=req.prompt,
+                accounts_count=req.accounts_count or 3,
+                reactions_enabled=req.reactions_enabled if req.reactions_enabled is not None else True,
+                override_provider=req.provider,
+                override_model=req.model
+            )
+            return {"status": "ok", "scenario": generated}
+        except Exception as e:
+            raise HTTPException(400, detail=f"AI Scenario Generation failed: {str(e)}")
+
 @router.post("/api/scenarios/{scenario_id}/steps/bulk")
 async def save_scenario_steps_bulk(scenario_id: int, req: ScenarioStepsBulkRequest):
     async with async_session() as session:
@@ -106,7 +126,9 @@ async def save_scenario_steps_bulk(scenario_id: int, req: ScenarioStepsBulkReque
                 reactions=item.reactions,
                 reaction_count=item.reaction_count,
                 reaction_source=item.reaction_source or 'pool',
-                reaction_roles=item.reaction_roles
+                reaction_roles=item.reaction_roles,
+                is_ai_dynamic=item.is_ai_dynamic or False,
+                ai_prompt=item.ai_prompt
             )
             session.add(db_step)
             db_steps.append(db_step)

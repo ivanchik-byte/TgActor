@@ -47,6 +47,13 @@ class Scenario(Base):
 
     weight = Column(Integer, default=1)
 
+    # AI configuration fields
+    mode = Column(String, default="manual")
+    ai_prompt = Column(Text, nullable=True)
+    ai_provider = Column(String, nullable=True)
+    ai_model = Column(String, nullable=True)
+    system_instruction = Column(Text, nullable=True)
+
     steps = relationship("ScenarioStep", back_populates="scenario", cascade="all, delete-orphan")
     task_logs = relationship("TaskLog", back_populates="scenario")
 
@@ -71,6 +78,10 @@ class ScenarioStep(Base):
 
     reaction_source = Column(String, default="pool")
     reaction_roles = Column(String, nullable=True)
+
+    # AI dynamic step fields
+    is_ai_dynamic = Column(Boolean, default=False)
+    ai_prompt = Column(Text, nullable=True)
 
     step_order = Column(Integer, nullable=False, default=1)
 
