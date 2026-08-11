@@ -124,12 +124,15 @@ async def call_ai_completion(
         else:
             # OpenAI / DeepSeek / NVIDIA / OpenRouter / Custom compatible format
             if base_url:
-                url = base_url.rstrip("/")
+                url = base_url.strip().rstrip("/")
                 # Auto-fix common URL mistake: build.nvidia.com -> integrate.api.nvidia.com
                 if "build.nvidia.com" in url:
                     url = url.replace("build.nvidia.com", "integrate.api.nvidia.com")
-                    if not url.endswith("/v1") and not url.endswith("/v1/chat/completions"):
-                        url += "/v1"
+                # Remove duplicate /chat/completions if present
+                if url.endswith("/chat/completions"):
+                    url = url[:-17].rstrip("/")
+                if not url.endswith("/v1") and provider in ["nvidia", "openai", "deepseek", "openrouter"] and not url.endswith("/chat/completions"):
+                    url += "/v1"
                 if not url.endswith("/chat/completions"):
                     url += "/chat/completions"
             else:
