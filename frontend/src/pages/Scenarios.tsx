@@ -139,7 +139,12 @@ export default function Scenarios() {
       setAiConfigProvider(aiSettingsData.ai_provider || 'openai');
       setAiConfigApiKey(aiSettingsData.ai_api_key || '');
       setAiConfigDefaultModel(aiSettingsData.ai_default_model || 'gpt-4o-mini');
-      setAiConfigSystemPrompt(aiSettingsData.ai_system_prompt || '');
+      const p = aiSettingsData.ai_system_prompt;
+      if (!p || p.includes('Ты ведешь естественный человеческий диалог')) {
+        setAiConfigSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+      } else {
+        setAiConfigSystemPrompt(p);
+      }
       setAiConfigBaseUrl(aiSettingsData.ai_base_url || '');
     }
   }, [aiSettingsData]);
@@ -1031,11 +1036,11 @@ export default function Scenarios() {
               <div>
                 <label style={labelStyle}>Персонаж / Системная инструкция по умолчанию</label>
                 <textarea
-                  rows={3}
-                  placeholder="Ты ведешь естественный человеческий диалог в комментариях Telegram..."
+                  rows={6}
+                  placeholder="Инструкции персонажа нейросети..."
                   value={aiConfigSystemPrompt}
                   onChange={e => setAiConfigSystemPrompt(e.target.value)}
-                  style={{ ...inputStyle, resize: 'vertical' }}
+                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.4' }}
                 />
               </div>
             </div>
