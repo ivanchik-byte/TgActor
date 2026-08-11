@@ -125,3 +125,21 @@ class SystemConfig(Base):
 
     key = Column(String, primary_key=True, index=True)
     value = Column(String, nullable=False)
+
+class ActionLog(Base):
+    __tablename__ = "bot_action_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    executed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    scenario_id = Column(Integer, ForeignKey("scenarios.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    action_type = Column(String(50), nullable=False, index=True)
+    status = Column(String(20), nullable=False, index=True)
+    target = Column(String(255), nullable=True)
+    target_id = Column(String(100), nullable=True)
+    details = Column(Text, nullable=True)
+
+    account = relationship("Account", backref="action_logs")
+    scenario = relationship("Scenario", backref="action_logs")
+

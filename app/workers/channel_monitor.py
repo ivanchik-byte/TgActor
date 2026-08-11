@@ -7,6 +7,7 @@ from app.models.models import MonitoredChannel, Account
 from app.telegram.client import get_hydrogram_client
 from app.services.monitor_service import pick_random_scenario
 from app.services.scenario_service import execute_scenario
+from app.services.log_service import log_action
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,26 @@ async def run_channel_monitor():
                                 if scenario:
                                     delay = random.randint(channel.min_delay_seconds, channel.max_delay_seconds)
                                     logger.info(f"Monitor triggered for {channel.channel_username}, waiting {delay}s...")
+                                    await log_action(
+                                        session,
+                                        action_type="channel_monitor",
+                                        status="ok",
+                                        target=channel.channel_username,
+                                        target_id=f"scenario #{scenario.id}",
+                                        details={"scenario_title": scenario.title, "delay_seconds": delay},
+                                        scenario_id=scenario.id
+                                    )
                                     await asyncio.sleep(delay)
                                     await execute_scenario(session, scenario.id, channel.channel_username)
                             except Exception as ex:
                                 logger.warning(f"Error monitoring channel {channel.channel_username}: {ex}")
+                                await log_action(
+                                    session,
+                                    action_type="channel_monitor",
+                                    status="error",
+                                    target=channel.channel_username,
+                                    details={"error": str(ex)}
+                                )
                     finally:
                         await client.stop()
         except asyncio.CancelledError:
