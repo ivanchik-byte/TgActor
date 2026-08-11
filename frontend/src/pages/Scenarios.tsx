@@ -417,7 +417,8 @@ export default function Scenarios() {
           });
           setReplicas(generatedReplicas);
         }
-        showToast('Сценарий успешно сгенерирован через ИИ! Отредактируйте при необходимости.', 'success');
+        setScenarioMode('manual');
+        showToast('🎉 Сценарий сгенерирован ИИ! Режим переключен в Ручной для просмотра и сохранения.', 'success');
       }
     } catch (err: any) {
       showToast(err?.response?.data?.detail || 'Ошибка генерации сценария ИИ', 'error');
@@ -1387,49 +1388,93 @@ export default function Scenarios() {
                 </div>
               </div>
 
-              {/* AI One-Time Generator Box */}
-              {scenarioMode === 'ai_generated' && (
+              {/* Option 2: Full-screen AI Generator Studio (hides previous steps while in generator mode) */}
+              {scenarioMode === 'ai_generated' ? (
                 <div style={{
                   backgroundColor: 'var(--bg-card)',
                   border: '1px solid var(--accent)',
-                  borderRadius: '14px',
-                  padding: '16px',
-                  marginBottom: '16px',
+                  borderRadius: '20px',
+                  padding: '24px',
+                  marginBottom: '20px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px'
+                  gap: '16px',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4)'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Wand2 className="w-5 h-5 text-accent" />
-                    <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-main)' }}>
-                      Мастер ИИ-генерации сценария
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      backgroundColor: 'var(--accent-soft)',
+                      padding: '10px',
+                      borderRadius: '12px',
+                      color: 'var(--accent)'
+                    }}>
+                      <Wand2 className="w-6 h-6 text-accent" />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
+                        Мастер ИИ-Генерации Сценариев
+                      </h3>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Задайте тему или заготовку — нейросеть выстроит последовательность реплик, свяжет ответы ботов и расставит эмодзи-реакции.
+                      </p>
+                    </div>
                   </div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Опишите идею обсуждения — ИИ сам составит список реплик, свяжет ответы и подберет эмодзи-реакции.
-                  </p>
                   
-                  <textarea
-                    rows={3}
-                    placeholder="Например: Живое обсуждение покупки подарка NFT двумя инвесторами в Telegram. Один восторгается, второй выражает сомнения, третий советует маркетплейс..."
-                    value={aiGenPrompt}
-                    onChange={e => setAiGenPrompt(e.target.value)}
-                    style={{ ...inputStyle, resize: 'vertical' }}
-                  />
+                  <div>
+                    <label style={labelStyle}>Тема или готовое описание диалога</label>
+                    <textarea
+                      rows={5}
+                      placeholder="Например: Живое обсуждение покупки NFT двумя инвесторами в Telegram. Один восторгается, второй выражает сомнения, третий советует маркетплейс..."
+                      value={aiGenPrompt}
+                      onChange={e => setAiGenPrompt(e.target.value)}
+                      style={{ ...inputStyle, resize: 'vertical', fontSize: '13px', lineHeight: '1.5' }}
+                    />
+                  </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Quick prompt suggestion chips */}
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: '10px' }}>Готовые шаблоны (нажмите для подстановки):</label>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {[
+                        '💬 Спор двух инвесторов про покупку NFT в Telegram',
+                        '🚀 Живое обсуждение нового листинга токена',
+                        '❓ Вопросы новичка по настройке и подробные ответы участников',
+                        '🔥 Эмоциональные восторги и обсуждение свежих новостей'
+                      ].map((chip, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setAiGenPrompt(chip)}
+                          style={{
+                            backgroundColor: 'var(--bg-main)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>БОТОВ:</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>УЧАСТНИКОВ (БОТОВ):</span>
                         {[2, 3, 4, 5].map(cnt => (
                           <button
                             key={cnt}
                             type="button"
                             onClick={() => setAiGenAccountsCount(cnt)}
                             style={{
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                              fontSize: '11px',
+                              padding: '5px 10px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
                               fontWeight: 700,
                               border: aiGenAccountsCount === cnt ? '1px solid var(--accent)' : '1px solid var(--border-color)',
                               backgroundColor: aiGenAccountsCount === cnt ? 'var(--accent-soft)' : 'var(--bg-main)',
@@ -1446,9 +1491,9 @@ export default function Scenarios() {
                         type="button"
                         onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
                         style={{
-                          padding: '3px 10px',
-                          borderRadius: '6px',
-                          fontSize: '11px',
+                          padding: '5px 12px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
                           fontWeight: 600,
                           border: aiGenReactionsEnabled ? '1px solid #22c55e' : '1px solid var(--border-color)',
                           backgroundColor: aiGenReactionsEnabled ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-main)',
@@ -1461,50 +1506,52 @@ export default function Scenarios() {
                     </div>
 
                     <button
+                      type="button"
                       onClick={handleGenerateScenarioAI}
                       disabled={isGeneratingAI || !aiGenPrompt.trim()}
                       style={{
                         backgroundColor: 'var(--accent)',
                         color: '#fff',
                         border: 'none',
-                        borderRadius: '8px',
-                        padding: '8px 16px',
-                        fontSize: '12px',
+                        borderRadius: '10px',
+                        padding: '10px 20px',
+                        fontSize: '13px',
                         fontWeight: 700,
                         cursor: 'pointer',
                         opacity: (isGeneratingAI || !aiGenPrompt.trim()) ? 0.5 : 1,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px'
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
                       }}
                     >
                       <Sparkles className="w-4 h-4" />
-                      {isGeneratingAI ? 'Генерация ИИ...' : 'Сгенерировать сценарий через ИИ'}
+                      {isGeneratingAI ? 'Генерация...' : '✨ Сгенерировать готовый сценарий'}
                     </button>
                   </div>
                 </div>
-              )}
-
-              {/* Dynamic AI Banner Notice */}
-              {scenarioMode === 'ai_dynamic' && (
-                <div style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid #3b82f6',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  color: '#60a5fa',
-                  fontSize: '12px'
-                }}>
-                  <Zap className="w-5 h-5 flex-shrink-0" />
-                  <span>
-                    <strong>Режим Динамического ИИ активен!</strong> При каждом исполнении сценария в Telegram ИИ будет генерировать 100% уникальный текст каждой реплики с учетом контекста поста!
-                  </span>
-                </div>
-              )}
+              ) : (
+                <>
+                  {/* Dynamic AI Banner Notice */}
+                  {scenarioMode === 'ai_dynamic' && (
+                    <div style={{
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid #3b82f6',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                      marginBottom: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      color: '#60a5fa',
+                      fontSize: '12px'
+                    }}>
+                      <Zap className="w-5 h-5 flex-shrink-0" />
+                      <span>
+                        <strong>Режим Динамического ИИ активен!</strong> При каждом исполнении сценария в Telegram ИИ будет генерировать 100% уникальный текст каждой реплики с учетом контекста поста!
+                      </span>
+                    </div>
+                  )}
 
               {replicas.length === 0 ? (
                 <div style={{
@@ -1964,7 +2011,9 @@ export default function Scenarios() {
                 })
               )}
             </>
-          ) : (
+          )}
+        </>
+      ) : (
             <div style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px dashed var(--border-color)',
