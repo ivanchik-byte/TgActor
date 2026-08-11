@@ -21,7 +21,8 @@ async def get_ai_config():
             ai_provider=settings["provider"],
             ai_api_key=masked_key,
             ai_default_model=settings["default_model"],
-            ai_system_prompt=settings["system_prompt"]
+            ai_system_prompt=settings["system_prompt"],
+            ai_base_url=settings.get("base_url")
         )
 
 @router.post("/api/settings/ai")
@@ -30,7 +31,8 @@ async def save_ai_config(cfg: AISettingsSchema):
         updates = {
             "ai_provider": cfg.ai_provider,
             "ai_default_model": cfg.ai_default_model,
-            "ai_system_prompt": cfg.ai_system_prompt or "Ты ведешь естественный человеческий диалог в комментариях Telegram."
+            "ai_system_prompt": cfg.ai_system_prompt or "Ты ведешь естественный человеческий диалог в комментариях Telegram.",
+            "ai_base_url": cfg.ai_base_url.strip() if cfg.ai_base_url else ""
         }
         # Only update API key if user didn't leave it masked or empty
         if cfg.ai_api_key and not cfg.ai_api_key.startswith("***") and "..." not in cfg.ai_api_key:
@@ -65,7 +67,8 @@ async def test_ai_connection(cfg: AISettingsSchema):
                 api_key=api_key,
                 model=cfg.ai_default_model,
                 system_prompt="Ответь одним словом 'OK'.",
-                user_prompt="Проверка связи."
+                user_prompt="Проверка связи.",
+                base_url=cfg.ai_base_url or stored.get("base_url")
             )
             return {"status": "ok", "response": response_text.strip()}
         except Exception as e:
