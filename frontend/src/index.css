@@ -123,6 +123,16 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+select {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+
+option {
+  background-color: var(--bg-card);
+  color: var(--text-main);
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

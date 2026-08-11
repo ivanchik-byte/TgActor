@@ -17,7 +17,7 @@ from app.workers.inbox_ws import router as ws_router, lifespan
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="TgActor API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="TgActor API", version="2.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +29,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
     if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/auth/login"):
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
