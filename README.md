@@ -72,10 +72,7 @@
 | :---: | :---: |
 | ![Подключение аккаунтов](images/accounts_management.png) | ![Пулы аккаунтов](images/account_pools.png) |
 
-### 3. Детализированная история логов и инспектор событий
-![Журнал активности аккаунтов](images/action_history_logs.png)
-
-### 4. Результат выполнения в Telegram
+### 3. Результат выполнения в Telegram
 ![Пример в Telegram](images/telegram_dialog_example.png)
 
 ## Архитектура и техническая документация
