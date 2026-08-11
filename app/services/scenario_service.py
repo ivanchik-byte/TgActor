@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.models.models import Scenario, ScenarioStep, TaskLog, Account
 from app.services.pool_service import get_commenting_pool, get_reaction_pool
+from app.services.log_service import log_action
 from app.telegram.client import get_hydrogram_client
 from app.telegram.preflight import check_chat_availability
 
@@ -145,6 +146,16 @@ async def execute_scenario(
                 
                 log = TaskLog(account_id=role_account_map[role_id].id, scenario_id=scenario_id, status="success")
                 session.add(log)
+                await log_action(
+                    session,
+                    action_type="comment_send",
+                    status="ok",
+                    account_id=role_account_map[role_id].id,
+                    target=str(target_chat_id),
+                    target_id=f"msg #{msg_id}",
+                    details={"text": step.text, "reply_to": reply_to, "step_id": step.id},
+                    scenario_id=scenario_id
+                )
                 await session.commit()
                 
                 if step.reactions:
@@ -173,6 +184,16 @@ async def execute_scenario(
                             await asyncio.sleep(random.uniform(0.5, 2.0))
                             await r_client.send_reaction(target_chat_id, msg_id, emoji)
                             logger.info(f"Аккаунт {r_acc.id} поставил реакцию {emoji}")
+                            await log_action(
+                                session,
+                                action_type="reaction_add",
+                                status="ok",
+                                account_id=r_acc.id,
+                                target=str(target_chat_id),
+                                target_id=f"msg #{msg_id}",
+                                details={"emoji": emoji, "source": source},
+                                scenario_id=scenario_id
+                            )
                         except Exception as e:
                             logger.error(f"Ошибка постановки реакции аккаунтом {r_acc.id}: {e}")
                         finally:
