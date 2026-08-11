@@ -6,7 +6,7 @@ from typing import Dict, Any
 from app.core.database import async_session
 from app.models.models import SystemConfig
 from app.models.schemas import AISettingsSchema
-from app.services.ai_service import get_ai_settings, call_ai_completion
+from app.services.ai_service import get_ai_settings, call_ai_completion, DEFAULT_SYSTEM_PROMPT
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def save_ai_config(cfg: AISettingsSchema):
         updates = {
             "ai_provider": cfg.ai_provider,
             "ai_default_model": cfg.ai_default_model,
-            "ai_system_prompt": cfg.ai_system_prompt or "Ты ведешь естественный человеческий диалог в комментариях Telegram.",
+            "ai_system_prompt": cfg.ai_system_prompt or DEFAULT_SYSTEM_PROMPT,
             "ai_base_url": cfg.ai_base_url.strip() if cfg.ai_base_url else ""
         }
         # Only update API key if user didn't leave it masked or empty
