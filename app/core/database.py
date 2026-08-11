@@ -38,6 +38,7 @@ async def ensure_db_schema_sync():
             
             # Auto-migrate missing columns for existing PostgreSQL/SQLite tables
             migrations = [
+                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS mode VARCHAR DEFAULT 'manual'",
                 "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_prompt VARCHAR",
                 "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_provider VARCHAR",

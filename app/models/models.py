@@ -46,6 +46,7 @@ class Scenario(Base):
     max_delay = Column(Float, default=10.0)
 
     weight = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # AI configuration fields
     mode = Column(String, default="manual")

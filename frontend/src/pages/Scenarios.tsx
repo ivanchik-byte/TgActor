@@ -856,7 +856,7 @@ export default function Scenarios() {
         </div>
       )}
 
-      {/* Global AI Settings Modal */}
+      {/* Global AI Settings Modal (Design-Taste-Frontend calibrated) */}
       {showAISettingsModal && (
         <div style={{
           position: 'fixed',
@@ -864,8 +864,8 @@ export default function Scenarios() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(4px)',
+          backgroundColor: 'rgba(0,0,0,0.75)',
+          backdropFilter: 'blur(10px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -873,113 +873,138 @@ export default function Scenarios() {
         }}>
           <div style={{
             backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '16px',
-            padding: '24px',
-            maxWidth: '520px',
-            width: '90%',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '24px',
+            padding: '28px',
+            maxWidth: '560px',
+            width: '92%',
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+            gap: '20px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
           }}>
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Bot className="w-5 h-5 text-accent" />
-                Настройки ИИ (OpenAI / DeepSeek / NVIDIA / Gemini)
-              </h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
-                Конфигурация провайдеров и ключей API (OpenAI, DeepSeek, NVIDIA NIM, OpenRouter, Gemini, Custom).
-              </p>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    fontSize: '10px', fontWeight: 800, padding: '2px 6px',
+                    borderRadius: '4px', backgroundColor: 'var(--accent)', color: '#fff',
+                    textTransform: 'uppercase', letterSpacing: '0.05em'
+                  }}>AI Engine v2.2</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Универсальный коннектор</span>
+                </div>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', marginTop: '6px', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Bot className="w-5 h-5 text-accent" />
+                  Конфигурация Нейросетей (AI API)
+                </h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
+                  Подключение OpenAI, DeepSeek, NVIDIA NIM, Gemini или любых сторонних провайдеров API.
+                </p>
+              </div>
             </div>
 
+            {/* Provider Grid Selector */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={labelStyle}>Провайдер ИИ</label>
+                <label style={labelStyle}>Провайдер Нейросети</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                   {[
-                    { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini', url: '' },
-                    { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat', url: '' },
-                    { id: 'nvidia', label: 'NVIDIA NIM', defaultModel: 'deepseek-ai/deepseek-r1', url: 'https://integrate.api.nvidia.com/v1' },
-                    { id: 'openrouter', label: 'OpenRouter', defaultModel: 'openai/gpt-4o-mini', url: '' },
-                    { id: 'gemini', label: 'Gemini', defaultModel: 'gemini-1.5-flash', url: '' },
-                    { id: 'custom', label: 'Свой URL (Proxy/vLLM)', defaultModel: 'deepseek-ai/deepseek-r1', url: 'http://localhost:11434/v1' },
-                  ].map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setAiConfigProvider(p.id);
-                        if (p.defaultModel && (!aiConfigDefaultModel || aiConfigDefaultModel === 'gpt-4o-mini' || aiConfigDefaultModel === 'deepseek-chat')) {
-                          setAiConfigDefaultModel(p.defaultModel);
-                        }
-                        if (p.url) {
-                          setAiConfigBaseUrl(p.url);
-                        } else if (p.id !== 'custom') {
-                          setAiConfigBaseUrl('');
-                        }
-                      }}
-                      style={{
-                        padding: '8px',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: aiConfigProvider === p.id ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                        backgroundColor: aiConfigProvider === p.id ? 'var(--accent-soft)' : 'var(--bg-main)',
-                        color: aiConfigProvider === p.id ? 'var(--accent-text)' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s'
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                    { id: 'openai', label: 'OpenAI', desc: 'GPT-4o Mini', defaultModel: 'gpt-4o-mini', url: '' },
+                    { id: 'deepseek', label: 'DeepSeek', desc: 'Official API', defaultModel: 'deepseek-chat', url: '' },
+                    { id: 'nvidia', label: 'NVIDIA NIM', desc: 'DeepSeek R1 / V3', defaultModel: 'deepseek-ai/deepseek-r1', url: 'https://integrate.api.nvidia.com/v1' },
+                    { id: 'openrouter', label: 'OpenRouter', desc: 'Unified Gateway', defaultModel: 'openai/gpt-4o-mini', url: '' },
+                    { id: 'gemini', label: 'Gemini', desc: 'Google AI', defaultModel: 'gemini-1.5-flash', url: '' },
+                    { id: 'custom', label: 'Свой API (Proxy)', desc: 'vLLM / Ollama', defaultModel: 'deepseek-ai/deepseek-r1', url: 'http://localhost:11434/v1' },
+                  ].map(p => {
+                    const isSelected = aiConfigProvider === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setAiConfigProvider(p.id);
+                          if (p.defaultModel && (!aiConfigDefaultModel || aiConfigDefaultModel === 'gpt-4o-mini' || aiConfigDefaultModel === 'deepseek-chat')) {
+                            setAiConfigDefaultModel(p.defaultModel);
+                          }
+                          if (p.url) {
+                            setAiConfigBaseUrl(p.url);
+                          } else if (p.id !== 'custom') {
+                            setAiConfigBaseUrl('');
+                          }
+                        }}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '12px',
+                          textAlign: 'left',
+                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                          backgroundColor: isSelected ? 'var(--accent-soft)' : 'var(--bg-main)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px'
+                        }}
+                      >
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? 'var(--accent-text)' : 'var(--text-main)' }}>
+                          {p.label}
+                        </span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                          {p.desc}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
+              {/* API Key */}
               <div>
-                <label style={labelStyle}>API Key ({aiConfigProvider.toUpperCase()})</label>
+                <label style={labelStyle}>API Key (Ключ авторизации)</label>
                 <input
                   type="password"
-                  placeholder="Вставьте любой API-ключ вашего сервиса (sk-..., nvapi-..., gsk-..., и т.д.)"
+                  placeholder="Вставьте sk-..., nvapi-..., gsk-... или любой другой API ключ"
                   value={aiConfigApiKey}
                   onChange={e => setAiConfigApiKey(e.target.value)}
-                  style={inputStyle}
+                  style={{ ...inputStyle, fontFamily: 'monospace' }}
                 />
               </div>
 
+              {/* Base URL Endpoint */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <label style={labelStyle}>Base URL API Endpoint (Необязательно / Для любых сайтов)</label>
+                  <label style={labelStyle}>Base URL Endpoint (Адрес Сервиса / Прокси)</label>
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    Оставьте пустым для официального API провайдера
+                    Необязательно (Для любых сторонних API)
                   </span>
                 </div>
                 <input
                   type="text"
-                  placeholder="Например: https://api.groq.com/openai/v1 или https://integrate.api.nvidia.com/v1"
+                  placeholder="Например: https://integrate.api.nvidia.com/v1 или https://api.groq.com/openai/v1"
                   value={aiConfigBaseUrl}
                   onChange={e => setAiConfigBaseUrl(e.target.value)}
-                  style={inputStyle}
+                  style={{ ...inputStyle, fontFamily: 'monospace' }}
                 />
               </div>
 
+              {/* Default Model */}
               <div>
-                <label style={labelStyle}>Модель нейросети</label>
+                <label style={labelStyle}>Идентификатор Модели</label>
                 <input
                   type="text"
-                  placeholder="Укажите название модели (например: gpt-4o-mini, deepseek-chat, llama-3.3-70b, и т.д.)"
+                  placeholder="Имя модели (например: deepseek-ai/deepseek-r1, gpt-4o-mini, deepseek-chat)"
                   value={aiConfigDefaultModel}
                   onChange={e => setAiConfigDefaultModel(e.target.value)}
-                  style={inputStyle}
+                  style={{ ...inputStyle, fontFamily: 'monospace' }}
                 />
               </div>
 
+              {/* System Instruction */}
               <div>
-                <label style={labelStyle}>Системный промпт персонажей</label>
+                <label style={labelStyle}>Персонаж / Системная инструкция по умолчанию</label>
                 <textarea
                   rows={3}
-                  placeholder="Ты ведешь естественный живой диалог в комментариях Telegram..."
+                  placeholder="Ты ведешь естественный человеческий диалог в комментариях Telegram..."
                   value={aiConfigSystemPrompt}
                   onChange={e => setAiConfigSystemPrompt(e.target.value)}
                   style={{ ...inputStyle, resize: 'vertical' }}
@@ -987,7 +1012,8 @@ export default function Scenarios() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            {/* Footer buttons */}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
               <button
                 onClick={handleSaveAISettings}
                 disabled={isSavingAISettings}
@@ -996,7 +1022,7 @@ export default function Scenarios() {
                   backgroundColor: 'var(--accent)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: '10px',
+                  borderRadius: '12px',
                   padding: '12px',
                   fontSize: '13px',
                   fontWeight: 700,
@@ -1005,7 +1031,8 @@ export default function Scenarios() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px'
+                  gap: '6px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                 }}
               >
                 <Save className="w-4 h-4" />
@@ -1019,8 +1046,8 @@ export default function Scenarios() {
                   backgroundColor: 'var(--bg-main)',
                   color: 'var(--text-main)',
                   border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -1040,8 +1067,8 @@ export default function Scenarios() {
                   backgroundColor: 'var(--bg-main)',
                   color: 'var(--text-muted)',
                   border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
