@@ -44,11 +44,13 @@ class ScenarioResponse(ScenarioBase):
     class Config:
         from_attributes = True
 
+from app.services.ai_service import DEFAULT_SYSTEM_PROMPT
+
 class AISettingsSchema(BaseModel):
     ai_provider: str = "openai" # 'openai', 'deepseek', 'nvidia', 'openrouter', 'gemini', 'custom'
     ai_api_key: Optional[str] = None
     ai_default_model: str = "gpt-4o-mini"
-    ai_system_prompt: Optional[str] = "Ты ведешь естественный человеческий диалог в комментариях Telegram."
+    ai_system_prompt: Optional[str] = DEFAULT_SYSTEM_PROMPT
     ai_base_url: Optional[str] = None
 
 class AIScenarioGenerateRequest(BaseModel):
