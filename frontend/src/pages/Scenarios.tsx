@@ -941,31 +941,34 @@ export default function Scenarios() {
                 <label style={labelStyle}>API Key ({aiConfigProvider.toUpperCase()})</label>
                 <input
                   type="password"
-                  placeholder="Вставьте nvapi-... или sk-... ключ провайдера"
+                  placeholder="Вставьте любой API-ключ вашего сервиса (sk-..., nvapi-..., gsk-..., и т.д.)"
                   value={aiConfigApiKey}
                   onChange={e => setAiConfigApiKey(e.target.value)}
                   style={inputStyle}
                 />
               </div>
 
-              {(aiConfigProvider === 'nvidia' || aiConfigProvider === 'custom' || aiConfigBaseUrl) && (
-                <div>
-                  <label style={labelStyle}>Base URL API EndPoint</label>
-                  <input
-                    type="text"
-                    placeholder="Например: https://integrate.api.nvidia.com/v1"
-                    value={aiConfigBaseUrl}
-                    onChange={e => setAiConfigBaseUrl(e.target.value)}
-                    style={inputStyle}
-                  />
-                </div>
-              )}
-
               <div>
-                <label style={labelStyle}>Модель по умолчанию</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={labelStyle}>Base URL API Endpoint (Необязательно / Для любых сайтов)</label>
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    Оставьте пустым для официального API провайдера
+                  </span>
+                </div>
                 <input
                   type="text"
-                  placeholder="Например: deepseek-ai/deepseek-r1, deepseek-chat, gpt-4o-mini"
+                  placeholder="Например: https://api.groq.com/openai/v1 или https://integrate.api.nvidia.com/v1"
+                  value={aiConfigBaseUrl}
+                  onChange={e => setAiConfigBaseUrl(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Модель нейросети</label>
+                <input
+                  type="text"
+                  placeholder="Укажите название модели (например: gpt-4o-mini, deepseek-chat, llama-3.3-70b, и т.д.)"
                   value={aiConfigDefaultModel}
                   onChange={e => setAiConfigDefaultModel(e.target.value)}
                   style={inputStyle}
