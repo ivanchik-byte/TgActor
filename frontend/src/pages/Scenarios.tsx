@@ -96,6 +96,7 @@ export default function Scenarios() {
   const [aiConfigApiKey, setAiConfigApiKey] = useState('');
   const [aiConfigDefaultModel, setAiConfigDefaultModel] = useState('gpt-4o-mini');
   const [aiConfigSystemPrompt, setAiConfigSystemPrompt] = useState('Ты ведешь естественный человеческий диалог в комментариях Telegram.');
+  const [aiConfigBaseUrl, setAiConfigBaseUrl] = useState('');
   const [isTestingAI, setIsTestingAI] = useState(false);
   const [isSavingAISettings, setIsSavingAISettings] = useState(false);
 
@@ -111,6 +112,7 @@ export default function Scenarios() {
       setAiConfigApiKey(aiSettingsData.ai_api_key || '');
       setAiConfigDefaultModel(aiSettingsData.ai_default_model || 'gpt-4o-mini');
       setAiConfigSystemPrompt(aiSettingsData.ai_system_prompt || '');
+      setAiConfigBaseUrl(aiSettingsData.ai_base_url || '');
     }
   }, [aiSettingsData]);
 
@@ -398,7 +400,8 @@ export default function Scenarios() {
         ai_provider: aiConfigProvider,
         ai_api_key: aiConfigApiKey,
         ai_default_model: aiConfigDefaultModel,
-        ai_system_prompt: aiConfigSystemPrompt
+        ai_system_prompt: aiConfigSystemPrompt,
+        ai_base_url: aiConfigBaseUrl
       });
       await refetchAISettings();
       showToast('Настройки ИИ успешно сохранены!', 'success');
@@ -416,7 +419,8 @@ export default function Scenarios() {
       const res = await axios.post('/api/settings/ai/test', {
         ai_provider: aiConfigProvider,
         ai_api_key: aiConfigApiKey,
-        ai_default_model: aiConfigDefaultModel
+        ai_default_model: aiConfigDefaultModel,
+        ai_base_url: aiConfigBaseUrl
       });
       showToast(`Проверка успешна! Ответ ИИ: ${res.data.response}`, 'success');
     } catch (err: any) {
@@ -882,27 +886,39 @@ export default function Scenarios() {
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Bot className="w-5 h-5 text-accent" />
-                Настройки ИИ (OpenAI / DeepSeek / Gemini)
+                Настройки ИИ (OpenAI / DeepSeek / NVIDIA / Gemini)
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
-                Конфигурация ключей API и моделей для автоматической генерации сценариев и динамических ответов ботов.
+                Конфигурация провайдеров и ключей API (OpenAI, DeepSeek, NVIDIA NIM, OpenRouter, Gemini, Custom).
               </p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={labelStyle}>Провайдер ИИ</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                   {[
-                    { id: 'openai', label: 'OpenAI' },
-                    { id: 'deepseek', label: 'DeepSeek' },
-                    { id: 'openrouter', label: 'OpenRouter' },
-                    { id: 'gemini', label: 'Gemini' },
+                    { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini', url: '' },
+                    { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat', url: '' },
+                    { id: 'nvidia', label: 'NVIDIA NIM', defaultModel: 'deepseek-ai/deepseek-r1', url: 'https://integrate.api.nvidia.com/v1' },
+                    { id: 'openrouter', label: 'OpenRouter', defaultModel: 'openai/gpt-4o-mini', url: '' },
+                    { id: 'gemini', label: 'Gemini', defaultModel: 'gemini-1.5-flash', url: '' },
+                    { id: 'custom', label: 'Свой URL (Proxy/vLLM)', defaultModel: 'deepseek-ai/deepseek-r1', url: 'http://localhost:11434/v1' },
                   ].map(p => (
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setAiConfigProvider(p.id)}
+                      onClick={() => {
+                        setAiConfigProvider(p.id);
+                        if (p.defaultModel && (!aiConfigDefaultModel || aiConfigDefaultModel === 'gpt-4o-mini' || aiConfigDefaultModel === 'deepseek-chat')) {
+                          setAiConfigDefaultModel(p.defaultModel);
+                        }
+                        if (p.url) {
+                          setAiConfigBaseUrl(p.url);
+                        } else if (p.id !== 'custom') {
+                          setAiConfigBaseUrl('');
+                        }
+                      }}
                       style={{
                         padding: '8px',
                         borderRadius: '8px',
@@ -925,18 +941,31 @@ export default function Scenarios() {
                 <label style={labelStyle}>API Key ({aiConfigProvider.toUpperCase()})</label>
                 <input
                   type="password"
-                  placeholder="Вставьте sk-... ключ провайдера"
+                  placeholder="Вставьте nvapi-... или sk-... ключ провайдера"
                   value={aiConfigApiKey}
                   onChange={e => setAiConfigApiKey(e.target.value)}
                   style={inputStyle}
                 />
               </div>
 
+              {(aiConfigProvider === 'nvidia' || aiConfigProvider === 'custom' || aiConfigBaseUrl) && (
+                <div>
+                  <label style={labelStyle}>Base URL API EndPoint</label>
+                  <input
+                    type="text"
+                    placeholder="Например: https://integrate.api.nvidia.com/v1"
+                    value={aiConfigBaseUrl}
+                    onChange={e => setAiConfigBaseUrl(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              )}
+
               <div>
                 <label style={labelStyle}>Модель по умолчанию</label>
                 <input
                   type="text"
-                  placeholder="Например: gpt-4o-mini, deepseek-chat, gemini-1.5-flash"
+                  placeholder="Например: deepseek-ai/deepseek-r1, deepseek-chat, gpt-4o-mini"
                   value={aiConfigDefaultModel}
                   onChange={e => setAiConfigDefaultModel(e.target.value)}
                   style={inputStyle}

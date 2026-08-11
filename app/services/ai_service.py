@@ -12,20 +12,23 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODELS = {
     "openai": "gpt-4o-mini",
     "deepseek": "deepseek-chat",
+    "nvidia": "deepseek-ai/deepseek-r1",
     "openrouter": "openai/gpt-4o-mini",
-    "gemini": "gemini-1.5-flash"
+    "gemini": "gemini-1.5-flash",
+    "custom": "deepseek-ai/deepseek-r1"
 }
 
 # API Endpoint base URLs per provider
 PROVIDER_URLS = {
     "openai": "https://api.openai.com/v1/chat/completions",
     "deepseek": "https://api.deepseek.com/v1/chat/completions",
+    "nvidia": "https://integrate.api.nvidia.com/v1/chat/completions",
     "openrouter": "https://openrouter.ai/api/v1/chat/completions"
 }
 
 async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
     """Retrieve saved AI credentials from system_config table."""
-    keys = ["ai_provider", "ai_api_key", "ai_default_model", "ai_system_prompt"]
+    keys = ["ai_provider", "ai_api_key", "ai_default_model", "ai_system_prompt", "ai_base_url"]
     result = {}
     for k in keys:
         stmt = select(SystemConfig).where(SystemConfig.key == k)
@@ -40,7 +43,8 @@ async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
         "provider": provider,
         "api_key": result.get("ai_api_key"),
         "default_model": model,
-        "system_prompt": system_prompt
+        "system_prompt": system_prompt,
+        "base_url": result.get("ai_base_url")
     }
 
 async def call_ai_completion(
@@ -49,9 +53,10 @@ async def call_ai_completion(
     model: str,
     system_prompt: str,
     user_prompt: str,
-    json_mode: bool = False
+    json_mode: bool = False,
+    base_url: Optional[str] = None
 ) -> str:
-    """Call AI API for OpenAI, DeepSeek, OpenRouter, or Gemini."""
+    """Call AI API for OpenAI, DeepSeek, NVIDIA NIM, OpenRouter, Gemini, or Custom endpoint."""
     if not api_key:
         raise ValueError("AI API key is missing. Please configure your API key in Settings.")
 
@@ -82,8 +87,14 @@ async def call_ai_completion(
             parts = candidates[0].get("content", {}).get("parts", [])
             return parts[0].get("text", "") if parts else ""
         else:
-            # OpenAI / DeepSeek / OpenRouter compatible format
-            url = PROVIDER_URLS.get(provider, PROVIDER_URLS["openai"])
+            # OpenAI / DeepSeek / NVIDIA / OpenRouter / Custom compatible format
+            if base_url:
+                url = base_url.rstrip("/")
+                if not url.endswith("/chat/completions"):
+                    url += "/chat/completions"
+            else:
+                url = PROVIDER_URLS.get(provider, PROVIDER_URLS["openai"])
+
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
@@ -183,7 +194,8 @@ async def generate_scenario_from_prompt(
         model=model,
         system_prompt=system_prompt,
         user_prompt=user_instructions,
-        json_mode=True
+        json_mode=True,
+        base_url=settings.get("base_url")
     )
 
     # Clean markdown backticks if present
@@ -243,7 +255,8 @@ async def generate_dynamic_step_text(
         model=model,
         system_prompt=system_prompt,
         user_prompt=user_instructions,
-        json_mode=False
+        json_mode=False,
+        base_url=settings.get("base_url")
     )
 
     # Clean surrounding quotes
