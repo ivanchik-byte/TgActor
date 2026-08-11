@@ -146,6 +146,11 @@ async def call_ai_completion(
                 headers["HTTP-Referer"] = "https://tgactor.local"
                 headers["X-Title"] = "TgActor"
 
+            # Auto-correct invalid model names for NVIDIA NIM
+            if provider == "nvidia" or (base_url and "nvidia.com" in base_url):
+                if not model or model in ["deepseek-chat", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-4"]:
+                    model = "deepseek-ai/deepseek-r1"
+
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -160,7 +165,12 @@ async def call_ai_completion(
 
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code != 200:
-                raise RuntimeError(f"{provider.upper()} API error ({resp.status_code}): {resp.text[:300]}")
+                err_text = resp.text[:300]
+                if api_key and len(api_key) > 4 and api_key in err_text:
+                    err_text = err_text.replace(api_key, "***MASKED_KEY***")
+                if resp.status_code == 404:
+                    raise RuntimeError(f"NVIDIA NIM API error 404 (Not Found) for model '{model}'. Check that model exists on NVIDIA NIM (e.g. 'deepseek-ai/deepseek-r1' or 'meta/llama-3.1-70b-instruct').")
+                raise RuntimeError(f"{provider.upper()} API error ({resp.status_code}): {err_text}")
             
             try:
                 data = resp.json()
