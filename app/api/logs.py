@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Response, Query
 from sqlalchemy import select, delete, func, or_
@@ -59,7 +59,7 @@ async def get_action_logs(
             stmt = stmt.where(ActionLog.status == status)
 
         if period:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             if period == 'today':
                 today_start = datetime(now.year, now.month, now.day)
                 stmt = stmt.where(ActionLog.executed_at >= today_start)
@@ -147,10 +147,10 @@ async def clear_action_logs(mode: str = Query("all")): # 'all', '7days', '30days
         if mode == "all":
             await session.execute(delete(ActionLog))
         elif mode == "7days":
-            cutoff = datetime.utcnow() - timedelta(days=7)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
             await session.execute(delete(ActionLog).where(ActionLog.executed_at < cutoff))
         elif mode == "30days":
-            cutoff = datetime.utcnow() - timedelta(days=30)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
             await session.execute(delete(ActionLog).where(ActionLog.executed_at < cutoff))
         await session.commit()
         return {"status": "ok", "cleared": mode}
