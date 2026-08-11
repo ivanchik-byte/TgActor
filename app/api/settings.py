@@ -28,10 +28,14 @@ async def get_ai_config():
 @router.post("/api/settings/ai")
 async def save_ai_config(cfg: AISettingsSchema):
     async with async_session() as session:
+        prompt_to_save = cfg.ai_system_prompt
+        if not prompt_to_save or "Ты ведешь естественный человеческий диалог" in prompt_to_save:
+            prompt_to_save = DEFAULT_SYSTEM_PROMPT
+
         updates = {
             "ai_provider": cfg.ai_provider,
             "ai_default_model": cfg.ai_default_model,
-            "ai_system_prompt": cfg.ai_system_prompt or DEFAULT_SYSTEM_PROMPT,
+            "ai_system_prompt": prompt_to_save,
             "ai_base_url": cfg.ai_base_url.strip() if cfg.ai_base_url else ""
         }
         # Only update API key if user didn't leave it masked or empty

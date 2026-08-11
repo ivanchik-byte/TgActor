@@ -66,7 +66,13 @@ async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
     
     provider = result.get("ai_provider") or "openai"
     model = result.get("ai_default_model") or DEFAULT_MODELS.get(provider, "gpt-4o-mini")
-    system_prompt = result.get("ai_system_prompt") or DEFAULT_SYSTEM_PROMPT
+    raw_prompt = result.get("ai_system_prompt")
+    
+    # Automatically upgrade legacy default prompts to the new comprehensive v2.1.1 Anti-AI prompt
+    if not raw_prompt or "Ты ведешь естественный человеческий диалог" in raw_prompt:
+        system_prompt = DEFAULT_SYSTEM_PROMPT
+    else:
+        system_prompt = raw_prompt
     
     return {
         "provider": provider,
