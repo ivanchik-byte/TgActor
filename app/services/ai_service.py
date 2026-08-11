@@ -125,6 +125,11 @@ async def call_ai_completion(
             # OpenAI / DeepSeek / NVIDIA / OpenRouter / Custom compatible format
             if base_url:
                 url = base_url.rstrip("/")
+                # Auto-fix common URL mistake: build.nvidia.com -> integrate.api.nvidia.com
+                if "build.nvidia.com" in url:
+                    url = url.replace("build.nvidia.com", "integrate.api.nvidia.com")
+                    if not url.endswith("/v1") and not url.endswith("/v1/chat/completions"):
+                        url += "/v1"
                 if not url.endswith("/chat/completions"):
                     url += "/chat/completions"
             else:
@@ -152,11 +157,16 @@ async def call_ai_completion(
 
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code != 200:
-                raise RuntimeError(f"{provider.upper()} API error ({resp.status_code}): {resp.text}")
-            data = resp.json()
+                raise RuntimeError(f"{provider.upper()} API error ({resp.status_code}): {resp.text[:300]}")
+            
+            try:
+                data = resp.json()
+            except Exception:
+                raise RuntimeError(f"{provider.upper()} API returned non-JSON response. Check Base URL endpoint.")
+
             choices = data.get("choices", [])
             if not choices:
-                raise RuntimeError(f"{provider.upper()} API returned no choices")
+                raise RuntimeError(f"{provider.upper()} API returned no choices. Message: {data}")
             return choices[0].get("message", {}).get("content", "")
 
 async def generate_scenario_from_prompt(
