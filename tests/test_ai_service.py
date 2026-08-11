@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from app.core.database import Base
+from app.core.database import Base, ensure_db_schema_sync
 from app.services.ai_service import get_ai_settings
 
 @pytest.mark.asyncio
@@ -19,3 +19,8 @@ async def test_ai_settings_default():
         assert settings["default_model"] == "gpt-4o-mini"
 
     await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_db_schema_sync():
+    """Test auto-migration of missing AI schema columns."""
+    await ensure_db_schema_sync()
