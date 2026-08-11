@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical } from 'lucide-react';
+import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, Wand2 } from 'lucide-react';
 
 interface Replica {
   id: string; // React local temporary ID or database ID
@@ -18,6 +18,8 @@ interface Replica {
   reactionRoles?: string; // space separated role/account IDs
   fileName: string;
   noAttachmentIfForbidden: boolean;
+  isAiDynamic?: boolean;
+  aiPrompt?: string;
 }
 
 const EMPTY_ARRAY: any[] = [];
@@ -75,6 +77,43 @@ export default function Scenarios() {
   const [defaultMaxDelay, setDefaultMaxDelay] = useState(10);
   const [scenarioWeight, setScenarioWeight] = useState(1);
 
+  // AI Configuration State
+  const [scenarioMode, setScenarioMode] = useState<'manual' | 'ai_generated' | 'ai_dynamic'>('manual');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiProvider, setAiProvider] = useState('');
+  const [aiModel, setAiModel] = useState('');
+  const [systemInstruction, setSystemInstruction] = useState('');
+
+  // AI One-time Generation Modal & Generator state
+  const [aiGenPrompt, setAiGenPrompt] = useState('');
+  const [aiGenAccountsCount, setAiGenAccountsCount] = useState(3);
+  const [aiGenReactionsEnabled, setAiGenReactionsEnabled] = useState(true);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+
+  // Global AI Settings Modal state
+  const [showAISettingsModal, setShowAISettingsModal] = useState(false);
+  const [aiConfigProvider, setAiConfigProvider] = useState('openai');
+  const [aiConfigApiKey, setAiConfigApiKey] = useState('');
+  const [aiConfigDefaultModel, setAiConfigDefaultModel] = useState('gpt-4o-mini');
+  const [aiConfigSystemPrompt, setAiConfigSystemPrompt] = useState('Ты ведешь естественный человеческий диалог в комментариях Telegram.');
+  const [isTestingAI, setIsTestingAI] = useState(false);
+  const [isSavingAISettings, setIsSavingAISettings] = useState(false);
+
+  // Fetch AI Global Settings
+  const { data: aiSettingsData, refetch: refetchAISettings } = useQuery({
+    queryKey: ['aiSettings'],
+    queryFn: async () => (await axios.get('/api/settings/ai')).data
+  });
+
+  useEffect(() => {
+    if (aiSettingsData) {
+      setAiConfigProvider(aiSettingsData.ai_provider || 'openai');
+      setAiConfigApiKey(aiSettingsData.ai_api_key || '');
+      setAiConfigDefaultModel(aiSettingsData.ai_default_model || 'gpt-4o-mini');
+      setAiConfigSystemPrompt(aiSettingsData.ai_system_prompt || '');
+    }
+  }, [aiSettingsData]);
+
   // Replica steps state
   const [replicas, setReplicas] = useState<Replica[]>([]);
   const [activeEmojiPickerId, setActiveEmojiPickerId] = useState<string | null>(null);
@@ -121,6 +160,11 @@ export default function Scenarios() {
         setDefaultMinDelay(activeScen.min_delay);
         setDefaultMaxDelay(activeScen.max_delay);
         setScenarioWeight(activeScen.weight ?? 1);
+        setScenarioMode(activeScen.mode || 'manual');
+        setAiPrompt(activeScen.ai_prompt || '');
+        setAiProvider(activeScen.ai_provider || '');
+        setAiModel(activeScen.ai_model || '');
+        setSystemInstruction(activeScen.system_instruction || '');
       }
     }
   }, [activeScenarioId, scenarios]);
@@ -129,7 +173,6 @@ export default function Scenarios() {
   useEffect(() => {
     if (dbSteps.length > 0) {
       // Map database steps to React Replica format
-      // We will map reply_to_step_id back to temporary string IDs
       const mapped: Replica[] = dbSteps.map((s: any, idx: number) => {
         return {
           id: `step_${s.id || idx}`,
@@ -146,6 +189,8 @@ export default function Scenarios() {
           reactionRoles: s.reaction_roles || '',
           fileName: s.media_path || '',
           noAttachmentIfForbidden: false,
+          isAiDynamic: s.is_ai_dynamic || false,
+          aiPrompt: s.ai_prompt || '',
         };
       });
 
@@ -197,7 +242,12 @@ export default function Scenarios() {
         is_active: isActive,
         min_delay: defaultMinDelay,
         max_delay: defaultMaxDelay,
-        weight: scenarioWeight
+        weight: scenarioWeight,
+        mode: scenarioMode,
+        ai_prompt: aiPrompt,
+        ai_provider: aiProvider || null,
+        ai_model: aiModel || null,
+        system_instruction: systemInstruction || null
       });
     },
     onSuccess: () => {
@@ -230,7 +280,9 @@ export default function Scenarios() {
           reaction_count: r.reactionCount,
           reaction_source: r.reactionSource || 'pool',
           reaction_roles: r.reactionRoles || null,
-          reply_to_index: replyToIndex
+          reply_to_index: replyToIndex,
+          is_ai_dynamic: r.isAiDynamic || false,
+          ai_prompt: r.aiPrompt || null
         };
       });
 
@@ -284,6 +336,94 @@ export default function Scenarios() {
       showToast('Ошибка чтения файла', 'error');
     }
     event.target.value = '';
+  };
+
+  const handleGenerateScenarioAI = async () => {
+    if (!aiGenPrompt.trim()) {
+      showToast('Введите описание диалога для ИИ!', 'error');
+      return;
+    }
+    setIsGeneratingAI(true);
+    try {
+      const res = await axios.post('/api/scenarios/generate-ai', {
+        prompt: aiGenPrompt.trim(),
+        accounts_count: aiGenAccountsCount,
+        reactions_enabled: aiGenReactionsEnabled
+      });
+
+      const gen = res.data.scenario;
+      if (gen) {
+        if (gen.title && !scenarioName) setScenarioName(gen.title);
+        if (gen.min_delay) setDefaultMinDelay(gen.min_delay);
+        if (gen.max_delay) setDefaultMaxDelay(gen.max_delay);
+
+        if (gen.steps && Array.isArray(gen.steps)) {
+          const generatedReplicas: Replica[] = gen.steps.map((s: any, idx: number) => {
+            let replyId = '';
+            if (s.reply_to_index !== null && s.reply_to_index !== undefined && s.reply_to_index >= 0) {
+              replyId = `step_ai_${s.reply_to_index}`;
+            }
+            return {
+              id: `step_ai_${idx}`,
+              role: String(s.role_id || (commentingAccounts[0] ? commentingAccounts[0].id : 1)),
+              type: s.reply_to_index !== null && s.reply_to_index !== undefined ? 'reply' : 'normal',
+              replyToId: replyId,
+              text: s.text || '',
+              minDelay: String(s.delay_before_min || 5.0),
+              maxDelay: String(s.delay_before_max || 10.0),
+              reactions: s.reactions || '',
+              reactionCount: s.reaction_count || 0,
+              reactionSource: 'pool',
+              fileName: '',
+              noAttachmentIfForbidden: false,
+              isAiDynamic: false,
+              aiPrompt: ''
+            };
+          });
+          setReplicas(generatedReplicas);
+        }
+        showToast('Сценарий успешно сгенерирован через ИИ! Отредактируйте при необходимости.', 'success');
+      }
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Ошибка генерации сценария ИИ', 'error');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handleSaveAISettings = async () => {
+    setIsSavingAISettings(true);
+    try {
+      await axios.post('/api/settings/ai', {
+        ai_provider: aiConfigProvider,
+        ai_api_key: aiConfigApiKey,
+        ai_default_model: aiConfigDefaultModel,
+        ai_system_prompt: aiConfigSystemPrompt
+      });
+      await refetchAISettings();
+      showToast('Настройки ИИ успешно сохранены!', 'success');
+      setShowAISettingsModal(false);
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Ошибка сохранения настроек ИИ', 'error');
+    } finally {
+      setIsSavingAISettings(false);
+    }
+  };
+
+  const handleTestAIConnection = async () => {
+    setIsTestingAI(true);
+    try {
+      const res = await axios.post('/api/settings/ai/test', {
+        ai_provider: aiConfigProvider,
+        ai_api_key: aiConfigApiKey,
+        ai_default_model: aiConfigDefaultModel
+      });
+      showToast(`Проверка успешна! Ответ ИИ: ${res.data.response}`, 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Ошибка проверки ключа ИИ', 'error');
+    } finally {
+      setIsTestingAI(false);
+    }
   };
 
   const handleDragStart = (index: number) => {
@@ -712,6 +852,176 @@ export default function Scenarios() {
         </div>
       )}
 
+      {/* Global AI Settings Modal */}
+      {showAISettingsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '520px',
+            width: '90%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
+          }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bot className="w-5 h-5 text-accent" />
+                Настройки ИИ (OpenAI / DeepSeek / Gemini)
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
+                Конфигурация ключей API и моделей для автоматической генерации сценариев и динамических ответов ботов.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={labelStyle}>Провайдер ИИ</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
+                  {[
+                    { id: 'openai', label: 'OpenAI' },
+                    { id: 'deepseek', label: 'DeepSeek' },
+                    { id: 'openrouter', label: 'OpenRouter' },
+                    { id: 'gemini', label: 'Gemini' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setAiConfigProvider(p.id)}
+                      style={{
+                        padding: '8px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        border: aiConfigProvider === p.id ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                        backgroundColor: aiConfigProvider === p.id ? 'var(--accent-soft)' : 'var(--bg-main)',
+                        color: aiConfigProvider === p.id ? 'var(--accent-text)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>API Key ({aiConfigProvider.toUpperCase()})</label>
+                <input
+                  type="password"
+                  placeholder="Вставьте sk-... ключ провайдера"
+                  value={aiConfigApiKey}
+                  onChange={e => setAiConfigApiKey(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Модель по умолчанию</label>
+                <input
+                  type="text"
+                  placeholder="Например: gpt-4o-mini, deepseek-chat, gemini-1.5-flash"
+                  value={aiConfigDefaultModel}
+                  onChange={e => setAiConfigDefaultModel(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Системный промпт персонажей</label>
+                <textarea
+                  rows={3}
+                  placeholder="Ты ведешь естественный живой диалог в комментариях Telegram..."
+                  value={aiConfigSystemPrompt}
+                  onChange={e => setAiConfigSystemPrompt(e.target.value)}
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button
+                onClick={handleSaveAISettings}
+                disabled={isSavingAISettings}
+                style={{
+                  flex: 1,
+                  backgroundColor: 'var(--accent)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  opacity: isSavingAISettings ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Save className="w-4 h-4" />
+                {isSavingAISettings ? 'Сохранение...' : 'Сохранить настройки'}
+              </button>
+
+              <button
+                onClick={handleTestAIConnection}
+                disabled={isTestingAI}
+                style={{
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  opacity: isTestingAI ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Zap className="w-4 h-4 text-amber-500" />
+                {isTestingAI ? 'Проверка...' : 'Проверить ключ'}
+              </button>
+
+              <button
+                onClick={() => setShowAISettingsModal(false)}
+                style={{
+                  backgroundColor: 'var(--bg-main)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
@@ -723,6 +1033,28 @@ export default function Scenarios() {
             Управление сценариями и автоматизация цепочек ответов с прокси-аккаунтов.
           </p>
         </div>
+
+        <button
+          onClick={() => setShowAISettingsModal(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '9px 16px',
+            borderRadius: '10px',
+            border: '1px solid var(--border-color)',
+            backgroundColor: 'var(--bg-card)',
+            color: 'var(--text-main)',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <Bot className="w-4 h-4 text-accent" />
+          <span>Настройки ИИ</span>
+        </button>
       </div>
 
       <div style={pageContainerStyle}>
@@ -879,17 +1211,55 @@ export default function Scenarios() {
         <div style={stepsColumnStyle}>
           {activeScenarioId ? (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)' }}>
-                  Шаги диалога ({replicas.length})
-                </h2>
+              {/* Scenario Type / AI Mode Selector */}
+              <div style={{
+                backgroundColor: 'var(--bg-card)',
+                padding: '12px 16px',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color)',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: '4px' }}>Режим:</span>
+                  {[
+                    { id: 'manual', label: '📝 Ручной', desc: 'Заполнение шагов вручную' },
+                    { id: 'ai_generated', label: '🚀 Сгенерировать ИИ', desc: 'Разовая генерация по описанию' },
+                    { id: 'ai_dynamic', label: '⚡ Динамический ИИ', desc: 'Уникальный ответ ИИ при каждом запуске' },
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setScenarioMode(m.id as any)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        border: scenarioMode === m.id ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                        backgroundColor: scenarioMode === m.id ? 'var(--accent-soft)' : 'var(--bg-main)',
+                        color: scenarioMode === m.id ? 'var(--accent-text)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                      title={m.desc}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={handleAddReplica}
                     style={{
-                      backgroundColor: 'var(--accent-soft)',
-                      color: 'var(--accent-text)',
-                      border: '1px solid var(--accent-soft)',
+                      backgroundColor: 'var(--bg-main)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-color)',
                       borderRadius: '8px',
                       padding: '6px 12px',
                       fontSize: '12px',
@@ -900,7 +1270,7 @@ export default function Scenarios() {
                       gap: '6px',
                     }}
                   >
-                    <Plus className="w-4 h-4" /> Добавить шаг
+                    <Plus className="w-4 h-4 text-accent" /> Добавить шаг
                   </button>
                   <button
                     onClick={() => saveStepsBulkMutation.mutate()}
@@ -924,6 +1294,125 @@ export default function Scenarios() {
                   </button>
                 </div>
               </div>
+
+              {/* AI One-Time Generator Box */}
+              {scenarioMode === 'ai_generated' && (
+                <div style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--accent)',
+                  borderRadius: '14px',
+                  padding: '16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Wand2 className="w-5 h-5 text-accent" />
+                    <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-main)' }}>
+                      Мастер ИИ-генерации сценария
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Опишите идею обсуждения — ИИ сам составит список реплик, свяжет ответы и подберет эмодзи-реакции.
+                  </p>
+                  
+                  <textarea
+                    rows={3}
+                    placeholder="Например: Живое обсуждение покупки подарка NFT двумя инвесторами в Telegram. Один восторгается, второй выражает сомнения, третий советует маркетплейс..."
+                    value={aiGenPrompt}
+                    onChange={e => setAiGenPrompt(e.target.value)}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                  />
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>БОТОВ:</span>
+                        {[2, 3, 4, 5].map(cnt => (
+                          <button
+                            key={cnt}
+                            type="button"
+                            onClick={() => setAiGenAccountsCount(cnt)}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              border: aiGenAccountsCount === cnt ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                              backgroundColor: aiGenAccountsCount === cnt ? 'var(--accent-soft)' : 'var(--bg-main)',
+                              color: aiGenAccountsCount === cnt ? 'var(--accent-text)' : 'var(--text-muted)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {cnt}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          border: aiGenReactionsEnabled ? '1px solid #22c55e' : '1px solid var(--border-color)',
+                          backgroundColor: aiGenReactionsEnabled ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-main)',
+                          color: aiGenReactionsEnabled ? '#4ade80' : 'var(--text-muted)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {aiGenReactionsEnabled ? '👍 Эмодзи ВКЛ' : '🚫 Эмодзи ВЫКЛ'}
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={handleGenerateScenarioAI}
+                      disabled={isGeneratingAI || !aiGenPrompt.trim()}
+                      style={{
+                        backgroundColor: 'var(--accent)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        opacity: (isGeneratingAI || !aiGenPrompt.trim()) ? 0.5 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      {isGeneratingAI ? 'Генерация ИИ...' : 'Сгенерировать сценарий через ИИ'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic AI Banner Notice */}
+              {scenarioMode === 'ai_dynamic' && (
+                <div style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid #3b82f6',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  color: '#60a5fa',
+                  fontSize: '12px'
+                }}>
+                  <Zap className="w-5 h-5 flex-shrink-0" />
+                  <span>
+                    <strong>Режим Динамического ИИ активен!</strong> При каждом исполнении сценария в Telegram ИИ будет генерировать 100% уникальный текст каждой реплики с учетом контекста поста!
+                  </span>
+                </div>
+              )}
 
               {replicas.length === 0 ? (
                 <div style={{
@@ -1029,15 +1518,56 @@ export default function Scenarios() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '32px' }}>
                         {/* Left Column: Text & Attachments */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <label style={labelStyle}>Содержимое сообщения</label>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateReplica(replica.id, 'isAiDynamic', !replica.isAiDynamic)}
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                border: replica.isAiDynamic ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                                backgroundColor: replica.isAiDynamic ? 'var(--accent-soft)' : 'var(--bg-main)',
+                                color: replica.isAiDynamic ? 'var(--accent-text)' : 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Zap className="w-3 h-3" />
+                              {replica.isAiDynamic ? 'Динамический ИИ' : 'Статический текст'}
+                            </button>
+                          </div>
+
+                          {replica.isAiDynamic || scenarioMode === 'ai_dynamic' ? (
+                            <div>
+                              <label style={{ ...labelStyle, color: 'var(--accent-text)' }}>
+                                Инструкция (промпт) для ИИ на этом шаге:
+                              </label>
+                              <textarea
+                                value={replica.aiPrompt || replica.text}
+                                onChange={e => {
+                                  handleUpdateReplica(replica.id, 'aiPrompt', e.target.value);
+                                  handleUpdateReplica(replica.id, 'text', e.target.value);
+                                }}
+                                placeholder="Пример: Ответь на предыдущее сообщение с восторгом, задай уточняющий вопрос..."
+                                style={{ ...textareaStyle, borderColor: 'var(--accent)' }}
+                              />
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
+                                ⚡ ИИ сгенерирует 100% уникальный текст реплики при выходе поста в Telegram.
+                              </span>
+                            </div>
+                          ) : (
                             <textarea
                               value={replica.text}
                               onChange={e => handleUpdateReplica(replica.id, 'text', e.target.value)}
                               placeholder="Напишите реплику сообщения..."
                               style={textareaStyle}
                             />
-                          </div>
+                          )}
 
                           {/* Attachment upload */}
                           <div style={{

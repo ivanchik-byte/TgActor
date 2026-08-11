@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.models.models import Scenario, ScenarioStep, TaskLog, Account
 from app.services.pool_service import get_commenting_pool, get_reaction_pool
 from app.services.log_service import log_action
+from app.services.ai_service import generate_dynamic_step_text
 from app.telegram.client import get_hydrogram_client
 from app.telegram.preflight import check_chat_availability
 
@@ -134,9 +135,46 @@ async def execute_scenario(
             delay = random.uniform(delay_min, delay_max)
             await asyncio.sleep(delay)
 
+            text_to_send = step.text or ""
+            if getattr(step, 'is_ai_dynamic', False) or getattr(scenario, 'mode', 'manual') == 'ai_dynamic':
+                try:
+                    thread_history = []
+                    for p_step in steps:
+                        if p_step.id in step_msg_map:
+                            p_acc = role_account_map.get(p_step.role_id)
+                            sender_label = f"Participant #{p_step.role_id}"
+                            if p_acc and (p_acc.first_name or p_acc.username):
+                                sender_label = p_acc.first_name or p_acc.username or sender_label
+                            thread_history.append({"sender": sender_label, "text": getattr(p_step, '_gen_text', p_step.text or '')})
+
+                    gen_text = await generate_dynamic_step_text(
+                        session=session,
+                        post_text=str(chat_id),
+                        step_prompt=step.ai_prompt or step.text or "Напиши естественный комментарий по теме поста",
+                        persona_instruction=getattr(scenario, 'system_instruction', None),
+                        thread_history=thread_history,
+                        override_provider=getattr(scenario, 'ai_provider', None),
+                        override_model=getattr(scenario, 'ai_model', None)
+                    )
+                    if gen_text:
+                        text_to_send = gen_text
+                        setattr(step, '_gen_text', text_to_send)
+                        await log_action(
+                            session,
+                            action_type="ai_dynamic_gen",
+                            status="ok",
+                            account_id=role_account_map[role_id].id,
+                            target=str(target_chat_id),
+                            target_id=f"step #{step.id}",
+                            details={"prompt": step.ai_prompt or step.text, "generated_text": text_to_send},
+                            scenario_id=scenario_id
+                        )
+                except Exception as ai_err:
+                    logger.warning(f"Dynamic AI generation notice for step {step.id}: {ai_err}")
+
             msg = await client.send_message(
                 chat_id=target_chat_id,
-                text=step.text or "",
+                text=text_to_send,
                 reply_to_message_id=reply_to
             )
             
@@ -153,7 +191,7 @@ async def execute_scenario(
                     account_id=role_account_map[role_id].id,
                     target=str(target_chat_id),
                     target_id=f"msg #{msg_id}",
-                    details={"text": step.text, "reply_to": reply_to, "step_id": step.id},
+                    details={"text": text_to_send, "reply_to": reply_to, "step_id": step.id},
                     scenario_id=scenario_id
                 )
                 await session.commit()
