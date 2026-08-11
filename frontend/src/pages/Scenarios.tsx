@@ -1542,14 +1542,12 @@ export default function Scenarios() {
                   return (
                     <div
                       key={replica.id}
-                      draggable
-                      onDragStart={() => handleDragStart(index)}
                       onDragOver={(e) => handleDragOver(e)}
                       onDrop={() => handleDrop(index)}
+                      onDragEnd={() => setDraggedIndex(null)}
                       style={{
                         ...stepCardStyle,
                         borderLeft: `4px solid ${getRoleColor(selectedRole)}`,
-                        cursor: 'grab',
                         opacity: draggedIndex === index ? 0.4 : 1,
                         transition: 'opacity 0.15s ease'
                       }}
@@ -1564,7 +1562,13 @@ export default function Scenarios() {
                         borderBottom: '1px solid var(--border-color)'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ color: 'var(--text-muted)', cursor: 'grab', display: 'flex', alignItems: 'center' }} title="Перетащите для изменения порядка">
+                          <span
+                            draggable
+                            onDragStart={() => handleDragStart(index)}
+                            onDragEnd={() => setDraggedIndex(null)}
+                            style={{ color: 'var(--text-muted)', cursor: 'grab', display: 'flex', alignItems: 'center', padding: '4px' }}
+                            title="Перетащите для изменения порядка"
+                          >
                             <GripVertical className="w-4 h-4" />
                           </span>
                           <span style={{
@@ -1589,6 +1593,7 @@ export default function Scenarios() {
                         {/* Step Actions */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <button
+                            type="button"
                             onClick={() => handleDeleteReplica(replica.id)}
                             style={{
                               background: 'none',
@@ -1672,8 +1677,8 @@ export default function Scenarios() {
                             border: '1px solid var(--border-color)',
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={labelStyle}>Вложение</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              <span style={labelStyle}>Вложение (Медиа / Фото / Файл)</span>
+                              <span style={{ fontSize: '11px', color: replica.fileName ? 'var(--accent-text)' : 'var(--text-muted)', fontWeight: replica.fileName ? 600 : 400 }}>
                                 {replica.fileName || 'Файл не выбран.'}
                               </span>
                             </div>
@@ -1688,12 +1693,27 @@ export default function Scenarios() {
                                 }}
                               />
                               <button
+                                type="button"
                                 onClick={() => fileInputRefs.current[replica.id]?.click()}
                                 style={btnSecondary}
                               >
                                 <Paperclip className="w-3.5 h-3.5 inline mr-1" />
                                 Обзор...
                               </button>
+                              {replica.fileName && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateReplica(replica.id, 'fileName', '')}
+                                  style={{
+                                    ...btnSecondary,
+                                    color: '#ef4444',
+                                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.05)'
+                                  }}
+                                >
+                                  Удалить файл
+                                </button>
+                              )}
                               <CustomCheckbox
                                 checked={replica.noAttachmentIfForbidden}
                                 onChange={v => handleUpdateReplica(replica.id, 'noAttachmentIfForbidden', v)}
