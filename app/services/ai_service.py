@@ -122,19 +122,19 @@ async def call_ai_completion(
             parts = candidates[0].get("content", {}).get("parts", [])
             return parts[0].get("text", "") if parts else ""
         else:
-            # OpenAI / DeepSeek / NVIDIA / OpenRouter / Custom compatible format
-            if base_url:
+            # Universal OpenAI-compatible API format for any model/provider/proxy
+            if base_url and base_url.strip():
                 url = base_url.strip().rstrip("/")
-                # Auto-fix common URL mistake: build.nvidia.com -> integrate.api.nvidia.com
                 if "build.nvidia.com" in url:
                     url = url.replace("build.nvidia.com", "integrate.api.nvidia.com")
-                # Remove duplicate /chat/completions if present
                 if url.endswith("/chat/completions"):
-                    url = url[:-17].rstrip("/")
-                if not url.endswith("/v1") and provider in ["nvidia", "openai", "deepseek", "openrouter"] and not url.endswith("/chat/completions"):
-                    url += "/v1"
-                if not url.endswith("/chat/completions"):
+                    pass
+                elif url.endswith("/v1"):
                     url += "/chat/completions"
+                elif "/v1" in url:
+                    url += "/chat/completions"
+                else:
+                    url += "/v1/chat/completions"
             else:
                 url = PROVIDER_URLS.get(provider, PROVIDER_URLS["openai"])
 
@@ -142,21 +142,19 @@ async def call_ai_completion(
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
-            if provider == "openrouter":
+            if provider == "openrouter" or "openrouter.ai" in url:
                 headers["HTTP-Referer"] = "https://tgactor.local"
                 headers["X-Title"] = "TgActor"
 
-            # Auto-correct invalid model names for NVIDIA NIM
-            if provider == "nvidia" or (base_url and "nvidia.com" in base_url):
-                if not model or model in ["deepseek-chat", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-4"]:
-                    model = "deepseek-ai/deepseek-r1"
+            # Use exact user-specified model without hardcoded replacements
+            final_model = model.strip() if (model and model.strip()) else DEFAULT_MODELS.get(provider, "gpt-4o-mini")
 
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ]
             payload: Dict[str, Any] = {
-                "model": model,
+                "model": final_model,
                 "messages": messages,
                 "temperature": 0.7
             }
@@ -165,12 +163,10 @@ async def call_ai_completion(
 
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code != 200:
-                err_text = resp.text[:300]
+                err_text = resp.text[:400]
                 if api_key and len(api_key) > 4 and api_key in err_text:
                     err_text = err_text.replace(api_key, "***MASKED_KEY***")
-                if resp.status_code == 404:
-                    raise RuntimeError(f"NVIDIA NIM API error 404 (Not Found) for model '{model}'. Check that model exists on NVIDIA NIM (e.g. 'deepseek-ai/deepseek-r1' or 'meta/llama-3.1-70b-instruct').")
-                raise RuntimeError(f"{provider.upper()} API error ({resp.status_code}): {err_text}")
+                raise RuntimeError(f"API Error ({resp.status_code}): {err_text}")
             
             try:
                 data = resp.json()
