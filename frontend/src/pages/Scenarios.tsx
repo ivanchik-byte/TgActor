@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, Wand2 } from 'lucide-react';
+import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, Wand2, CheckCircle2, X } from 'lucide-react';
 
 interface Replica {
   id: string; // React local temporary ID or database ID
@@ -447,8 +447,11 @@ export default function Scenarios() {
     }
   };
 
+  const [aiTestResult, setAiTestResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   const handleTestAIConnection = async () => {
     setIsTestingAI(true);
+    setAiTestResult(null);
     try {
       const res = await axios.post('/api/settings/ai/test', {
         ai_provider: aiConfigProvider,
@@ -456,9 +459,18 @@ export default function Scenarios() {
         ai_default_model: aiConfigDefaultModel,
         ai_base_url: aiConfigBaseUrl
       });
+      setAiTestResult({
+        type: 'success',
+        message: `Соединение успешно! Ответ нейросети: "${res.data.response}"`
+      });
       showToast(`Проверка успешна! Ответ ИИ: ${res.data.response}`, 'success');
     } catch (err: any) {
-      showToast(err?.response?.data?.detail || 'Ошибка проверки ключа ИИ', 'error');
+      const errMsg = err?.response?.data?.detail || 'Ошибка проверки подключения к ИИ';
+      setAiTestResult({
+        type: 'error',
+        message: errMsg
+      });
+      showToast(errMsg, 'error');
     } finally {
       setIsTestingAI(false);
     }
@@ -898,8 +910,8 @@ export default function Scenarios() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.75)',
-          backdropFilter: 'blur(10px)',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(16px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -907,138 +919,149 @@ export default function Scenarios() {
         }}>
           <div style={{
             backgroundColor: 'var(--bg-card)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
-            borderRadius: '24px',
-            padding: '28px',
-            maxWidth: '560px',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '20px',
+            padding: '24px',
+            maxWidth: '540px',
             width: '92%',
             display: 'flex',
             flexDirection: 'column',
-            gap: '20px',
+            gap: '18px',
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
           }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{
-                    fontSize: '10px', fontWeight: 800, padding: '2px 6px',
-                    borderRadius: '4px', backgroundColor: 'var(--accent)', color: '#fff',
-                    textTransform: 'uppercase', letterSpacing: '0.05em'
-                  }}>AI Engine v2.2</span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Универсальный коннектор</span>
-                </div>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', marginTop: '6px', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  backgroundColor: 'var(--accent-soft)',
+                  padding: '8px',
+                  borderRadius: '10px',
+                  color: 'var(--accent)',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}>
                   <Bot className="w-5 h-5 text-accent" />
-                  Конфигурация Нейросетей (AI API)
-                </h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
-                  Подключение OpenAI, DeepSeek, NVIDIA NIM, Gemini или любых сторонних провайдеров API.
-                </p>
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+                    Настройки Нейросетей (AI API)
+                  </h3>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Управление провайдером, ключами доступа и параметрами моделей.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAISettingsModal(false);
+                  setAiTestResult(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: '6px'
+                }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Compact Provider Pill Selector */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={labelStyle}>Выберите Провайдера</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                {[
+                  { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini', url: '' },
+                  { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat', url: '' },
+                  { id: 'nvidia', label: 'NVIDIA NIM', defaultModel: 'deepseek-ai/deepseek-r1', url: 'https://integrate.api.nvidia.com/v1' },
+                  { id: 'openrouter', label: 'OpenRouter', defaultModel: 'openai/gpt-4o-mini', url: '' },
+                  { id: 'gemini', label: 'Gemini', defaultModel: 'gemini-1.5-flash', url: '' },
+                  { id: 'custom', label: 'Свой API (Proxy)', defaultModel: 'deepseek-ai/deepseek-r1', url: 'http://localhost:11434/v1' },
+                ].map(p => {
+                  const isSelected = aiConfigProvider === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setAiConfigProvider(p.id);
+                        if (p.defaultModel && !aiConfigDefaultModel.trim()) {
+                          setAiConfigDefaultModel(p.defaultModel);
+                        }
+                        if (p.url) {
+                          setAiConfigBaseUrl(p.url);
+                        } else if (p.id !== 'custom') {
+                          setAiConfigBaseUrl('');
+                        }
+                        setAiTestResult(null);
+                      }}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                        backgroundColor: isSelected ? 'var(--accent-soft)' : 'var(--bg-main)',
+                        color: isSelected ? 'var(--accent-text)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Provider Grid Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={labelStyle}>Провайдер Нейросети</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                  {[
-                    { id: 'openai', label: 'OpenAI', desc: 'GPT-4o Mini', defaultModel: 'gpt-4o-mini', url: '' },
-                    { id: 'deepseek', label: 'DeepSeek', desc: 'Official API', defaultModel: 'deepseek-chat', url: '' },
-                    { id: 'nvidia', label: 'NVIDIA NIM', desc: 'DeepSeek R1 / V3', defaultModel: 'deepseek-ai/deepseek-r1', url: 'https://integrate.api.nvidia.com/v1' },
-                    { id: 'openrouter', label: 'OpenRouter', desc: 'Unified Gateway', defaultModel: 'openai/gpt-4o-mini', url: '' },
-                    { id: 'gemini', label: 'Gemini', desc: 'Google AI', defaultModel: 'gemini-1.5-flash', url: '' },
-                    { id: 'custom', label: 'Свой API (Proxy)', desc: 'vLLM / Ollama', defaultModel: 'deepseek-ai/deepseek-r1', url: 'http://localhost:11434/v1' },
-                  ].map(p => {
-                    const isSelected = aiConfigProvider === p.id;
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setAiConfigProvider(p.id);
-                          if (p.defaultModel && !aiConfigDefaultModel.trim()) {
-                            setAiConfigDefaultModel(p.defaultModel);
-                          }
-                          if (p.url) {
-                            setAiConfigBaseUrl(p.url);
-                          } else if (p.id !== 'custom') {
-                            setAiConfigBaseUrl('');
-                          }
-                        }}
-                        style={{
-                          padding: '10px 12px',
-                          borderRadius: '12px',
-                          textAlign: 'left',
-                          border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                          backgroundColor: isSelected ? 'var(--accent-soft)' : 'var(--bg-main)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px'
-                        }}
-                      >
-                        <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? 'var(--accent-text)' : 'var(--text-main)' }}>
-                          {p.label}
-                        </span>
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                          {p.desc}
-                        </span>
-                      </button>
-                    );
-                  })}
+            {/* Inputs Grid */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={labelStyle}>API Key (Ключ доступа)</label>
+                  <input
+                    type="password"
+                    placeholder="sk-..., nvapi-..., gsk-..."
+                    value={aiConfigApiKey}
+                    onChange={e => setAiConfigApiKey(e.target.value)}
+                    style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Модель</label>
+                  <input
+                    type="text"
+                    placeholder="deepseek-ai/deepseek-r1"
+                    value={aiConfigDefaultModel}
+                    onChange={e => setAiConfigDefaultModel(e.target.value)}
+                    style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
+                  />
                 </div>
               </div>
 
-              {/* API Key */}
               <div>
-                <label style={labelStyle}>API Key (Ключ авторизации)</label>
-                <input
-                  type="password"
-                  placeholder="Вставьте sk-..., nvapi-..., gsk-... или любой другой API ключ"
-                  value={aiConfigApiKey}
-                  onChange={e => setAiConfigApiKey(e.target.value)}
-                  style={{ ...inputStyle, fontFamily: 'monospace' }}
-                />
-              </div>
-
-              {/* Base URL Endpoint */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <label style={labelStyle}>Base URL Endpoint (Адрес Сервиса / Прокси)</label>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                    Необязательно (Для любых сторонних API)
-                  </span>
-                </div>
+                <label style={labelStyle}>Base URL Endpoint (необязательно)</label>
                 <input
                   type="text"
-                  placeholder="Например: https://integrate.api.nvidia.com/v1 или https://api.groq.com/openai/v1"
+                  placeholder="https://integrate.api.nvidia.com/v1 или http://localhost:11434/v1"
                   value={aiConfigBaseUrl}
                   onChange={e => setAiConfigBaseUrl(e.target.value)}
-                  style={{ ...inputStyle, fontFamily: 'monospace' }}
+                  style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
                 />
               </div>
 
-              {/* Default Model */}
               <div>
-                <label style={labelStyle}>Идентификатор Модели</label>
-                <input
-                  type="text"
-                  placeholder="Имя модели (например: deepseek-ai/deepseek-r1, gpt-4o-mini, deepseek-chat)"
-                  value={aiConfigDefaultModel}
-                  onChange={e => setAiConfigDefaultModel(e.target.value)}
-                  style={{ ...inputStyle, fontFamily: 'monospace' }}
-                />
-              </div>
-
-              {/* System Instruction */}
-              <div>
-                <label style={labelStyle}>Персонаж / Системная инструкция по умолчанию</label>
+                <label style={labelStyle}>Системная инструкция по умолчанию</label>
                 <textarea
-                  rows={6}
-                  placeholder="Инструкции персонажа нейросети..."
+                  rows={4}
+                  placeholder="Инструкции персонажа..."
                   value={aiConfigSystemPrompt}
                   onChange={e => setAiConfigSystemPrompt(e.target.value)}
                   style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.4' }}
@@ -1046,9 +1069,29 @@ export default function Scenarios() {
               </div>
             </div>
 
-            {/* Footer buttons */}
+            {/* Inline Test Result Alert */}
+            {aiTestResult && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                lineHeight: '1.4',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: aiTestResult.type === 'success' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                border: aiTestResult.type === 'success' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                color: aiTestResult.type === 'success' ? '#4ade80' : '#f87171'
+              }}>
+                {aiTestResult.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                <span>{aiTestResult.message}</span>
+              </div>
+            )}
+
+            {/* Footer Buttons */}
             <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
               <button
+                type="button"
                 onClick={handleSaveAISettings}
                 disabled={isSavingAISettings}
                 style={{
@@ -1056,8 +1099,8 @@ export default function Scenarios() {
                   backgroundColor: 'var(--accent)',
                   color: '#fff',
                   border: 'none',
-                  borderRadius: '12px',
-                  padding: '12px',
+                  borderRadius: '10px',
+                  padding: '10px 16px',
                   fontSize: '13px',
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -1065,8 +1108,7 @@ export default function Scenarios() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                  gap: '6px'
                 }}
               >
                 <Save className="w-4 h-4" />
@@ -1074,14 +1116,15 @@ export default function Scenarios() {
               </button>
 
               <button
+                type="button"
                 onClick={handleTestAIConnection}
                 disabled={isTestingAI}
                 style={{
                   backgroundColor: 'var(--bg-main)',
                   color: 'var(--text-main)',
                   border: '1px solid var(--border-color)',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  padding: '10px 14px',
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -1091,24 +1134,8 @@ export default function Scenarios() {
                   gap: '6px'
                 }}
               >
-                <Zap className="w-4 h-4 text-amber-500" />
+                <Sparkles className="w-4 h-4 text-accent" />
                 {isTestingAI ? 'Проверка...' : 'Проверить ключ'}
-              </button>
-
-              <button
-                onClick={() => setShowAISettingsModal(false)}
-                style={{
-                  backgroundColor: 'var(--bg-main)',
-                  color: 'var(--text-muted)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Закрыть
               </button>
             </div>
           </div>
