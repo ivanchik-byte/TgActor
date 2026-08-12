@@ -958,7 +958,7 @@ export default function Scenarios() {
                         type="button"
                         onClick={() => {
                           setAiConfigProvider(p.id);
-                          if (p.defaultModel && (!aiConfigDefaultModel || aiConfigDefaultModel === 'gpt-4o-mini' || aiConfigDefaultModel === 'deepseek-chat')) {
+                          if (p.defaultModel && !aiConfigDefaultModel.trim()) {
                             setAiConfigDefaultModel(p.defaultModel);
                           }
                           if (p.url) {
