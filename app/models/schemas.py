@@ -116,7 +116,7 @@ class MonitoredChannelBase(BaseModel):
     is_active: Optional[bool] = True
     min_delay_seconds: Optional[int] = 10
     max_delay_seconds: Optional[int] = 30
-    no_repeat_scenarios: Optional[int] = 3
+    no_repeat_scenarios: Optional[bool] = True
 
 class MonitoredChannelCreate(MonitoredChannelBase):
     pass

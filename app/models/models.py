@@ -107,7 +107,7 @@ class MonitoredChannel(Base):
     min_delay_seconds = Column(Integer, default=10)
     max_delay_seconds = Column(Integer, default=30)
 
-    no_repeat_scenarios = Column(Integer, default=3)
+    no_repeat_scenarios = Column(Boolean, default=True)
     history_json = Column(Text, default="[]")
 
 class TaskLog(Base):
