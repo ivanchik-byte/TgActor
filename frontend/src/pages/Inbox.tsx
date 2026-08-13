@@ -67,9 +67,23 @@ export default function Inbox() {
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterAccountId, setFilterAccountId] = useState<number | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const mediaFileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleSyncTelegram = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await axios.post('/api/inbox/sync');
+      await refetch();
+      showToast(`Синхронизация завершена! Импортировано сообщений: ${res.data.total_messages || 0}`, 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Ошибка синхронизации диалогов Telegram', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Query: Fetch chats list
   const { data: chats = EMPTY_ARRAY, refetch, isRefetching } = useQuery({
@@ -285,27 +299,52 @@ export default function Inbox() {
           </p>
         </div>
 
-        <button
-          onClick={() => refetch()}
-          disabled={isRefetching}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
-            background: 'var(--bg-card, #1e293b)',
-            color: 'var(--text-main, #f8fafc)',
-            fontSize: '0.85rem',
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <RefreshCw size={15} className={isRefetching ? 'spin' : ''} />
-          Обновить диалоги
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={handleSyncTelegram}
+            disabled={isSyncing}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'var(--accent-color, #6366f1)',
+              color: '#ffffff',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: isSyncing ? 'wait' : 'pointer',
+              opacity: isSyncing ? 0.7 : 1,
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <RefreshCw size={15} className={isSyncing ? 'spin' : ''} />
+            {isSyncing ? 'Синхронизация...' : 'Синхронизировать с Telegram'}
+          </button>
+
+          <button
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
+              background: 'var(--bg-card, #1e293b)',
+              color: 'var(--text-main, #f8fafc)',
+              fontSize: '0.85rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <RefreshCw size={15} className={isRefetching ? 'spin' : ''} />
+            Обновить
+          </button>
+        </div>
       </div>
 
       {/* Main Inbox Card Container */}

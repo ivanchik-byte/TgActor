@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useTheme, ThemeProvider } from './ThemeContext';
-import { AlertTriangle, LayoutDashboard, Server, Route as RouteIcon, Inbox as InboxIcon, Radio, ChevronDown, PanelLeftClose, PanelLeftOpen, Lock, Clock } from 'lucide-react';
+import { AlertTriangle, LayoutDashboard, Server, Route as RouteIcon, Inbox as InboxIcon, Radio, ChevronDown, PanelLeftClose, PanelLeftOpen, Lock, Clock, Send } from 'lucide-react';
 import axios from 'axios';
 
 // Component imports
@@ -235,6 +235,39 @@ function Layout({ children }: { children: React.ReactNode }) {
             >
               Выйти
             </button>
+
+            <a
+              href="https://t.me/ivanchik_byte"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                marginTop: '10px',
+                padding: '7px 10px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--accent-soft)',
+                border: '1px solid var(--accent)',
+                color: 'var(--accent-text)',
+                fontSize: '11px',
+                fontWeight: 700,
+                textDecoration: 'none',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <Send style={{ width: '12px', height: '12px' }} />
+              <span>Автор: @ivanchik_byte</span>
+            </a>
           </div>
         )}
       </aside>

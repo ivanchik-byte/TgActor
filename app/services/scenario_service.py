@@ -196,9 +196,9 @@ async def execute_scenario(
                 )
                 await session.commit()
                 
-                if step.reactions:
+                source = getattr(step, 'reaction_source', 'pool')
+                if step.reactions or source == 'ai_smart':
                     reactors = []
-                    source = getattr(step, 'reaction_source', 'pool')
                     
                     if source == 'roles' and getattr(step, 'reaction_roles', None):
                         try:
@@ -213,11 +213,15 @@ async def execute_scenario(
                         count = step.reaction_count or 1
                         reactors = random.sample(reaction_pool, min(count, len(reaction_pool)))
                     
-                    reactions = step.reactions.split()
+                    reactions = step.reactions.split() if step.reactions else []
+                    if source == 'ai_smart' or not reactions:
+                        reactions = ["🔥", "👍", "❤️", "😍", "👏", "🎉", "🤝", "💯"]
+
                     for r_acc in reactors:
                         r_client = get_hydrogram_client(r_acc, r_acc.proxy)
                         try:
                             await r_client.start()
+                            # Telegram API requires strictly 1 emoji per reaction
                             emoji = random.choice(reactions)
                             await asyncio.sleep(random.uniform(0.5, 2.0))
                             await r_client.send_reaction(target_chat_id, msg_id, emoji)
