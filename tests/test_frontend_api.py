@@ -4,6 +4,7 @@ from httpx import ASGITransport, AsyncClient
 
 os.environ["ADMIN_PASSWORD"] = "testpassword"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_api.db"
+os.makedirs("./data", exist_ok=True)
 
 import app.workers.channel_monitor as cm
 import app.workers.inbox_listener as il
@@ -75,3 +76,45 @@ async def test_accounts():
         resp = await ac.get("/api/accounts", headers=headers)
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
+
+@pytest.mark.asyncio
+async def test_channels_api():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        headers = await get_token_headers(ac)
+        
+        # Test creating channel with URL
+        resp = await ac.post("/api/channels", json={
+            "channel_identifier": "https://t.me/testchannel228",
+            "min_delay_seconds": 5,
+            "max_delay_seconds": 15,
+            "no_repeat_scenarios": True
+        }, headers=headers)
+        assert resp.status_code == 200
+        assert "added_ids" in resp.json()
+        assert len(resp.json()["added_ids"]) == 1
+        ch_id = resp.json()["added_ids"][0]
+
+        # Test listing channels
+        resp = await ac.get("/api/channels", headers=headers)
+        assert resp.status_code == 200
+        channels = resp.json()
+        assert any(c["channel_username"] == "testchannel228" for c in channels)
+
+        # Test patching channel
+        resp = await ac.patch(f"/api/channels/{ch_id}", json={
+            "is_active": False,
+            "min_delay_seconds": 8,
+            "max_delay_seconds": 20,
+            "no_repeat_scenarios": False
+        }, headers=headers)
+        assert resp.status_code == 200
+
+        # Test monitor status
+        resp = await ac.get("/api/channels/monitor/status", headers=headers)
+        assert resp.status_code == 200
+        assert "running" in resp.json()
+
+        # Test deleting channel
+        resp = await ac.delete(f"/api/channels/{ch_id}", headers=headers)
+        assert resp.status_code == 200
+
