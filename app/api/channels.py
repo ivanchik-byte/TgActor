@@ -21,6 +21,7 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
     """Add new monitored channels with sanitized username parsing."""
     raw_input = str(payload.get("channel_identifier") or payload.get("channel_username") or "").strip()
     min_delay = int(payload.get("min_delay_seconds") or 5)
+    max_delay = int(payload.get("max_delay_seconds") or 10)
     no_repeat = bool(payload.get("no_repeat_scenarios", True))
 
     if not raw_input:
