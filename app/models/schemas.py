@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Any
 
 class AccountBase(BaseModel):
@@ -13,11 +13,29 @@ class AccountResponse(AccountBase):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     username: Optional[str] = None
+    custom_name: Optional[str] = None
+    status: Optional[str] = 'active'
+    source_type: Optional[str] = 'tdata'
+    position: Optional[int] = 0
     pool_type: Optional[str] = 'commenting'
     proxy_id: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+class AccountCustomNameUpdate(BaseModel):
+    custom_name: Optional[str] = None
+
+class AccountReorderRequest(BaseModel):
+    ids: List[int]
+
+class AccountProxyUpdate(BaseModel):
+    proxy_id: Optional[int] = None
+
+class AccountPoolsUpdate(BaseModel):
+    pool_type: Optional[str] = None
+    in_commenting_pool: Optional[bool] = None
+    in_reaction_pool: Optional[bool] = None
 
 class ScenarioBase(BaseModel):
     title: str
@@ -52,6 +70,23 @@ class AISettingsSchema(BaseModel):
     ai_default_model: str = "gpt-4o-mini"
     ai_system_prompt: Optional[str] = DEFAULT_SYSTEM_PROMPT
     ai_base_url: Optional[str] = None
+
+class AiPresetCreate(BaseModel):
+    name: str
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    system_prompt: Optional[str] = None
+
+class AiPresetResponse(BaseModel):
+    id: int
+    name: str
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    has_key: bool = False
+    created_at: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class AIScenarioGenerateRequest(BaseModel):
     prompt: str

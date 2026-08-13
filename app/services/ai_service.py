@@ -122,19 +122,14 @@ async def call_ai_completion(
             parts = candidates[0].get("content", {}).get("parts", [])
             return parts[0].get("text", "") if parts else ""
         else:
-            # Universal OpenAI-compatible API format for any model/provider/proxy
+            # Universal OpenAI-compatible endpoint resolution
             if base_url and base_url.strip():
                 url = base_url.strip().rstrip("/")
-                if "build.nvidia.com" in url:
-                    url = url.replace("build.nvidia.com", "integrate.api.nvidia.com")
-                if url.endswith("/chat/completions"):
-                    pass
-                elif url.endswith("/v1"):
-                    url += "/chat/completions"
-                elif "/v1" in url:
-                    url += "/chat/completions"
-                else:
-                    url += "/v1/chat/completions"
+                if not url.endswith("/chat/completions"):
+                    if url.endswith("/v1"):
+                        url += "/chat/completions"
+                    else:
+                        url += "/chat/completions"
             else:
                 url = PROVIDER_URLS.get(provider, PROVIDER_URLS["openai"])
 
@@ -142,7 +137,8 @@ async def call_ai_completion(
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
-            if provider == "openrouter" or "openrouter.ai" in url:
+            # Auto-detect OpenRouter from URL for required headers
+            if "openrouter.ai" in url:
                 headers["HTTP-Referer"] = "https://tgactor.local"
                 headers["X-Title"] = "TgActor"
 
@@ -161,6 +157,7 @@ async def call_ai_completion(
             if json_mode and provider in ["openai", "deepseek"]:
                 payload["response_format"] = {"type": "json_object"}
 
+            logger.info(f"AI request -> {url} model={final_model}")
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code != 200:
                 err_text = resp.text[:400]
@@ -175,8 +172,19 @@ async def call_ai_completion(
 
             choices = data.get("choices", [])
             if not choices:
-                raise RuntimeError(f"{provider.upper()} API returned no choices. Message: {data}")
-            return choices[0].get("message", {}).get("content", "")
+                raise RuntimeError(f"{provider.upper()} API returned no choices. Response data: {data}")
+
+            msg = choices[0].get("message", {})
+            raw_content = msg.get("content") or msg.get("reasoning_content") or choices[0].get("text") or ""
+
+            # Clean DeepSeek R1 <think>...</think> reasoning tags if present
+            if isinstance(raw_content, str) and "<think>" in raw_content:
+                if "</think>" in raw_content:
+                    raw_content = raw_content.split("</think>")[-1].strip()
+                else:
+                    raw_content = raw_content.split("<think>")[0].strip()
+
+            return raw_content
 
 async def generate_scenario_from_prompt(
     session: AsyncSession,
@@ -192,14 +200,23 @@ async def generate_scenario_from_prompt(
     api_key = settings["api_key"]
     model = override_model or settings["default_model"]
 
+    if not api_key:
+        raise ValueError("Не настроен API Key ИИ. Пожалуйста, нажмите 'ИИ НАСТРОЙКИ' и введите ваш API ключ.")
+
     # Get active account IDs to assign roles realistically
     acc_stmt = select(Account.id).where(Account.is_active == True)
     existing_accs = list((await session.execute(acc_stmt)).scalars().all())
     if not existing_accs:
         existing_accs = [1, 2, 3]
 
+    available_roles = existing_accs[:accounts_count]
+    if len(available_roles) < accounts_count:
+        max_id = max(existing_accs) if existing_accs else 0
+        extra_needed = accounts_count - len(available_roles)
+        available_roles.extend([max_id + i + 1 for i in range(extra_needed)])
+
     system_prompt = (
-        "Ты — генератор сценариев реального человеческого общения в комментарии Telegram. "
+        "Ты — генератор сценариев реального человеческого общения в комментариях Telegram. "
         "Создай структурированный диалог на русском языке в формате JSON. "
         "Диалог должен звучать 100% естественно, живой разговорный сленг, с репликами и эмодзи."
     )
@@ -209,18 +226,18 @@ async def generate_scenario_from_prompt(
 "{prompt}"
 
 Требования к сценарию:
-1. Количество аккаунтов участников: {min(accounts_count, len(existing_accs))}.
-2. Список доступных ID ролей (ролей аккаунтов): {existing_accs[:accounts_count]}.
-3. Сгенерируй от 3 до 6 шагов (реплик).
+1. Количество участников (ролей): {accounts_count}.
+2. Список доступных ID ролей: {available_roles}.
+3. Сгенерируй от 4 до 8 естественных шагов (реплик общения).
 4. Каждому шагу укажи:
    - step_order (1, 2, 3...)
-   - role_id (один из доступных ID)
+   - role_id (один из доступных ID ролей: {available_roles})
    - text (живой текст реплики)
    - reply_to_index (null для первого шага, или номер шага N 1-based, на который отвечает реплика)
    - delay_before_min (от 3.0 до 8.0)
    - delay_before_max (от 9.0 до 20.0)
-   - reactions ({'эмодзи под сообщениями, например "🔥 👍 🚀"' if reactions_enabled else 'null'})
-   - reaction_count ({'число от 1 до 3' if reactions_enabled else 0})
+   - reactions ({'ВАЖНО: ставь эмодзи-реакции УМНО и ВЫБОРОЧНО (НЕ на каждое сообщение, а примерно на 30-40% сообщений, например "🔥" или "👍". Для остальных пиши null)' if reactions_enabled else 'null'})
+   - reaction_count ({'число от 1 до 2' if reactions_enabled else 0})
 
 Верни строго JSON объект следующей структуры:
 {{
@@ -230,13 +247,13 @@ async def generate_scenario_from_prompt(
   "steps": [
     {{
       "step_order": 1,
-      "role_id": {existing_accs[0]},
+      "role_id": {available_roles[0]},
       "text": "Текст первого сообщения",
       "reply_to_index": null,
       "delay_before_min": 5.0,
       "delay_before_max": 10.0,
-      "reactions": "🔥 👍",
-      "reaction_count": 2
+      "reactions": null,
+      "reaction_count": 0
     }}
   ]
 }}
@@ -252,13 +269,19 @@ async def generate_scenario_from_prompt(
         base_url=settings.get("base_url")
     )
 
-    # Clean markdown backticks if present
+    # Clean markdown backticks and extract valid JSON object
     cleaned = raw_response.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("\n", 1)[-1]
-        if cleaned.endswith("```"):
-            cleaned = cleaned.rsplit("```", 1)[0]
-        cleaned = cleaned.strip()
+    if "```" in cleaned:
+        if "```json" in cleaned:
+            cleaned = cleaned.split("```json")[-1].split("```")[0].strip()
+        else:
+            parts = cleaned.split("```")
+            if len(parts) >= 3:
+                cleaned = parts[1].strip()
+    if not cleaned.startswith("{") and "{" in cleaned:
+        cleaned = "{" + cleaned.split("{", 1)[-1]
+    if not cleaned.endswith("}") and "}" in cleaned:
+        cleaned = cleaned.rsplit("}", 1)[0] + "}"
 
     try:
         data = json.loads(cleaned)
