@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.core.database import Base
@@ -10,9 +10,15 @@ class Account(Base):
     phone = Column(String, unique=True, index=True, nullable=False)
     session_string = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
+    status = Column(String, default="active", nullable=False, server_default="active")
+    source_type = Column(String, default="tdata", nullable=False, server_default="tdata")
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     username = Column(String, nullable=True)
+    custom_name = Column(String, nullable=True)
+    position = Column(Integer, default=0)
+    cooldown_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     pool_type = Column(String, default="commenting")
 
@@ -122,7 +128,8 @@ class InboxMessage(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
-    peer_id = Column(Integer, nullable=False)
+    message_id = Column(BigInteger, nullable=True)
+    peer_id = Column(BigInteger, nullable=False)
     peer_name = Column(String, nullable=True)
     peer_username = Column(String, nullable=True)
     incoming = Column(Boolean, default=True)
@@ -155,3 +162,13 @@ class ActionLog(Base):
     account = relationship("Account", backref="action_logs")
     scenario = relationship("Scenario", backref="action_logs")
 
+class AiPreset(Base):
+    __tablename__ = "ai_presets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    api_key = Column(Text, nullable=True)
+    model = Column(String, nullable=True)
+    base_url = Column(String, nullable=True)
+    system_prompt = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

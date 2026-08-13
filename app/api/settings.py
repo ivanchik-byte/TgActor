@@ -4,8 +4,8 @@ from sqlalchemy import select
 from typing import Dict, Any
 
 from app.core.database import async_session
-from app.models.models import SystemConfig
-from app.models.schemas import AISettingsSchema
+from app.models.models import SystemConfig, AiPreset
+from app.models.schemas import AISettingsSchema, AiPresetCreate, AiPresetResponse
 from app.services.ai_service import get_ai_settings, call_ai_completion, DEFAULT_SYSTEM_PROMPT
 
 router = APIRouter()
@@ -63,7 +63,9 @@ async def test_ai_connection(cfg: AISettingsSchema):
             api_key = stored.get("api_key")
 
         if not api_key:
-            raise HTTPException(400, detail="API Key is missing")
+            raise HTTPException(400, detail="API Ключ не указан. Пожалуйста, введите ключ.")
+
+        base_url = cfg.ai_base_url if cfg.ai_base_url is not None else stored.get("base_url")
 
         try:
             response_text = await call_ai_completion(
@@ -72,8 +74,74 @@ async def test_ai_connection(cfg: AISettingsSchema):
                 model=cfg.ai_default_model,
                 system_prompt="Ответь одним словом 'OK'.",
                 user_prompt="Проверка связи.",
-                base_url=cfg.ai_base_url or stored.get("base_url")
+                base_url=base_url
             )
             return {"status": "ok", "response": response_text.strip()}
         except Exception as e:
-            raise HTTPException(400, detail=f"AI Connection Test failed: {str(e)}")
+            raise HTTPException(400, detail=str(e))
+
+@router.get("/api/settings/ai/presets")
+async def list_ai_presets():
+    async with async_session() as session:
+        result = await session.execute(select(AiPreset).order_by(AiPreset.created_at.desc()))
+        presets = result.scalars().all()
+        return [
+            {
+                "id": p.id,
+                "name": p.name,
+                "model": p.model,
+                "base_url": p.base_url,
+                "has_key": bool(p.api_key),
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            }
+            for p in presets
+        ]
+
+@router.post("/api/settings/ai/presets")
+async def create_ai_preset(preset: AiPresetCreate):
+    if not preset.name or not preset.name.strip():
+        raise HTTPException(400, detail="Название пресета не может быть пустым.")
+    async with async_session() as session:
+        existing = await session.execute(
+            select(AiPreset).where(AiPreset.name == preset.name.strip())
+        )
+        if existing.scalars().first():
+            raise HTTPException(400, detail=f"Пресет '{preset.name}' уже существует.")
+        new_preset = AiPreset(
+            name=preset.name.strip(),
+            api_key=preset.api_key.strip() if preset.api_key else None,
+            model=preset.model.strip() if preset.model else None,
+            base_url=preset.base_url.strip() if preset.base_url else None,
+            system_prompt=preset.system_prompt if preset.system_prompt else None
+        )
+        session.add(new_preset)
+        await session.commit()
+        return {"status": "ok", "id": new_preset.id, "name": new_preset.name}
+
+@router.delete("/api/settings/ai/presets/{preset_id}")
+async def delete_ai_preset(preset_id: int):
+    async with async_session() as session:
+        result = await session.execute(select(AiPreset).where(AiPreset.id == preset_id))
+        preset = result.scalars().first()
+        if not preset:
+            raise HTTPException(404, detail="Пресет не найден.")
+        await session.delete(preset)
+        await session.commit()
+        return {"status": "ok"}
+
+@router.get("/api/settings/ai/presets/{preset_id}")
+async def get_ai_preset(preset_id: int):
+    """Load full preset data including API key for applying."""
+    async with async_session() as session:
+        result = await session.execute(select(AiPreset).where(AiPreset.id == preset_id))
+        preset = result.scalars().first()
+        if not preset:
+            raise HTTPException(404, detail="Пресет не найден.")
+        return {
+            "id": preset.id,
+            "name": preset.name,
+            "api_key": preset.api_key or "",
+            "model": preset.model or "",
+            "base_url": preset.base_url or "",
+            "system_prompt": preset.system_prompt or ""
+        }

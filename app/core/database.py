@@ -46,6 +46,12 @@ async def ensure_db_schema_sync():
                 "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS system_instruction VARCHAR",
                 "ALTER TABLE scenario_steps ADD COLUMN IF NOT EXISTS is_ai_dynamic BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE scenario_steps ADD COLUMN IF NOT EXISTS ai_prompt VARCHAR",
+                "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'active'",
+                "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS source_type VARCHAR DEFAULT 'tdata'",
+                "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "ALTER TABLE inbox_messages ALTER COLUMN peer_id TYPE BIGINT",
+                "ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS message_id BIGINT",
+                "ALTER TABLE inbox_messages ALTER COLUMN message_id DROP NOT NULL",
             ]
             for stmt in migrations:
                 try:

@@ -14,7 +14,7 @@ interface Replica {
   maxDelay: string;
   reactions: string;
   reactionCount: number;
-  reactionSource?: 'pool' | 'roles';
+  reactionSource?: 'pool' | 'roles' | 'manual' | 'ai_smart';
   reactionRoles?: string; // space separated role/account IDs
   fileName: string;
   noAttachmentIfForbidden: boolean;
@@ -52,8 +52,70 @@ const DEFAULT_SYSTEM_PROMPT = `# ИНСТРУКЦИЯ ПЕРСОНАЖА (ANTI-A
 
 const EMPTY_ARRAY: any[] = [];
 
+const DEFAULT_PROMPT_TEMPLATES = [
+  {
+    id: 't1',
+    title: '💬 Спор двух инвесторов про покупку NFT в Telegram',
+    prompt: 'Два крипто-инвестора эмоционально спорят в комментариях Telegram. Первый хвастается новой покупкой коллекционной картинки NFT и уверяет, что цена взлетит в 10 раз к концу месяца. Второй скептически объясняет, что это оверпрайс и нет ликвидности. В конце присоединяется третий участник с юмором.'
+  },
+  {
+    id: 't2',
+    title: '🚀 Обсуждение нового листинга токена',
+    prompt: 'Оживленная дискуссия участников под постом о новом листинге токена на бирже. Один спрашивает стартовую цену и ликвидность, второй приводит цифры из токеномики и вестинга, а третий с эмоциями кричит "TO THE MOON!" и обсуждает, сколько иксов сделают на старте.'
+  },
+  {
+    id: 't3',
+    title: '❓ Вопросы новичка по настройке и подробные ответы участников',
+    prompt: 'Новичок заходит в комментарии и вежливо спрашивает, как правильно настроить безопасность своего Telegram аккаунта и защититься от фишинга. Опытный участник расписывает пошаговый совет с привязкой 2FA. Третий участник благодарит за полезную информацию.'
+  },
+  {
+    id: 't4',
+    title: '🔥 Эмоциональные восторги и обсуждение свежих новостей',
+    prompt: 'Бурные эмоциональные восторги под главным анонсом проекта. Участники делятся позитивными эмоциями, хвалят команду разработчиков за быстрый релиз новой фичи и активно обсуждают планы развития.'
+  }
+];
+
 export default function Scenarios() {
   const queryClient = useQueryClient();
+  
+  // Custom templates state
+  const [promptTemplates, setPromptTemplates] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tgactor_ai_templates');
+      return saved ? JSON.parse(saved) : DEFAULT_PROMPT_TEMPLATES;
+    } catch {
+      return DEFAULT_PROMPT_TEMPLATES;
+    }
+  });
+  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
+  const [newTemplateTitle, setNewTemplateTitle] = useState('');
+  const [newTemplatePrompt, setNewTemplatePrompt] = useState('');
+
+  const handleAddCustomTemplate = () => {
+    if (!newTemplateTitle.trim() || !newTemplatePrompt.trim()) return;
+    const updated = [
+      ...promptTemplates,
+      {
+        id: Math.random().toString(36).substring(2, 9),
+        title: newTemplateTitle.trim(),
+        prompt: newTemplatePrompt.trim()
+      }
+    ];
+    setPromptTemplates(updated);
+    try { localStorage.setItem('tgactor_ai_templates', JSON.stringify(updated)); } catch {}
+    setNewTemplateTitle('');
+    setNewTemplatePrompt('');
+    setShowAddTemplateModal(false);
+    showToast('Новый шаблон сохранен!', 'success');
+  };
+
+  const handleDeleteCustomTemplate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = promptTemplates.filter((t: any) => t.id !== id);
+    setPromptTemplates(updated);
+    try { localStorage.setItem('tgactor_ai_templates', JSON.stringify(updated)); } catch {}
+    showToast('Шаблон удален', 'info');
+  };
   
   // Active Scenario state
   const [activeScenarioId, setActiveScenarioId] = useState<number | null>(null);
@@ -128,10 +190,22 @@ export default function Scenarios() {
   const [isTestingAI, setIsTestingAI] = useState(false);
   const [isSavingAISettings, setIsSavingAISettings] = useState(false);
 
+  // Preset system state
+  const [presetName, setPresetName] = useState('');
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+
   // Fetch AI Global Settings
   const { data: aiSettingsData, refetch: refetchAISettings } = useQuery({
     queryKey: ['aiSettings'],
     queryFn: async () => (await axios.get('/api/settings/ai')).data
+  });
+
+  // Fetch AI Presets
+  const { data: aiPresets = [], refetch: refetchPresets } = useQuery({
+    queryKey: ['aiPresets'],
+    queryFn: async () => (await axios.get('/api/settings/ai/presets')).data
   });
 
   useEffect(() => {
@@ -473,6 +547,53 @@ export default function Scenarios() {
       showToast(errMsg, 'error');
     } finally {
       setIsTestingAI(false);
+    }
+  };
+
+  const handleSavePreset = async () => {
+    if (!presetName.trim()) return;
+    setIsSavingPreset(true);
+    try {
+      await axios.post('/api/settings/ai/presets', {
+        name: presetName.trim(),
+        api_key: aiConfigApiKey,
+        model: aiConfigDefaultModel,
+        base_url: aiConfigBaseUrl,
+        system_prompt: aiConfigSystemPrompt
+      });
+      await refetchPresets();
+      setPresetName('');
+      setShowSavePreset(false);
+      showToast(`Пресет "${presetName.trim()}" сохранён!`, 'success');
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Ошибка сохранения пресета', 'error');
+    } finally {
+      setIsSavingPreset(false);
+    }
+  };
+
+  const handleLoadPreset = async (presetId: number) => {
+    try {
+      const res = await axios.get(`/api/settings/ai/presets/${presetId}`);
+      const p = res.data;
+      if (p.api_key) setAiConfigApiKey(p.api_key);
+      if (p.model) setAiConfigDefaultModel(p.model);
+      setAiConfigBaseUrl(p.base_url || '');
+      if (p.system_prompt) setAiConfigSystemPrompt(p.system_prompt);
+      setAiTestResult(null);
+      showToast(`Пресет "${p.name}" загружен!`, 'success');
+    } catch (err: any) {
+      showToast('Ошибка загрузки пресета', 'error');
+    }
+  };
+
+  const handleDeletePreset = async (presetId: number) => {
+    try {
+      await axios.delete(`/api/settings/ai/presets/${presetId}`);
+      await refetchPresets();
+      showToast('Пресет удалён', 'success');
+    } catch (err: any) {
+      showToast('Ошибка удаления пресета', 'error');
     }
   };
 
@@ -902,16 +1023,13 @@ export default function Scenarios() {
         </div>
       )}
 
-      {/* Global AI Settings Modal (Design-Taste-Frontend calibrated) */}
+      {/* Global AI Settings Modal */}
       {showAISettingsModal && (
         <div style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(16px)',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(12px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -919,135 +1037,106 @@ export default function Scenarios() {
         }}>
           <div style={{
             backgroundColor: 'var(--bg-card)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: '20px',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
             padding: '24px',
-            maxWidth: '540px',
+            maxWidth: '480px',
             width: '92%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: '18px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            gap: '16px',
           }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{
-                  backgroundColor: 'var(--accent-soft)',
-                  padding: '8px',
-                  borderRadius: '10px',
-                  color: 'var(--accent)',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}>
-                  <Bot className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                    Настройки Нейросетей (AI API)
-                  </h3>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Управление провайдером, ключами доступа и параметрами моделей.
-                  </p>
-                </div>
-              </div>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bot className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                Настройки ИИ
+              </h3>
               <button
                 type="button"
-                onClick={() => {
-                  setShowAISettingsModal(false);
-                  setAiTestResult(null);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  borderRadius: '6px'
-                }}
+                onClick={() => { setShowAISettingsModal(false); setAiTestResult(null); setShowSavePreset(false); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex' }}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Compact Provider Pill Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={labelStyle}>Выберите Провайдера</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-                {[
-                  { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o-mini', url: '' },
-                  { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat', url: '' },
-                  { id: 'nvidia', label: 'NVIDIA NIM', defaultModel: 'deepseek-ai/deepseek-r1', url: 'https://integrate.api.nvidia.com/v1' },
-                  { id: 'openrouter', label: 'OpenRouter', defaultModel: 'openai/gpt-4o-mini', url: '' },
-                  { id: 'gemini', label: 'Gemini', defaultModel: 'gemini-1.5-flash', url: '' },
-                  { id: 'custom', label: 'Свой API (Proxy)', defaultModel: 'deepseek-ai/deepseek-r1', url: 'http://localhost:11434/v1' },
-                ].map(p => {
-                  const isSelected = aiConfigProvider === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setAiConfigProvider(p.id);
-                        if (p.defaultModel && !aiConfigDefaultModel.trim()) {
-                          setAiConfigDefaultModel(p.defaultModel);
-                        }
-                        if (p.url) {
-                          setAiConfigBaseUrl(p.url);
-                        } else if (p.id !== 'custom') {
-                          setAiConfigBaseUrl('');
-                        }
-                        setAiTestResult(null);
-                      }}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: '10px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        border: isSelected ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                        backgroundColor: isSelected ? 'var(--accent-soft)' : 'var(--bg-main)',
-                        color: isSelected ? 'var(--accent-text)' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        textAlign: 'center'
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
+            {/* Saved Presets */}
+            {(aiPresets as any[]).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ ...labelStyle, marginBottom: '2px' }}>Сохранённые пресеты</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {(aiPresets as any[]).map((p: any) => (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleLoadPreset(p.id)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px 0 0 8px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          border: '1px solid var(--border-color)',
+                          borderRight: 'none',
+                          backgroundColor: 'var(--bg-main)',
+                          color: 'var(--text-main)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePreset(p.id)}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '0 8px 8px 0',
+                          fontSize: '11px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-main)',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Inputs Grid */}
+            {/* Connection Fields */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>API Key (Ключ доступа)</label>
-                  <input
-                    type="password"
-                    placeholder="sk-..., nvapi-..., gsk-..."
-                    value={aiConfigApiKey}
-                    onChange={e => setAiConfigApiKey(e.target.value)}
-                    style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>Модель</label>
-                  <input
-                    type="text"
-                    placeholder="deepseek-ai/deepseek-r1"
-                    value={aiConfigDefaultModel}
-                    onChange={e => setAiConfigDefaultModel(e.target.value)}
-                    style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
-                  />
-                </div>
+              <div>
+                <label style={labelStyle}>API Key</label>
+                <input
+                  type="password"
+                  placeholder="Вставьте ваш API ключ (sk-..., nvapi-..., gsk-...)"
+                  value={aiConfigApiKey}
+                  onChange={e => setAiConfigApiKey(e.target.value)}
+                  style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
+                />
               </div>
 
               <div>
-                <label style={labelStyle}>Base URL Endpoint (необязательно)</label>
+                <label style={labelStyle}>Модель</label>
+                <input
+                  type="text"
+                  placeholder="Например: gpt-4o-mini, deepseek-chat, deepseek-ai/deepseek-r1"
+                  value={aiConfigDefaultModel}
+                  onChange={e => setAiConfigDefaultModel(e.target.value)}
+                  style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Base URL (необязательно — для NVIDIA, Ollama, Proxy)</label>
                 <input
                   type="text"
                   placeholder="https://integrate.api.nvidia.com/v1 или http://localhost:11434/v1"
@@ -1055,41 +1144,63 @@ export default function Scenarios() {
                   onChange={e => setAiConfigBaseUrl(e.target.value)}
                   style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
                 />
+                <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  Оставьте пустым для OpenAI / DeepSeek / Gemini. Укажите для NVIDIA NIM, Ollama, vLLM, OpenRouter.
+                </span>
               </div>
 
+              {/* Collapsible system prompt */}
               <div>
-                <label style={labelStyle}>Системная инструкция по умолчанию</label>
-                <textarea
-                  rows={4}
-                  placeholder="Инструкции персонажа..."
-                  value={aiConfigSystemPrompt}
-                  onChange={e => setAiConfigSystemPrompt(e.target.value)}
-                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.4' }}
-                />
+                <button
+                  type="button"
+                  onClick={() => setShowSystemPrompt(!showSystemPrompt)}
+                  style={{
+                    ...labelStyle,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  {showSystemPrompt ? '▾' : '▸'} Системная инструкция
+                </button>
+                {showSystemPrompt && (
+                  <textarea
+                    rows={5}
+                    placeholder="Инструкции персонажа нейросети..."
+                    value={aiConfigSystemPrompt}
+                    onChange={e => setAiConfigSystemPrompt(e.target.value)}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.4', marginTop: '6px' }}
+                  />
+                )}
               </div>
             </div>
 
-            {/* Inline Test Result Alert */}
+            {/* Inline Test Result */}
             {aiTestResult && (
               <div style={{
-                padding: '10px 14px',
+                padding: '10px 12px',
                 borderRadius: '10px',
                 fontSize: '12px',
                 lineHeight: '1.4',
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 gap: '8px',
-                backgroundColor: aiTestResult.type === 'success' ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                border: aiTestResult.type === 'success' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                color: aiTestResult.type === 'success' ? '#4ade80' : '#f87171'
+                backgroundColor: aiTestResult.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                border: aiTestResult.type === 'success' ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
+                color: aiTestResult.type === 'success' ? '#4ade80' : '#f87171',
+                wordBreak: 'break-word'
               }}>
-                {aiTestResult.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                {aiTestResult.type === 'success' ? <CheckCircle2 className="w-4 h-4" style={{ flexShrink: 0, marginTop: '1px' }} /> : <AlertTriangle className="w-4 h-4" style={{ flexShrink: 0, marginTop: '1px' }} />}
                 <span>{aiTestResult.message}</span>
               </div>
             )}
 
-            {/* Footer Buttons */}
-            <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 type="button"
                 onClick={handleSaveAISettings}
@@ -1105,14 +1216,11 @@ export default function Scenarios() {
                   fontWeight: 700,
                   cursor: 'pointer',
                   opacity: isSavingAISettings ? 0.6 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                 }}
               >
                 <Save className="w-4 h-4" />
-                {isSavingAISettings ? 'Сохранение...' : 'Сохранить настройки'}
+                {isSavingAISettings ? 'Сохранение...' : 'Применить'}
               </button>
 
               <button
@@ -1120,24 +1228,60 @@ export default function Scenarios() {
                 onClick={handleTestAIConnection}
                 disabled={isTestingAI}
                 style={{
-                  backgroundColor: 'var(--bg-main)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '10px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  ...btnSecondary,
                   opacity: isTestingAI ? 0.6 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
+                  display: 'flex', alignItems: 'center', gap: '6px'
                 }}
               >
-                <Sparkles className="w-4 h-4 text-accent" />
-                {isTestingAI ? 'Проверка...' : 'Проверить ключ'}
+                <Zap className="w-4 h-4" />
+                {isTestingAI ? '...' : 'Тест'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSavePreset(!showSavePreset)}
+                style={{
+                  ...btnSecondary,
+                  display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+              >
+                <Download className="w-4 h-4" />
+                Пресет
               </button>
             </div>
+
+            {/* Save Preset Inline Form */}
+            {showSavePreset && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Название пресета (напр. API DeepSeek)"
+                  value={presetName}
+                  onChange={e => setPresetName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                  style={{ ...inputStyle, flex: 1, fontSize: '12px' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleSavePreset}
+                  disabled={isSavingPreset || !presetName.trim()}
+                  style={{
+                    backgroundColor: 'var(--accent)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '10px 16px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    opacity: isSavingPreset || !presetName.trim() ? 0.5 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {isSavingPreset ? '...' : 'Сохранить'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1347,9 +1491,8 @@ export default function Scenarios() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: '4px' }}>Режим:</span>
                   {[
-                    { id: 'manual', label: '📝 Ручной', desc: 'Заполнение шагов вручную' },
+                    { id: 'manual', label: '📝 Статический', desc: 'Ручной конструктор сценария' },
                     { id: 'ai_generated', label: '🚀 Сгенерировать ИИ', desc: 'Разовая генерация по описанию' },
-                    { id: 'ai_dynamic', label: '⚡ Динамический ИИ', desc: 'Уникальный ответ ИИ при каждом запуске' },
                   ].map(m => (
                     <button
                       key={m.id}
@@ -1458,20 +1601,33 @@ export default function Scenarios() {
                     />
                   </div>
 
-                  {/* Quick prompt suggestion chips */}
+                  {/* Quick prompt suggestion chips with Delete & Add custom template capabilities */}
                   <div>
-                    <label style={{ ...labelStyle, fontSize: '10px' }}>Готовые шаблоны (нажмите для подстановки):</label>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ ...labelStyle, fontSize: '10px', marginBottom: 0 }}>ГОТОВЫЕ ШАБЛОНЫ (НАЖМИТЕ ДЛЯ ПОДСТАНОВКИ):</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddTemplateModal(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent)',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        + Добавить свой шаблон
+                      </button>
+                    </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {[
-                        '💬 Спор двух инвесторов про покупку NFT в Telegram',
-                        '🚀 Живое обсуждение нового листинга токена',
-                        '❓ Вопросы новичка по настройке и подробные ответы участников',
-                        '🔥 Эмоциональные восторги и обсуждение свежих новостей'
-                      ].map((chip, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setAiGenPrompt(chip)}
+                      {promptTemplates.map((t: any) => (
+                        <div
+                          key={t.id}
+                          onClick={() => setAiGenPrompt(t.prompt)}
                           style={{
                             backgroundColor: 'var(--bg-main)',
                             border: '1px solid var(--border-color)',
@@ -1480,55 +1636,90 @@ export default function Scenarios() {
                             fontSize: '11px',
                             color: 'var(--text-muted)',
                             cursor: 'pointer',
-                            transition: 'all 0.15s'
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
                           }}
+                          title={t.prompt}
                         >
-                          {chip}
-                        </button>
+                          <span>{t.title}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCustomTemplate(t.id, e)}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              padding: '0 2px',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              lineHeight: 1
+                            }}
+                            title="Удалить этот шаблон"
+                          >
+                            ×
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>УЧАСТНИКОВ (БОТОВ):</span>
-                        {[2, 3, 4, 5].map(cnt => (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                           <button
-                            key={cnt}
                             type="button"
-                            onClick={() => setAiGenAccountsCount(cnt)}
+                            onClick={() => setAiGenAccountsCount(Math.max(1, aiGenAccountsCount - 1))}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >-</button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={aiGenAccountsCount}
+                            onChange={e => setAiGenAccountsCount(Math.max(1, parseInt(e.target.value) || 1))}
                             style={{
-                              padding: '5px 10px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              border: aiGenAccountsCount === cnt ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                              backgroundColor: aiGenAccountsCount === cnt ? 'var(--accent-soft)' : 'var(--bg-main)',
-                              color: aiGenAccountsCount === cnt ? 'var(--accent-text)' : 'var(--text-muted)',
-                              cursor: 'pointer'
+                              width: '45px',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: 'var(--accent-text)',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              textAlign: 'center',
+                              outline: 'none'
                             }}
-                          >
-                            {cnt}
-                          </button>
-                        ))}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setAiGenAccountsCount(aiGenAccountsCount + 1)}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >+</button>
+                        </div>
                       </div>
 
                       <button
                         type="button"
                         onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
+                        title="ИИ выборочно ставит реакции только на ключевые реплики (~35% сообщений)"
                         style={{
-                          padding: '5px 12px',
+                          padding: '6px 12px',
                           borderRadius: '8px',
                           fontSize: '12px',
                           fontWeight: 600,
                           border: aiGenReactionsEnabled ? '1px solid #22c55e' : '1px solid var(--border-color)',
                           backgroundColor: aiGenReactionsEnabled ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-main)',
                           color: aiGenReactionsEnabled ? '#4ade80' : 'var(--text-muted)',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
                         }}
                       >
-                        {aiGenReactionsEnabled ? '👍 Эмодзи ВКЛ' : '🚫 Эмодзи ВЫКЛ'}
+                        {aiGenReactionsEnabled ? '👍 Реакции (Умный выбор)' : '🚫 Реакции ВЫКЛ'}
                       </button>
                     </div>
 
@@ -1559,26 +1750,6 @@ export default function Scenarios() {
                 </div>
               ) : (
                 <>
-                  {/* Dynamic AI Banner Notice */}
-                  {scenarioMode === 'ai_dynamic' && (
-                    <div style={{
-                      backgroundColor: 'var(--bg-card)',
-                      border: '1px solid #3b82f6',
-                      borderRadius: '12px',
-                      padding: '12px 16px',
-                      marginBottom: '16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      color: '#60a5fa',
-                      fontSize: '12px'
-                    }}>
-                      <Zap className="w-5 h-5 flex-shrink-0" />
-                      <span>
-                        <strong>Режим Динамического ИИ активен!</strong> При каждом исполнении сценария в Telegram ИИ будет генерировать 100% уникальный текст каждой реплики с учетом контекста поста!
-                      </span>
-                    </div>
-                  )}
 
               {replicas.length === 0 ? (
                 <div style={{
@@ -1801,28 +1972,28 @@ export default function Scenarios() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           <div>
                             <label style={labelStyle}>Персонаж (ID роли)</label>
-                            {commentingAccounts.length === 0 ? (
-                              <div style={{
-                                fontSize: '12px', color: '#ef4444', padding: '8px 12px',
-                                border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '10px',
-                                backgroundColor: 'rgba(239, 68, 68, 0.02)', display: 'flex', alignItems: 'center', gap: '6px'
-                              }}>
-                                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                                Нет аккаунтов для комментирования в пуле!
-                              </div>
-                            ) : (
-                              <select
-                                value={selectedRole}
-                                onChange={e => handleUpdateReplica(replica.id, 'role', e.target.value)}
-                                style={inputStyle}
-                              >
-                                {commentingAccounts.map((a: any) => (
-                                  <option key={a.id} value={String(a.id)}>
-                                    {a.custom_name ? a.custom_name : (a.username ? `@${a.username}` : (a.first_name || `Персонаж #${a.id}`))} ({a.phone})
+                            <select
+                              value={selectedRole}
+                              onChange={e => handleUpdateReplica(replica.id, 'role', e.target.value)}
+                              style={inputStyle}
+                            >
+                              <optgroup label="🎲 Случайные боты (без повторов на время исполнения)">
+                                {Array.from({ length: Math.max(5, commentingAccounts.length || 5) }).map((_, idx) => (
+                                  <option key={idx + 1} value={String(idx + 1)}>
+                                    🎲 Случайный бот {idx + 1} (Уникальный участник #{idx + 1})
                                   </option>
                                 ))}
-                              </select>
-                            )}
+                              </optgroup>
+                              {commentingAccounts.length > 0 && (
+                                <optgroup label="👤 Конкретные аккаунты из пула">
+                                  {commentingAccounts.map((a: any) => (
+                                    <option key={a.id} value={String(a.id)}>
+                                      {a.custom_name ? a.custom_name : (a.username ? `@${a.username}` : (a.first_name || `Аккаунт #${a.id}`))} ({a.phone})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
                           </div>
 
                           <div>
@@ -1898,62 +2069,111 @@ export default function Scenarios() {
                           </div>
 
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <label style={labelStyle}>Набор реакций</label>
-                              <button
-                                type="button"
-                                onClick={() => setActiveEmojiPickerId(activeEmojiPickerId === replica.id ? null : replica.id)}
-                                style={{
-                                  background: 'none', border: '1px solid var(--border-color)', borderRadius: '6px',
-                                  color: 'var(--accent-text)', padding: '2px 8px', fontSize: '11px', cursor: 'pointer',
-                                  backgroundColor: activeEmojiPickerId === replica.id ? 'var(--accent-soft)' : 'transparent',
-                                  transition: 'all 0.15s'
-                                }}
-                              >
-                                {activeEmojiPickerId === replica.id ? 'Скрыть выбор' : 'Выбрать эмодзи ⚡'}
-                              </button>
+                            <label style={labelStyle}>Режим реакций</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                              {[
+                                { id: 'manual', label: '🖐️ Вручную' },
+                                { id: 'ai_smart', label: '🧠 Умный ИИ' },
+                                { id: 'pool', label: '🎯 Из пула' },
+                              ].map(mode => (
+                                <button
+                                  key={mode.id}
+                                  type="button"
+                                  onClick={() => handleUpdateReplica(replica.id, 'reactionSource', mode.id)}
+                                  style={{
+                                    padding: '6px 4px',
+                                    borderRadius: '8px',
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                    border: (replica.reactionSource || 'pool') === mode.id ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                                    backgroundColor: (replica.reactionSource || 'pool') === mode.id ? 'var(--accent-soft)' : 'var(--bg-main)',
+                                    color: (replica.reactionSource || 'pool') === mode.id ? 'var(--accent-text)' : 'var(--text-muted)',
+                                    cursor: 'pointer',
+                                    textAlign: 'center'
+                                  }}
+                                >
+                                  {mode.label}
+                                </button>
+                              ))}
                             </div>
-                            {activeEmojiPickerId === replica.id && (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '4px', backgroundColor: 'var(--bg-main)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                                {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
-                                  const currentList = (replica.reactions || '').split(/\s+/).filter(Boolean);
-                                  const isActive = currentList.includes(emoji);
-                                  return (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      onClick={() => {
-                                        let newList;
-                                        if (isActive) {
-                                          newList = currentList.filter(e => e !== emoji);
-                                        } else {
-                                          newList = [...currentList, emoji];
-                                        }
-                                        handleUpdateReplica(replica.id, 'reactions', newList.join(' '));
-                                      }}
-                                      style={{
-                                        fontSize: '14px',
-                                        padding: '6px 10px',
-                                        borderRadius: '8px',
-                                        border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                                        backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-main)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                      }}
-                                    >
-                                      {emoji}
-                                    </button>
-                                  );
-                                })}
+
+                            {replica.reactionSource === 'ai_smart' && (
+                              <div style={{
+                                fontSize: '11px',
+                                color: '#4ade80',
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                border: '1px solid rgba(34, 197, 94, 0.25)',
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}>
+                                <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span>ИИ автоматически подберет 1-2 идеальных эмодзи под контекст в момент отправки.</span>
                               </div>
                             )}
-                            <input
-                              type="text"
-                              value={replica.reactions}
-                              onChange={e => handleUpdateReplica(replica.id, 'reactions', e.target.value)}
-                              placeholder="Или введите вручную через пробел..."
-                              style={inputStyle}
-                            />
+
+                            {replica.reactionSource === 'manual' && (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <label style={{ ...labelStyle, marginBottom: 0 }}>Набор эмодзи</label>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveEmojiPickerId(activeEmojiPickerId === replica.id ? null : replica.id)}
+                                    style={{
+                                      background: 'none', border: '1px solid var(--border-color)', borderRadius: '6px',
+                                      color: 'var(--accent-text)', padding: '2px 8px', fontSize: '11px', cursor: 'pointer',
+                                      backgroundColor: activeEmojiPickerId === replica.id ? 'var(--accent-soft)' : 'transparent',
+                                      transition: 'all 0.15s'
+                                    }}
+                                  >
+                                    {activeEmojiPickerId === replica.id ? 'Скрыть выбор' : 'Палитра ⚡'}
+                                  </button>
+                                </div>
+                                {activeEmojiPickerId === replica.id && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', backgroundColor: 'var(--bg-main)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                    {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
+                                      const currentList = (replica.reactions || '').split(/\s+/).filter(Boolean);
+                                      const isActive = currentList.includes(emoji);
+                                      return (
+                                        <button
+                                          key={emoji}
+                                          type="button"
+                                          onClick={() => {
+                                            let newList;
+                                            if (isActive) {
+                                              newList = currentList.filter(e => e !== emoji);
+                                            } else {
+                                              newList = [...currentList, emoji];
+                                            }
+                                            handleUpdateReplica(replica.id, 'reactions', newList.join(' '));
+                                          }}
+                                          style={{
+                                            fontSize: '14px',
+                                            padding: '6px 10px',
+                                            borderRadius: '8px',
+                                            border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                                            backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-main)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s',
+                                          }}
+                                        >
+                                          {emoji}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                <input
+                                  type="text"
+                                  value={replica.reactions}
+                                  onChange={e => handleUpdateReplica(replica.id, 'reactions', e.target.value)}
+                                  placeholder="Или введите вручную через пробел..."
+                                  style={inputStyle}
+                                />
+                              </>
+                            )}
                           </div>
 
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
@@ -2296,6 +2516,109 @@ export default function Scenarios() {
           </div>
         )}
       </div>
+
+      {/* Add Custom Template Modal */}
+      {showAddTemplateModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px',
+            width: '100%',
+            maxWidth: '520px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>
+                Добавить свой готовый шаблон
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddTemplateModal(false)}
+                style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '18px', fontWeight: 800 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Название шаблона (для кнопки)</label>
+              <input
+                type="text"
+                placeholder="Например: 💎 Обсуждение новой реферальной программы"
+                value={newTemplateTitle}
+                onChange={e => setNewTemplateTitle(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Подробная инструкция промпта для ИИ</label>
+              <textarea
+                rows={5}
+                placeholder="Опишите детальнее: ролевую модель участников, их аргументы, эмоции, темы вопросов и финал общения..."
+                value={newTemplatePrompt}
+                onChange={e => setNewTemplatePrompt(e.target.value)}
+                style={{ ...inputStyle, resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setShowAddTemplateModal(false)}
+                style={{
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  borderRadius: '10px',
+                  padding: '10px 18px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleAddCustomTemplate}
+                disabled={!newTemplateTitle.trim() || !newTemplatePrompt.trim()}
+                style={{
+                  backgroundColor: 'var(--accent)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '10px 20px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  opacity: (!newTemplateTitle.trim() || !newTemplatePrompt.trim()) ? 0.5 : 1
+                }}
+              >
+                Сохранить шаблон
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
