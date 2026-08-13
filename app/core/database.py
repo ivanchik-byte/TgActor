@@ -52,6 +52,7 @@ async def ensure_db_schema_sync():
                 "ALTER TABLE inbox_messages ALTER COLUMN peer_id TYPE BIGINT",
                 "ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS message_id BIGINT",
                 "ALTER TABLE inbox_messages ALTER COLUMN message_id DROP NOT NULL",
+                "ALTER TABLE monitored_channels ALTER COLUMN no_repeat_scenarios TYPE BOOLEAN USING (CASE WHEN no_repeat_scenarios::text IN ('1', 'true', 't', 'TRUE') THEN TRUE ELSE FALSE END)",
             ]
             for stmt in migrations:
                 try:

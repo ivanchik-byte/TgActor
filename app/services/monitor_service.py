@@ -22,23 +22,28 @@ async def pick_random_scenario(session: AsyncSession, channel: MonitoredChannel)
     if not scenarios:
         return None
 
-    if len(scenarios) > channel.no_repeat_scenarios:
+    no_repeat = bool(channel.no_repeat_scenarios)
+    if not scenarios:
+        return None
+
+    if no_repeat and len(scenarios) > 1:
         candidates = [s for s in scenarios if s.id not in history]
     else:
-        candidates = scenarios
+        candidates = list(scenarios)
 
     if not candidates:
-        candidates = scenarios
+        candidates = list(scenarios)
 
-    total_weight = sum(max(1, s.weight) for s in candidates)
-    weights = [max(1, s.weight) / total_weight for s in candidates]
+    total_weight = sum(max(1, getattr(s, 'weight', 1)) for s in candidates)
+    weights = [max(1, getattr(s, 'weight', 1)) / total_weight for s in candidates]
 
     chosen = random.choices(candidates, weights=weights, k=1)[0]
 
-    history.append(chosen.id)
-    if len(history) > channel.no_repeat_scenarios:
-        history = history[-channel.no_repeat_scenarios:]
-    channel.history_json = json.dumps(history)
+    if no_repeat:
+        history.append(chosen.id)
+        if len(history) > 5:
+            history = history[-5:]
+        channel.history_json = json.dumps(history)
 
     await session.commit()
     return chosen
