@@ -21,9 +21,7 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
     """Add new monitored channels with sanitized username parsing."""
     raw_input = str(payload.get("channel_identifier") or payload.get("channel_username") or "").strip()
     min_delay = int(payload.get("min_delay_seconds") or 5)
-    max_delay = int(payload.get("max_delay_seconds") or 10)
-    no_repeat = payload.get("no_repeat_scenarios")
-    no_repeat_val = 1 if (no_repeat is True or no_repeat == 1 or no_repeat is None) else 0
+    no_repeat = bool(payload.get("no_repeat_scenarios", True))
 
     if not raw_input:
         raise HTTPException(400, "Укажите имя канала или ссылку t.me")
@@ -50,7 +48,7 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
                 is_active=True,
                 min_delay_seconds=min_delay,
                 max_delay_seconds=max_delay,
-                no_repeat_scenarios=no_repeat_val
+                no_repeat_scenarios=no_repeat
             )
             session.add(channel)
             await session.flush()
@@ -74,8 +72,7 @@ async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
         if "max_delay_seconds" in payload:
             ch.max_delay_seconds = int(payload["max_delay_seconds"])
         if "no_repeat_scenarios" in payload:
-            val = payload["no_repeat_scenarios"]
-            ch.no_repeat_scenarios = 1 if (val is True or val == 1) else 0
+            ch.no_repeat_scenarios = bool(payload["no_repeat_scenarios"])
 
         await session.commit()
         return {"status": "ok"}
