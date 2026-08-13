@@ -54,7 +54,10 @@ async def get_action_logs(
         if account_id is not None:
             stmt = stmt.where(ActionLog.account_id == account_id)
         if action_type and action_type != "all":
-            stmt = stmt.where(ActionLog.action_type == action_type)
+            if action_type == "bot_actions" or action_type == "exclude_monitor":
+                stmt = stmt.where(ActionLog.action_type != "channel_monitor")
+            else:
+                stmt = stmt.where(ActionLog.action_type == action_type)
         if status and status != "all":
             stmt = stmt.where(ActionLog.status == status)
 

@@ -83,7 +83,7 @@ export const HistoryPage: React.FC = () => {
 
   // Dynamic filter state
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
-  const [selectedAction, setSelectedAction] = useState<string>('all');
+  const [selectedAction, setSelectedAction] = useState<string>('bot_actions');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [quickPreset, setQuickPreset] = useState<string>('all');
@@ -161,6 +161,16 @@ export const HistoryPage: React.FC = () => {
     setSelectedPeriod('all');
 
     switch (presetKey) {
+      case 'all':
+        // Default clean view: all real bot actions, no background daemon polling spam
+        setSelectedStatus('all');
+        setSelectedAction('bot_actions');
+        break;
+      case 'system':
+        // Dedicated Monitoring tab
+        setSelectedStatus('all');
+        setSelectedAction('channel_monitor');
+        break;
       case 'errors':
         setSelectedStatus('error');
         setSelectedAction('all');
@@ -173,9 +183,9 @@ export const HistoryPage: React.FC = () => {
         setSelectedStatus('all');
         setSelectedAction('comment_send');
         break;
-      case 'system':
+      case 'raw_all':
         setSelectedStatus('all');
-        setSelectedAction('health_check');
+        setSelectedAction('all');
         break;
       default:
         setSelectedStatus('all');
@@ -187,7 +197,7 @@ export const HistoryPage: React.FC = () => {
   const handleResetFilters = () => {
     setQuickPreset('all');
     setSelectedAccount('all');
-    setSelectedAction('all');
+    setSelectedAction('bot_actions');
     setSelectedStatus('all');
     setSelectedPeriod('all');
     setSearchQuery('');
@@ -608,11 +618,12 @@ export const HistoryPage: React.FC = () => {
               <Sparkles size={14} /> Пресеты:
             </span>
             {[
-              { key: 'all', label: 'Все события' },
+              { key: 'all', label: '🤖 Действия ботов' },
+              { key: 'system', label: '📡 Мониторинг каналов' },
               { key: 'errors', label: '🔴 Ошибки' },
-              { key: 'cooldowns', label: '⏳ Флуд / Паузы' },
               { key: 'engagement', label: '💬 Комментарии' },
-              { key: 'system', label: '🩺 Мониторинг' },
+              { key: 'cooldowns', label: '⏳ Флуд / Паузы' },
+              { key: 'raw_all', label: '⚡ Все сырые логи' },
             ].map((preset) => (
               <button
                 key={preset.key}
@@ -721,9 +732,9 @@ export const HistoryPage: React.FC = () => {
               style={{
                 padding: '6px 26px 6px 28px',
                 borderRadius: '8px',
-                border: selectedAction !== 'all' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                backgroundColor: selectedAction !== 'all' ? 'var(--accent-soft)' : 'var(--bg-main)',
-                color: selectedAction !== 'all' ? 'var(--accent-text)' : 'var(--text-main)',
+                border: selectedAction !== 'all' && selectedAction !== 'bot_actions' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                backgroundColor: selectedAction !== 'all' && selectedAction !== 'bot_actions' ? 'var(--accent-soft)' : 'var(--bg-main)',
+                color: selectedAction !== 'all' && selectedAction !== 'bot_actions' ? 'var(--accent-text)' : 'var(--text-main)',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 outline: 'none',
@@ -732,8 +743,10 @@ export const HistoryPage: React.FC = () => {
                 transition: 'all 0.15s ease'
               }}
             >
-              <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Действие: Все</option>
-              {filterOptions.action_types.map((act) => (
+              <option value="bot_actions" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>🤖 Действия ботов (без спама)</option>
+              <option value="channel_monitor" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>📡 Мониторинг каналов</option>
+              <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>⚡ Все типы логов</option>
+              {filterOptions.action_types.filter(act => act !== 'channel_monitor').map((act) => (
                 <option key={act} value={act} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>
                   {act}
                 </option>

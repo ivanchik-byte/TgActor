@@ -1,18 +1,21 @@
 import asyncio
 import logging
 import random
+from typing import Dict, Any, Optional
 from sqlalchemy import select
+
 from app.core.database import async_session
 from app.models.models import MonitoredChannel, Account
-from app.telegram.client import get_hydrogram_client
 from app.services.monitor_service import pick_random_scenario
 from app.services.scenario_service import execute_scenario
+from app.telegram.client import get_hydrogram_client
 from app.services.log_service import log_action
 
 logger = logging.getLogger(__name__)
 
 _monitor_running = False
 _monitor_task = None
+_last_checked_msg_id: Dict[str, int] = {}
 
 def is_monitor_running() -> bool:
     return _monitor_running
@@ -45,33 +48,50 @@ async def run_channel_monitor():
 
                 if channels and accounts:
                     sample_account = accounts[0]
-                    client = get_hydrogram_client(sample_account, sample_account.proxy)
+                    client = get_hydrogram_client(sample_account, getattr(sample_account, 'proxy', None))
                     try:
                         await client.start()
                         for channel in channels:
+                            ch_user = channel.channel_username
                             try:
+                                # Fetch latest post to avoid re-triggering on unchanged channels
+                                latest_msg_id = None
+                                try:
+                                    async for msg in client.get_chat_history(ch_user, limit=1):
+                                        latest_msg_id = msg.id
+                                        break
+                                except Exception:
+                                    latest_msg_id = None
+
+                                # Check if already processed
+                                if latest_msg_id is not None:
+                                    if _last_checked_msg_id.get(ch_user) == latest_msg_id:
+                                        # No new post, skip to avoid spamming
+                                        continue
+                                    _last_checked_msg_id[ch_user] = latest_msg_id
+
                                 scenario = await pick_random_scenario(session, channel)
                                 if scenario:
                                     delay = random.randint(channel.min_delay_seconds, channel.max_delay_seconds)
-                                    logger.info(f"Monitor triggered for {channel.channel_username}, waiting {delay}s...")
+                                    logger.info(f"New post detected in {ch_user} (msg #{latest_msg_id}). Triggering scenario '{scenario.title}' in {delay}s...")
                                     await log_action(
                                         session,
                                         action_type="channel_monitor",
                                         status="ok",
-                                        target=channel.channel_username,
-                                        target_id=f"scenario #{scenario.id}",
-                                        details={"scenario_title": scenario.title, "delay_seconds": delay},
+                                        target=ch_user,
+                                        target_id=f"msg #{latest_msg_id or 'new'} -> sc #{scenario.id}",
+                                        details={"scenario_title": scenario.title, "delay_seconds": delay, "msg_id": latest_msg_id},
                                         scenario_id=scenario.id
                                     )
                                     await asyncio.sleep(delay)
-                                    await execute_scenario(session, scenario.id, channel.channel_username)
+                                    await execute_scenario(session, scenario.id, ch_user, discussion_message_id=latest_msg_id)
                             except Exception as ex:
-                                logger.warning(f"Error monitoring channel {channel.channel_username}: {ex}")
+                                logger.warning(f"Error monitoring channel {ch_user}: {ex}")
                                 await log_action(
                                     session,
                                     action_type="channel_monitor",
                                     status="error",
-                                    target=channel.channel_username,
+                                    target=ch_user,
                                     details={"error": str(ex)}
                                 )
                     finally:
@@ -81,4 +101,4 @@ async def run_channel_monitor():
         except Exception as e:
             logger.warning(f"Channel monitor status notice: {e}")
 
-        await asyncio.sleep(10)
+        await asyncio.sleep(15)
