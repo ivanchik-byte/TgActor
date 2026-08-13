@@ -1,15 +1,76 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Upload, Loader2, Phone, Folder, RefreshCw, Trash2, User, X, Shield, Plus } from 'lucide-react';
+import {
+  Upload,
+  Loader2,
+  Phone,
+  Folder,
+  RefreshCw,
+  Trash2,
+  User,
+  X,
+  Shield,
+  Plus,
+  Search,
+  Users,
+  AlertCircle,
+  MessageSquare,
+  Copy,
+  Check,
+  Globe,
+  Edit2,
+  ShieldAlert,
+  ArrowLeft,
+  ArrowRight,
+  Send,
+  Lock
+} from 'lucide-react';
+import { useToast } from '../components/ToastContext';
+
+interface Account {
+  id: number;
+  phone: string;
+  is_active: boolean;
+  first_name?: string | null;
+  last_name?: string | null;
+  username?: string | null;
+  custom_name?: string | null;
+  status: string;
+  source_type?: string;
+  position?: number;
+  pool_type?: string;
+  in_commenting_pool: boolean;
+  in_reaction_pool: boolean;
+  proxy_id?: number | null;
+  created_at?: string;
+}
+
+interface ProxyItem {
+  id: number;
+  ip: string;
+  port: number;
+  protocol: string;
+  username?: string | null;
+  password?: string | null;
+  status: string;
+}
+
+type FilterStatus = 'all' | 'active' | 'error' | 'no_proxy';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  
+  const { showToast } = useToast();
+
+  // Tab: TData vs Phone Auth
   const [activeTab, setActiveTab] = useState<'tdata' | 'phone'>('tdata');
-  
+
+  // Search & Filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
+
   // Phone login state
   const [phone, setPhone] = useState('');
   const [apiId, setApiId] = useState('');
@@ -26,48 +87,108 @@ export default function Dashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [tdataPassword, setTdataPassword] = useState('');
 
-  // Profile Details Modal State
-  const [selectedProfileAccount, setSelectedProfileAccount] = useState<any | null>(null);
+  // Renaming inline state
+  const [renamingAccountId, setRenamingAccountId] = useState<number | null>(null);
+  const [renamingName, setRenamingName] = useState('');
 
-  // Confirm delete account ID state
+  // Modals state
+  const [selectedProfileAccount, setSelectedProfileAccount] = useState<Account | null>(null);
   const [confirmDeleteAccountId, setConfirmDeleteAccountId] = useState<number | null>(null);
-
-  // Toast notification state
-  const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
-
-  // Edit proxy state
-  const [editingProxyAccount, setEditingProxyAccount] = useState<any | null>(null);
+  const [editingProxyAccount, setEditingProxyAccount] = useState<Account | null>(null);
   const [selectedProxyId, setSelectedProxyId] = useState<number | null>(null);
 
-  // Proxy management state
+  // Proxy manager state
   const [showAddProxy, setShowAddProxy] = useState(false);
   const [proxyInput, setProxyInput] = useState('');
   const [proxyProtocol, setProxyProtocol] = useState('socks5');
   const [confirmDeleteProxyId, setConfirmDeleteProxyId] = useState<number | null>(null);
 
-  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
+  // Copy helper state
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    showToast('Скопировано в буфер обмена', 'info');
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Fetch accounts (ordered correctly on backend!)
-  const { data: accounts = [], isLoading } = useQuery({
+  // Queries
+  const { data: accounts = [], isLoading: isLoadingAccounts } = useQuery<Account[]>({
     queryKey: ['accounts'],
-    queryFn: async () => (await axios.get('/api/accounts')).data
+    queryFn: async () => (await axios.get('/api/accounts')).data,
   });
 
-  // Fetch proxies
-  const { data: proxies = [] } = useQuery({
+  const { data: proxies = [], isLoading: isLoadingProxies } = useQuery<ProxyItem[]>({
     queryKey: ['proxies'],
-    queryFn: async () => (await axios.get('/api/proxies')).data
+    queryFn: async () => (await axios.get('/api/proxies')).data,
   });
 
-  const [renamingAccountId, setRenamingAccountId] = useState<number | null>(null);
-  const [renamingName, setRenamingName] = useState('');
+  // Dynamic Avatar Gradient Generator
+  const getAvatarGradient = (id: number) => {
+    const gradients = [
+      'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+      'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+      'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      'linear-gradient(135deg, #10b981 0%, #047857 100%)',
+      'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)',
+      'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+      'linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)',
+    ];
+    return gradients[id % gradients.length];
+  };
 
+  const getAccountDisplayName = (acc: Account) => {
+    if (acc.custom_name) return acc.custom_name;
+    if (acc.first_name || acc.last_name) {
+      return [acc.first_name, acc.last_name].filter(Boolean).join(' ');
+    }
+    if (acc.username) return `@${acc.username}`;
+    return acc.phone || `Аккаунт #${acc.id}`;
+  };
+
+  const getInitials = (acc: Account) => {
+    const name = getAccountDisplayName(acc).replace('@', '');
+    return name.slice(0, 2).toUpperCase() || 'TG';
+  };
+
+  // Calculations & Stats
+  const stats = useMemo(() => {
+    const total = accounts.length;
+    const active = accounts.filter((a) => a.status === 'active' || a.is_active).length;
+    const error = accounts.filter((a) => a.status === 'error' || !a.is_active).length;
+    const withProxy = accounts.filter((a) => a.proxy_id).length;
+    const noProxy = total - withProxy;
+    const totalProxies = proxies.length;
+    const activeProxies = proxies.filter((p) => p.status === 'active').length;
+
+    return { total, active, error, withProxy, noProxy, totalProxies, activeProxies };
+  }, [accounts, proxies]);
+
+  // Filtering Accounts
+  const filteredAccounts = useMemo(() => {
+    return accounts.filter((acc) => {
+      // Search query
+      const q = searchQuery.toLowerCase().trim();
+      if (q) {
+        const name = (acc.custom_name || `${acc.first_name || ''} ${acc.last_name || ''}`).toLowerCase();
+        const username = (acc.username || '').toLowerCase();
+        const phoneStr = (acc.phone || '').toLowerCase();
+        const idStr = String(acc.id);
+        const matches = name.includes(q) || username.includes(q) || phoneStr.includes(q) || idStr.includes(q);
+        if (!matches) return false;
+      }
+
+      // Status filter
+      if (statusFilter === 'active') return acc.status === 'active' || acc.is_active;
+      if (statusFilter === 'error') return acc.status === 'error' || !acc.is_active;
+      if (statusFilter === 'no_proxy') return !acc.proxy_id;
+
+      return true;
+    });
+  }, [accounts, searchQuery, statusFilter]);
+
+  // Mutations
   const updateAccountName = useMutation({
     mutationFn: async ({ id, name }: { id: number; name: string }) => {
       await axios.patch(`/api/accounts/${id}/name`, { custom_name: name || null });
@@ -76,11 +197,11 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       setRenamingAccountId(null);
       setRenamingName('');
-      showToast('Имя аккаунта изменено!', 'success');
+      showToast('Имя аккаунта изменено', 'success');
     },
     onError: (err: any) => {
-      showToast(err?.response?.data?.detail || 'Не удалось изменить имя!', 'error');
-    }
+      showToast(err?.response?.data?.detail || 'Не удалось изменить имя', 'error');
+    },
   });
 
   const reorderAccounts = useMutation({
@@ -89,46 +210,46 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-    }
+    },
   });
 
   const handleMoveAccount = (index: number, direction: 'left' | 'right') => {
     const newAccounts = [...accounts];
     const targetIndex = direction === 'left' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= accounts.length) return;
-    
+
     const temp = newAccounts[index];
     newAccounts[index] = newAccounts[targetIndex];
     newAccounts[targetIndex] = temp;
-    
-    const orderedIds = newAccounts.map((a: any) => a.id);
+
+    const orderedIds = newAccounts.map((a) => a.id);
     reorderAccounts.mutate(orderedIds);
   };
 
   const updateProxy = useMutation({
-    mutationFn: async ({ accountId, proxyId }: { accountId: number, proxyId: number | null }) => {
+    mutationFn: async ({ accountId, proxyId }: { accountId: number; proxyId: number | null }) => {
       await axios.patch(`/api/accounts/${accountId}/proxy`, { proxy_id: proxyId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       setEditingProxyAccount(null);
-      showToast('Прокси успешно обновлен!', 'success');
+      showToast('Прокси успешно привязан', 'success');
     },
     onError: (err: any) => {
-      showToast(err?.response?.data?.detail || 'Не удалось обновить прокси!', 'error');
-    }
+      showToast(err?.response?.data?.detail || 'Не удалось обновить прокси', 'error');
+    },
   });
 
   const addProxy = useMutation({
     mutationFn: async () => {
-      // Parse proxy lines: ip:port, ip:port:user:pass, or ip:port:protocol:user:pass
-      const lines = proxyInput.split('\n').map(l => l.trim()).filter(Boolean);
+      const lines = proxyInput.split('\n').map((l) => l.trim()).filter(Boolean);
       for (const line of lines) {
         const parts = line.split(':');
         if (parts.length < 2) continue;
         const ip = parts[0];
         const port = parseInt(parts[1]);
-        let username = null, password = null;
+        let username = null;
+        let password = null;
         let protocol = proxyProtocol;
         if (parts.length === 4) {
           username = parts[2];
@@ -145,9 +266,9 @@ export default function Dashboard() {
       setProxyInput('');
       setShowAddProxy(false);
       queryClient.invalidateQueries({ queryKey: ['proxies'] });
-      showToast('Прокси успешно добавлены!', 'success');
+      showToast('Прокси успешно добавлены', 'success');
     },
-    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка!', 'error')
+    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка добавления прокси', 'error'),
   });
 
   const deleteProxy = useMutation({
@@ -155,8 +276,8 @@ export default function Dashboard() {
     onSuccess: () => {
       setConfirmDeleteProxyId(null);
       queryClient.invalidateQueries({ queryKey: ['proxies'] });
-      showToast('Прокси удалён.', 'info');
-    }
+      showToast('Прокси удалён', 'info');
+    },
   });
 
   const requestPhoneCode = useMutation({
@@ -164,19 +285,20 @@ export default function Dashboard() {
     onSuccess: (res) => {
       setPhoneCodeHash(res.data.phone_code_hash);
       setStep(2);
-      showToast('Код авторизации успешно запрошен!', 'success');
+      showToast('Код авторизации успешно запрошен', 'success');
     },
     onError: (err: any) => {
-      showToast(err?.response?.data?.detail || 'Не удалось отправить код!', 'error');
-    }
+      showToast(err?.response?.data?.detail || 'Не удалось отправить код', 'error');
+    },
   });
 
   const submitCode = useMutation({
-    mutationFn: async () => axios.post('/api/accounts/sign-in', { phone, phone_code_hash: phoneCodeHash, code, password }),
+    mutationFn: async () =>
+      axios.post('/api/accounts/sign-in', { phone, phone_code_hash: phoneCodeHash, code, password }),
     onSuccess: (res) => {
       if (res.data?.need_password) {
         setNeedPassword(true);
-        showToast('Требуется двухфакторный пароль!', 'info');
+        showToast('Требуется двухфакторный пароль (2FA)', 'info');
       } else {
         setStep(1);
         setPhone('');
@@ -186,12 +308,12 @@ export default function Dashboard() {
         setPassword('');
         setNeedPassword(false);
         queryClient.invalidateQueries({ queryKey: ['accounts'] });
-        showToast('Аккаунт успешно авторизован!', 'success');
+        showToast('Аккаунт успешно авторизован', 'success');
       }
     },
     onError: (err: any) => {
-      showToast(err?.response?.data?.detail || 'Неверный код авторизации!', 'error');
-    }
+      showToast(err?.response?.data?.detail || 'Неверный код авторизации', 'error');
+    },
   });
 
   const uploadTdata = useMutation({
@@ -215,25 +337,25 @@ export default function Dashboard() {
       setTdataPassword('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      showToast('Сессии поставлены в очередь импорта!', 'success');
+      showToast('Сессии успешно импортированы', 'success');
     },
     onError: (err: any) => {
-      showToast(err?.response?.data?.detail || 'Не удалось импортировать tdata!', 'error');
-    }
+      showToast(err?.response?.data?.detail || 'Не удалось импортировать TData', 'error');
+    },
   });
 
   const deleteAccount = useMutation({
     mutationFn: async (id: number) => axios.delete(`/api/accounts/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      showToast('Аккаунт успешно удален из базы данных!', 'success');
+      setConfirmDeleteAccountId(null);
+      showToast('Аккаунт удален из базы', 'success');
     },
     onError: (err: any) => {
       showToast(`Не удалось удалить аккаунт: ${err?.response?.data?.detail || err.message}`, 'error');
-    }
+    },
   });
 
-  // Test account connection mutation
   const testConnection = useMutation({
     mutationFn: async (id: number) => (await axios.post(`/api/accounts/${id}/test`)).data,
     onSuccess: (data) => {
@@ -242,12 +364,14 @@ export default function Dashboard() {
       } else {
         showToast(data.message, 'error');
       }
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
     onError: (err: any) => {
       showToast(`Ошибка соединения: ${err?.response?.data?.detail || err.message}`, 'error');
-    }
+    },
   });
 
+  // Drag & Drop & Paste Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setSelectedFiles(Array.from(e.target.files));
@@ -267,12 +391,12 @@ export default function Dashboard() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const zipFiles = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.zip'));
+      const zipFiles = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith('.zip'));
       if (zipFiles.length > 0) {
-        setSelectedFiles(zipFiles);
-        showToast(`Перетащено файлов: ${zipFiles.length} шт.`, 'info');
+        setSelectedFiles((prev) => [...prev, ...zipFiles]);
+        showToast(`Добавлено архивов: ${zipFiles.length} шт.`, 'info');
       } else {
-        showToast('Пожалуйста, перетаскивайте только файлы в формате .zip!', 'error');
+        showToast('Пожалуйста, загружайте файлы в формате .zip', 'error');
       }
     }
   };
@@ -280,618 +404,743 @@ export default function Dashboard() {
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
       if (activeTab !== 'tdata') return;
-      
       const files = e.clipboardData?.files;
       if (files && files.length > 0) {
-        const zipFiles = Array.from(files).filter(f => f.name.endsWith('.zip'));
+        const zipFiles = Array.from(files).filter((f) => f.name.endsWith('.zip'));
         if (zipFiles.length > 0) {
-          setSelectedFiles(zipFiles);
-          showToast(`Файлы вставлены из буфера обмена: ${zipFiles.length} шт.`, 'info');
+          setSelectedFiles((prev) => [...prev, ...zipFiles]);
+          showToast(`Вставлено файлов из буфера: ${zipFiles.length} шт.`, 'info');
         }
       }
     };
 
     window.addEventListener('paste', handleGlobalPaste);
-    return () => {
-      window.removeEventListener('paste', handleGlobalPaste);
-    };
+    return () => window.removeEventListener('paste', handleGlobalPaste);
   }, [activeTab]);
 
-  // Shared Styles
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: 'var(--bg-card)',
-    border: '1px solid var(--border-color)',
-    borderRadius: '16px',
-    padding: '24px',
-    transition: 'all 0.2s',
-  };
-
-  const tabButtonStyle = (isActive: boolean): React.CSSProperties => ({
-    flex: 1,
-    padding: '12px',
-    fontSize: '13px',
-    fontWeight: 600,
-    borderRadius: '8px',
-    border: 'none',
-    cursor: 'pointer',
-    backgroundColor: isActive ? 'var(--accent)' : 'transparent',
-    color: isActive ? '#fff' : 'var(--text-muted)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    transition: 'all 0.15s ease',
-  });
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    backgroundColor: 'var(--bg-main)',
-    border: '1px solid var(--border-color)',
-    borderRadius: '10px',
-    padding: '10px 14px',
-    fontSize: '13px',
-    color: 'var(--text-main)',
-    outline: 'none',
-    transition: 'all 0.15s ease',
-  };
-
-  const btnAccent: React.CSSProperties = {
-    backgroundColor: 'var(--accent)',
-    color: '#fff',
-    padding: '10px 20px',
-    borderRadius: '10px',
-    fontSize: '13px',
-    fontWeight: 600,
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  };
-
-  const btnSecondary: React.CSSProperties = {
-    backgroundColor: 'var(--bg-main)',
-    color: 'var(--text-muted)',
-    padding: '10px 16px',
-    borderRadius: '10px',
-    fontSize: '13px',
-    fontWeight: 500,
-    border: '1px solid var(--border-color)',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  };
-
-  const actionBtnStyle: React.CSSProperties = {
-    flex: 1,
-    backgroundColor: 'transparent',
-    border: '1px solid var(--border-color)',
-    color: 'var(--text-muted)',
-    padding: '6px 0',
-    borderRadius: '6px',
-    fontSize: '11px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-      
-      {/* Custom Toast Notifications */}
-      <div style={{
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        zIndex: 9999,
-      }}>
-        {toasts.map(t => (
-          <div key={t.id} style={{
-            backgroundColor: t.type === 'error' ? '#ef4444' : t.type === 'info' ? '#3b82f6' : '#22c55e',
-            color: '#fff',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            fontSize: '13px',
-            fontWeight: 600,
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}>
-            <span>{t.text}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Profile Details Modal */}
-      {selectedProfileAccount && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          backdropFilter: 'blur(4px)',
-        }}>
-          <div style={{
-            ...cardStyle,
-            width: '400px',
-            backgroundColor: 'var(--bg-card)',
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>Профиль аккаунта</h3>
-              <button 
-                onClick={() => setSelectedProfileAccount(null)} 
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* 1. Header & Quick Analytics */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  backgroundColor: 'var(--accent-soft)',
+                  border: '1px solid var(--accent)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--accent-text)',
+                }}
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--accent-soft)',
-                color: 'var(--accent-text)',
-                fontSize: '24px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid var(--border-color)',
-              }}>
-                {(selectedProfileAccount.custom_name || selectedProfileAccount.first_name || selectedProfileAccount.username || '?')[0]?.toUpperCase()}
+                <Users className="w-5 h-5" />
               </div>
               <div>
-                <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
-                  {selectedProfileAccount.custom_name || selectedProfileAccount.first_name || selectedProfileAccount.username || 'Без имени'}
-                </h4>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {selectedProfileAccount.username ? `@${selectedProfileAccount.username}` : 'Юзернейм отсутствует'}
-                </span>
+                <h1
+                  style={{
+                    fontSize: '24px',
+                    fontWeight: 800,
+                    letterSpacing: '-0.02em',
+                    color: 'var(--text-main)',
+                    margin: 0,
+                  }}
+                >
+                  Управление аккаунтами
+                </h1>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px', margin: 0 }}>
+                  Пул Telegram-сессий, назначение прокси и мониторинг работоспособности
+                </p>
               </div>
             </div>
+          </div>
 
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              backgroundColor: 'var(--bg-main)',
-              padding: '16px',
-              borderRadius: '12px',
-              border: '1px solid var(--border-color)',
-              fontSize: '13px',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>ID аккаунта:</span>
-                <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{selectedProfileAccount.id}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Телефон:</span>
-                <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{selectedProfileAccount.phone || '—'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Источник:</span>
-                <span style={{ color: 'var(--text-main)', fontWeight: 600, textTransform: 'uppercase' }}>{selectedProfileAccount.source_type}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Статус сессии:</span>
-                <span style={{ color: selectedProfileAccount.status === 'active' ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
-                  {selectedProfileAccount.status}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Прокси-сервер:</span>
-                <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>
-                  {selectedProfileAccount.proxy_id ? `ID = ${selectedProfileAccount.proxy_id}` : 'Не привязан'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Создан:</span>
-                <span style={{ color: 'var(--text-muted)' }}>{new Date(selectedProfileAccount.created_at).toLocaleDateString()}</span>
-              </div>
-            </div>
-
-            <button onClick={() => setSelectedProfileAccount(null)} style={btnAccent}>
-              Закрыть
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['accounts'] })}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-main)',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-muted" />
+              <span>Обновить статус</span>
             </button>
           </div>
         </div>
-      )}
 
-      {/* Edit Proxy Modal */}
-      {editingProxyAccount && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          backdropFilter: 'blur(4px)',
-        }}>
-          <div style={{
-            ...cardStyle,
-            width: '380px',
-            backgroundColor: 'var(--bg-card)',
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
-          }}>
+        {/* 4 Metric Bento Cards */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '14px',
+          }}
+        >
+          {/* Total Accounts */}
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '12px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
             <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px' }}>
-                Изменение прокси
-              </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                Выберите прокси-сервер для аккаунта {editingProxyAccount.custom_name || editingProxyAccount.first_name || editingProxyAccount.username || `acc #${editingProxyAccount.id}`}:
-              </p>
-              
-              <select
-                value={selectedProxyId || ""}
-                onChange={(e) => setSelectedProxyId(e.target.value ? Number(e.target.value) : null)}
-                style={inputStyle}
-              >
-                <option value="">Без прокси (Прямое подключение)</option>
-                {proxies.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    ID {p.id}: {p.ip}:{p.port} ({p.protocol})
-                  </option>
-                ))}
-              </select>
+              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                Всего аккаунтов
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
+                {isLoadingAccounts ? '...' : stats.total}
+              </div>
+              <div style={{ fontSize: '12px', color: '#22c55e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
+                <span>{stats.active} активных</span>
+              </div>
             </div>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                color: '#6366f1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setEditingProxyAccount(null)}
-                style={{ ...btnSecondary, flex: 1 }}
-              >
-                Отмена
-              </button>
-              <button
-                onClick={() => updateProxy.mutate({ accountId: editingProxyAccount.id, proxyId: selectedProxyId })}
-                disabled={updateProxy.isPending}
-                style={{ ...btnAccent, flex: 1 }}
-              >
-                {updateProxy.isPending ? 'Сохранение...' : 'Сохранить'}
-              </button>
+          {/* Active Status */}
+          <div
+            onClick={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: `1px solid ${statusFilter === 'active' ? 'var(--accent)' : 'var(--border-color)'}`,
+              borderRadius: '12px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+            onMouseLeave={(e) => {
+              if (statusFilter !== 'active') e.currentTarget.style.borderColor = 'var(--border-color)';
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                Готовы к работе
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
+                {isLoadingAccounts ? '...' : stats.active}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Подключены к Telegram
+              </div>
+            </div>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                color: '#22c55e',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Check className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Errors / Attention */}
+          <div
+            onClick={() => setStatusFilter(statusFilter === 'error' ? 'all' : 'error')}
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: `1px solid ${statusFilter === 'error' ? '#ef4444' : 'var(--border-color)'}`,
+              borderRadius: '12px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#ef4444')}
+            onMouseLeave={(e) => {
+              if (statusFilter !== 'error') e.currentTarget.style.borderColor = 'var(--border-color)';
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                Требуют внимания
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: stats.error > 0 ? '#ef4444' : 'var(--text-main)', marginTop: '4px' }}>
+                {isLoadingAccounts ? '...' : stats.error}
+              </div>
+              <div style={{ fontSize: '12px', color: stats.error > 0 ? '#ef4444' : 'var(--text-muted)', marginTop: '2px' }}>
+                {stats.error > 0 ? 'Ошибка авторизации' : 'Все сессии в норме'}
+              </div>
+            </div>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <AlertCircle className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Proxy Pool */}
+          <div
+            onClick={() => setStatusFilter(statusFilter === 'no_proxy' ? 'all' : 'no_proxy')}
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: `1px solid ${statusFilter === 'no_proxy' ? 'var(--accent)' : 'var(--border-color)'}`,
+              borderRadius: '12px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+            onMouseLeave={(e) => {
+              if (statusFilter !== 'no_proxy') e.currentTarget.style.borderColor = 'var(--border-color)';
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                Прокси защита
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
+                {stats.withProxy} / {stats.total}
+              </div>
+              <div style={{ fontSize: '12px', color: stats.noProxy > 0 ? '#eab308' : 'var(--text-muted)', marginTop: '2px' }}>
+                {stats.noProxy > 0 ? `${stats.noProxy} без прокси` : '100% через прокси'}
+              </div>
+            </div>
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                color: '#3b82f6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Shield className="w-5 h-5" />
             </div>
           </div>
         </div>
-      )}
-
-      {/* Custom Confirmation Modal */}
-      {confirmDeleteAccountId !== null && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-          backdropFilter: 'blur(4px)',
-        }}>
-          <div style={{
-            ...cardStyle,
-            width: '380px',
-            backgroundColor: 'var(--bg-card)',
-            padding: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)',
-          }}>
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px' }}>
-                Подтверждение удаления
-              </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                Вы действительно хотите удалить этот аккаунт из базы данных? Это действие необратимо и сотрет все привязанные сессии.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => {
-                  deleteAccount.mutate(confirmDeleteAccountId);
-                  setConfirmDeleteAccountId(null);
-                }}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#ef4444',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '10px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'opacity 0.15s',
-                }}
-              >
-                Удалить
-              </button>
-              <button
-                onClick={() => setConfirmDeleteAccountId(null)}
-                style={{
-                  flex: 1,
-                  backgroundColor: 'var(--bg-main)',
-                  color: 'var(--text-muted)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  padding: '10px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Отмена
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Top Banner */}
-      <div>
-        <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '4px', color: 'var(--text-main)' }}>
-          Подключение аккаунтов
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5 }}>
-          Каждый аккаунт привязывается к выделенному прокси. Доступен импорт tdata сессий в zip-архиве либо прямая авторизация по номеру телефона.
-        </p>
       </div>
 
-      {/* Tabs & Form wrapper */}
-      <div style={{ ...cardStyle, maxWidth: '640px' }}>
-        {/* Tab Header Selector */}
-        <div style={{
-          display: 'flex',
-          backgroundColor: 'var(--bg-main)',
-          padding: '4px',
-          borderRadius: '10px',
+      {/* 2. Import / Add Accounts Hub */}
+      <div
+        style={{
+          backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
-          marginBottom: '20px',
-        }}>
-          <button
-            onClick={() => setActiveTab('tdata')}
-            style={tabButtonStyle(activeTab === 'tdata')}
+          borderRadius: '14px',
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 2px 0' }}>
+              Импорт и подключение аккаунтов
+            </h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+              Добавляйте сессии через tdata ZIP-архивы или авторизуйтесь по официальному SMS-коду Telegram
+            </p>
+          </div>
+
+          {/* Tab Selector */}
+          <div
+            style={{
+              display: 'flex',
+              backgroundColor: 'var(--bg-main)',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)',
+            }}
           >
-            <Folder className="w-4 h-4" />
-            TData Архив (.zip)
-          </button>
-          <button
-            onClick={() => setActiveTab('phone')}
-            style={tabButtonStyle(activeTab === 'phone')}
-          >
-            <Phone className="w-4 h-4" />
-            Авторизация по SMS
-          </button>
+            <button
+              onClick={() => setActiveTab('tdata')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: activeTab === 'tdata' ? 600 : 500,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: activeTab === 'tdata' ? 'var(--accent)' : 'transparent',
+                color: activeTab === 'tdata' ? '#ffffff' : 'var(--text-muted)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Folder className="w-3.5 h-3.5" />
+              <span>TData Архив (.zip)</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('phone')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: activeTab === 'phone' ? 600 : 500,
+                border: 'none',
+                cursor: 'pointer',
+                backgroundColor: activeTab === 'phone' ? 'var(--accent)' : 'transparent',
+                color: activeTab === 'phone' ? '#ffffff' : 'var(--text-muted)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>SMS Авторизация</span>
+            </button>
+          </div>
         </div>
 
-        {/* Tab 1: TData Zip Uploader */}
+        {/* Tab 1: TData Upload Area */}
         {activeTab === 'tdata' && (
-          <div 
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '14px',
-              border: isDragging ? '2px dashed var(--accent)' : '2px dashed var(--border-color)',
-              borderRadius: '12px',
-              padding: '20px',
-              backgroundColor: isDragging ? 'var(--accent-soft)' : 'transparent',
-              transition: 'all 0.2s ease',
-              textAlign: 'center',
-              cursor: 'pointer'
-            }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload style={{ width: '40px', height: '40px', color: isDragging ? 'var(--accent)' : 'var(--text-muted)', margin: '0 auto' }} />
-            <div>
-              <p style={{ color: 'var(--text-main)', fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>
-                Перетащите сюда .zip файлы или нажмите для выбора
-              </p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
-                Также можно скопировать .zip в проводнике (Ctrl+C) и просто вставить здесь (Ctrl+V)
-              </p>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".zip"
-              multiple
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
-            
-            {/* Show Selected Files list if any */}
-            {selectedFiles.length > 0 && (
-              <div 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                border: isDragging ? '2px dashed var(--accent)' : '2px dashed var(--border-color)',
+                borderRadius: '12px',
+                padding: '24px 20px',
+                backgroundColor: isDragging ? 'var(--accent-soft)' : 'var(--bg-main)',
+                transition: 'all 0.2s ease',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              <div
                 style={{
-                  textAlign: 'left',
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  backgroundColor: 'var(--accent-soft)',
+                  color: 'var(--accent-text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Upload className="w-5 h-5" />
+              </div>
+
+              <div>
+                <p style={{ color: 'var(--text-main)', fontSize: '14px', fontWeight: 600, margin: '0 0 2px 0' }}>
+                  Перетащите сюда .zip архивы или нажмите для выбора
+                </p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
+                  Поддерживается множественный выбор и вставка файлов прямо из буфера (Ctrl+V)
+                </p>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".zip"
+                multiple
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+            </div>
+
+            {/* Selected files list & 2FA cloud password */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '12px',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  style={{
+                    width: '14px',
+                    height: '14px',
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="Пароль 2FA облачной защиты (если установлен)..."
+                  value={tdataPassword}
+                  onChange={(e) => setTdataPassword(e.target.value)}
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'var(--bg-main)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '8px 12px 8px 34px',
+                    fontSize: '13px',
+                    color: 'var(--text-main)',
+                    outline: 'none',
+                  }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                {selectedFiles.length > 0 && (
+                  <button
+                    onClick={() => setSelectedFiles([])}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      padding: '6px 10px',
+                    }}
+                  >
+                    Очистить ({selectedFiles.length})
+                  </button>
+                )}
+
+                <button
+                  disabled={selectedFiles.length === 0 || uploadTdata.isPending}
+                  onClick={() => uploadTdata.mutate(selectedFiles)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--accent)',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: selectedFiles.length === 0 || uploadTdata.isPending ? 'not-allowed' : 'pointer',
+                    opacity: selectedFiles.length === 0 || uploadTdata.isPending ? 0.6 : 1,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {uploadTdata.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  <span>{uploadTdata.isPending ? 'Импортируем...' : `Загрузить ${selectedFiles.length ? `(${selectedFiles.length})` : ''}`}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Selected files pills */}
+            {selectedFiles.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
                   backgroundColor: 'var(--bg-main)',
-                  padding: '10px 14px',
+                  padding: '10px',
                   borderRadius: '8px',
                   border: '1px solid var(--border-color)',
-                  marginTop: '10px'
                 }}
-                onClick={(e) => e.stopPropagation()} // Prevent file picker
               >
-                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
-                  Выбранные файлы:
-                </div>
                 {selectedFiles.map((file, i) => (
-                  <div key={i} style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span
+                    key={i}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      fontSize: '11px',
+                      color: 'var(--text-main)',
+                    }}
+                  >
+                    <Folder className="w-3 h-3 text-muted" />
                     <span>{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
-                    <button 
-                      onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))}
+                    <button
+                      onClick={() => setSelectedFiles((prev) => prev.filter((_, idx) => idx !== i))}
                       style={{
                         background: 'none',
                         border: 'none',
                         color: '#ef4444',
                         cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: '11px'
+                        padding: 0,
+                        fontSize: '12px',
+                        lineHeight: 1,
                       }}
                     >
-                      Удалить
+                      &times;
                     </button>
-                  </div>
+                  </span>
                 ))}
               </div>
             )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', maxWidth: '280px', margin: '8px auto 14px' }} onClick={(e) => e.stopPropagation()}>
-              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Пароль 2FA (если установлен)
-              </label>
-              <input
-                type="password"
-                placeholder="Введите облачный пароль..."
-                value={tdataPassword}
-                onChange={e => setTdataPassword(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px' }} onClick={(e) => e.stopPropagation()}>
-              <button
-                style={{
-                  ...btnAccent,
-                  opacity: selectedFiles.length === 0 || uploadTdata.isPending ? 0.5 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-                disabled={selectedFiles.length === 0 || uploadTdata.isPending}
-                onClick={() => uploadTdata.mutate(selectedFiles)}
-              >
-                {uploadTdata.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4" />
-                )}
-                {uploadTdata.isPending ? 'Загрузка...' : 'Импортировать'}
-              </button>
-            </div>
           </div>
         )}
 
-        {/* Tab 2: SMS Authentication */}
+        {/* Tab 2: SMS Phone Auth */}
         {activeTab === 'phone' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: '1.5' }}>
-              Введите номер телефона в международном формате и API-данные от my.telegram.org. Мы запросим официальный код входа.
-            </p>
-
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '560px' }}>
             {step === 1 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input
-                  type="text"
-                  placeholder="Номер телефона (+7999...)"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  style={inputStyle}
-                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
-                />
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input
-                    type="text"
-                    placeholder="api_id"
-                    value={apiId}
-                    onChange={e => setApiId(e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }}
-                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
-                  />
-                  <input
-                    type="text"
-                    placeholder="api_hash"
-                    value={apiHash}
-                    onChange={e => setApiHash(e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }}
-                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
-                  />
-                </div>
                 <div>
-                  <button
-                    onClick={() => requestPhoneCode.mutate()}
-                    disabled={requestPhoneCode.isPending || !phone}
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    Номер телефона
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="+79991234567"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     style={{
-                      ...btnAccent,
-                      opacity: requestPhoneCode.isPending || !phone ? 0.5 : 1,
+                      width: '100%',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      color: 'var(--text-main)',
+                      outline: 'none',
                       marginTop: '4px',
                     }}
-                  >
-                    {requestPhoneCode.isPending ? 'Запрос отправлен...' : 'Отправить запрос'}
-                  </button>
+                    onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                  />
                 </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      API ID (с my.telegram.org)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="1234567"
+                      value={apiId}
+                      onChange={(e) => setApiId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        color: 'var(--text-main)',
+                        outline: 'none',
+                        marginTop: '4px',
+                      }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      API Hash
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="abcdef1234567890..."
+                      value={apiHash}
+                      onChange={(e) => setApiHash(e.target.value)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        color: 'var(--text-main)',
+                        outline: 'none',
+                        marginTop: '4px',
+                      }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => requestPhoneCode.mutate()}
+                  disabled={requestPhoneCode.isPending || !phone}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '9px 16px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--accent)',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: requestPhoneCode.isPending || !phone ? 'not-allowed' : 'pointer',
+                    opacity: requestPhoneCode.isPending || !phone ? 0.6 : 1,
+                    marginTop: '4px',
+                  }}
+                >
+                  {requestPhoneCode.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  <span>{requestPhoneCode.isPending ? 'Отправляем запрос...' : 'Запросить код в Telegram'}</span>
+                </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input
-                  type="text"
-                  placeholder="Введите код авторизации"
-                  value={code}
-                  onChange={e => setCode(e.target.value)}
-                  style={inputStyle}
-                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
-                />
-                {needPassword && (
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    Код подтверждения из Telegram
+                  </label>
                   <input
-                    type="password"
-                    placeholder="Введите 2FA пароль"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    style={inputStyle}
-                    onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                    onBlur={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                    type="text"
+                    placeholder="12345"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    style={{
+                      width: '100%',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      color: 'var(--text-main)',
+                      outline: 'none',
+                      marginTop: '4px',
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
                   />
+                </div>
+
+                {needPassword && (
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      Пароль двухфакторной аутентификации (2FA)
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="Введите 2FA пароль..."
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        fontSize: '13px',
+                        color: 'var(--text-main)',
+                        outline: 'none',
+                        marginTop: '4px',
+                      }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+                    />
+                  </div>
                 )}
-                <div style={{ display: 'flex', gap: '8px' }}>
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button
                     onClick={() => submitCode.mutate()}
                     disabled={submitCode.isPending || !code || (needPassword && !password)}
                     style={{
-                      ...btnAccent,
-                      opacity: submitCode.isPending || !code || (needPassword && !password) ? 0.5 : 1,
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '9px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--accent)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: submitCode.isPending || !code ? 'not-allowed' : 'pointer',
+                      opacity: submitCode.isPending || !code ? 0.6 : 1,
                     }}
                   >
-                    {submitCode.isPending ? 'Вход...' : 'Подтвердить код'}
+                    {submitCode.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    <span>{submitCode.isPending ? 'Авторизуем...' : 'Войти в аккаунт'}</span>
                   </button>
+
                   <button
-                    style={btnSecondary}
-                    onClick={() => { setStep(1); setCode(''); setNeedPassword(false); setPassword(''); }}
+                    onClick={() => {
+                      setStep(1);
+                      setCode('');
+                      setNeedPassword(false);
+                      setPassword('');
+                    }}
+                    style={{
+                      padding: '9px 14px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-muted)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
                   >
                     Назад
                   </button>
@@ -902,339 +1151,551 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Grid of Profile Cards */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)' }}>
-            Активные аккаунты ({accounts.length})
-          </h3>
-          <button
-            style={{ ...btnSecondary, display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '12px' }}
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['accounts'] })}
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Обновить статус
-          </button>
+      {/* 3. Search & Filter Bar */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '10px 16px',
+        }}
+      >
+        {/* Search */}
+        <div style={{ position: 'relative', minWidth: '260px', flex: '1 1 260px', maxWidth: '380px' }}>
+          <Search
+            style={{
+              width: '16px',
+              height: '16px',
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-muted)',
+              pointerEvents: 'none',
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Поиск по имени, @username, телефону, ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              padding: '8px 12px 8px 36px',
+              fontSize: '13px',
+              color: 'var(--text-main)',
+              outline: 'none',
+              transition: 'border-color 0.15s ease',
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                fontSize: '14px',
+                padding: '2px',
+              }}
+            >
+              &times;
+            </button>
+          )}
         </div>
 
-        {accounts.length === 0 && !isLoading ? (
-          <div style={{
-            ...cardStyle,
-            textAlign: 'center',
-            padding: '48px 24px',
-            color: 'var(--text-muted)',
-            borderStyle: 'dashed'
-          }}>
-            <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p style={{ fontSize: '14px', fontWeight: 500 }}>Список подключенных аккаунтов пуст</p>
-            <p style={{ fontSize: '12px', marginTop: '4px' }}>Воспользуйтесь формой выше, чтобы добавить аккаунт.</p>
-          </div>
-        ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: '16px'
-          }}>
-            {accounts.map((acc: any, index: number) => {
-              const name = acc.custom_name || acc.first_name || acc.username || 'Без имени';
-              const initial = name[0]?.toUpperCase() || '?';
-              const statusColor = acc.status === 'active' ? '#22c55e' : '#ef4444';
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+          {[
+            { id: 'all', label: 'Все', count: stats.total },
+            { id: 'active', label: 'Активные', count: stats.active },
+            { id: 'error', label: 'С ошибкой', count: stats.error },
+            { id: 'no_proxy', label: 'Без прокси', count: stats.noProxy },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id as FilterStatus)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '7px',
+                  fontSize: '12px',
+                  fontWeight: isActive ? 600 : 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: isActive ? 'var(--accent)' : 'transparent',
+                  color: isActive ? '#ffffff' : 'var(--text-muted)',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
+                    e.currentTarget.style.color = 'var(--text-main)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-muted)';
+                  }
+                }}
+              >
+                <span>{tab.label}</span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : 'var(--bg-main)',
+                    color: isActive ? '#ffffff' : 'var(--text-muted)',
+                  }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-              return (
-                <div key={acc.id} style={{
-                  ...cardStyle,
+      {/* 4. Accounts Cards Grid */}
+      <div>
+        {isLoadingAccounts ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <div
+                key={n}
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '14px',
                   padding: '20px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '16px',
-                  justifyContent: 'space-between',
-                  border: '1px solid var(--border-color)',
-                  backgroundImage: 'linear-gradient(to bottom, rgba(255,255,255,0.01), rgba(255,255,255,0))',
-                }}>
-                  {/* Card Header: Avatar & Main info */}
-                  <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                    <div style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '12px',
-                      backgroundColor: 'var(--accent-soft)',
-                      color: 'var(--accent-text)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 700,
-                      fontSize: '16px',
-                      border: '1px solid var(--border-color)',
-                      position: 'relative'
-                    }}>
-                      {initial}
-                      <span style={{
-                        position: 'absolute',
-                        bottom: '-3px',
-                        right: '-3px',
-                        fontSize: '9px',
-                        fontWeight: 600,
-                        backgroundColor: 'var(--bg-main)',
-                        padding: '1px 4px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border-color)',
-                        color: 'var(--text-muted)'
-                      }}>
-                        {acc.source_type}
-                      </span>
-                    </div>
+                  gap: '14px',
+                  opacity: 0.6,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '46px', height: '46px', borderRadius: '12px', backgroundColor: 'var(--bg-main)' }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ height: '14px', width: '60%', backgroundColor: 'var(--bg-main)', borderRadius: '4px' }} />
+                    <div style={{ height: '10px', width: '40%', backgroundColor: 'var(--bg-main)', borderRadius: '4px' }} />
+                  </div>
+                </div>
+                <div style={{ height: '36px', backgroundColor: 'var(--bg-main)', borderRadius: '8px' }} />
+              </div>
+            ))}
+          </div>
+        ) : filteredAccounts.length === 0 ? (
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '14px',
+              padding: '50px 20px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
+            }}
+          >
+            <User className="w-10 h-10 text-muted opacity-40" />
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+              {searchQuery ? 'Ничего не найдено' : 'Аккаунты отсутствуют'}
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, maxWidth: '400px' }}>
+              {searchQuery
+                ? `По запросу «${searchQuery}» совпадений нет. Сбросьте поиск.`
+                : 'Воспользуйтесь блоком выше для импорта TData или SMS авторизации.'}
+            </p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {filteredAccounts.map((acc, index) => {
+              const displayName = getAccountDisplayName(acc);
+              const initials = getInitials(acc);
+              const isError = acc.status === 'error' || !acc.is_active;
 
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {renamingAccountId === acc.id ? (
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          <input
-                            type="text"
-                            value={renamingName}
-                            onChange={e => setRenamingName(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                updateAccountName.mutate({ id: acc.id, name: renamingName });
-                              } else if (e.key === 'Escape') {
-                                setRenamingAccountId(null);
-                              }
-                            }}
-                            autoFocus
-                            style={{
-                              width: '100%',
-                              backgroundColor: 'var(--bg-main)',
-                              border: '1px solid var(--border-color)',
-                              borderRadius: '6px',
-                              padding: '2px 6px',
-                              fontSize: '12px',
-                              color: 'var(--text-main)',
-                              outline: 'none'
-                            }}
-                          />
-                          <button
-                            onClick={() => updateAccountName.mutate({ id: acc.id, name: renamingName })}
-                            style={{
-                              fontSize: '11px', color: '#10b981', background: 'none', border: 'none', cursor: 'pointer', padding: '2px'
-                            }}
-                            title="Сохранить"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={() => setRenamingAccountId(null)}
-                            style={{
-                              fontSize: '11px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '2px'
-                            }}
-                            title="Отмена"
-                          >
-                            ✗
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                          <h4 
-                            onClick={() => {
-                              setRenamingAccountId(acc.id);
-                              setRenamingName(acc.custom_name || name);
-                            }}
-                            title="Кликните, чтобы изменить отображаемое имя"
-                            style={{
-                              fontSize: '14px',
-                              fontWeight: 700,
-                              color: 'var(--text-main)',
-                              margin: 0,
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              cursor: 'pointer',
-                              borderBottom: '1px dashed var(--text-muted)'
-                            }}
-                          >
-                            {name}
-                          </h4>
-                        </div>
-                      )}
-                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-                        {acc.phone || '—'}
-                      </p>
-                    </div>
-
-                    {/* Status & Reordering Actions */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                      <div style={{
-                        backgroundColor: `${statusColor}15`,
-                        border: `1px solid ${statusColor}30`,
-                        color: statusColor,
-                        padding: '3px 8px',
-                        borderRadius: '20px',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        textTransform: 'uppercase'
-                      }}>
-                        {acc.status}
+              return (
+                <div
+                  key={acc.id}
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '14px',
+                    padding: '18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '14px',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                    position: 'relative',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  {/* Card Header: Avatar & Info */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                      {/* Avatar */}
+                      <div
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          background: getAvatarGradient(acc.id),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          fontSize: '15px',
+                          flexShrink: 0,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                          position: 'relative',
+                        }}
+                      >
+                        {initials}
+                        <span
+                          style={{
+                            position: 'absolute',
+                            bottom: '-3px',
+                            right: '-3px',
+                            fontSize: '8px',
+                            fontWeight: 700,
+                            backgroundColor: 'var(--bg-main)',
+                            padding: '1px 3px',
+                            borderRadius: '3px',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {acc.source_type || 'tdata'}
+                        </span>
                       </div>
-                      
-                      <div style={{ display: 'flex', gap: '4px' }}>
+
+                      {/* Name & Subtitle */}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        {renamingAccountId === acc.id ? (
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <input
+                              type="text"
+                              value={renamingName}
+                              onChange={(e) => setRenamingName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') updateAccountName.mutate({ id: acc.id, name: renamingName });
+                                else if (e.key === 'Escape') setRenamingAccountId(null);
+                              }}
+                              autoFocus
+                              style={{
+                                width: '100%',
+                                backgroundColor: 'var(--bg-main)',
+                                border: '1px solid var(--accent)',
+                                borderRadius: '6px',
+                                padding: '2px 6px',
+                                fontSize: '12px',
+                                color: 'var(--text-main)',
+                                outline: 'none',
+                              }}
+                            />
+                            <button
+                              onClick={() => updateAccountName.mutate({ id: acc.id, name: renamingName })}
+                              style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: '2px' }}
+                              title="Сохранить"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setRenamingAccountId(null)}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                              title="Отмена"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span
+                              onClick={() => {
+                                setRenamingAccountId(acc.id);
+                                setRenamingName(acc.custom_name || displayName);
+                              }}
+                              title="Кликните для переименования"
+                              style={{
+                                fontSize: '14px',
+                                fontWeight: 700,
+                                color: 'var(--text-main)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {displayName}
+                            </span>
+                            <Edit2
+                              onClick={() => {
+                                setRenamingAccountId(acc.id);
+                                setRenamingName(acc.custom_name || displayName);
+                              }}
+                              className="w-3 h-3 text-muted"
+                              style={{ cursor: 'pointer', opacity: 0.6 }}
+                            />
+                          </div>
+                        )}
+
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {acc.username && <span>@{acc.username}</span>}
+                          {acc.username && acc.phone && <span>•</span>}
+                          {acc.phone && <span>{acc.phone}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status Badge & Move Arrows */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          backgroundColor: isError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                          color: isError ? '#ef4444' : '#22c55e',
+                          border: `1px solid ${isError ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)'}`,
+                        }}
+                      >
+                        <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: isError ? '#ef4444' : '#22c55e' }} />
+                        {acc.status || (acc.is_active ? 'active' : 'error')}
+                      </span>
+
+                      {/* Reorder Buttons */}
+                      <div style={{ display: 'flex', gap: '2px' }}>
                         <button
                           onClick={() => handleMoveAccount(index, 'left')}
                           disabled={index === 0}
                           style={{
-                            background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px',
+                            background: 'var(--bg-main)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
                             color: index === 0 ? 'var(--border-color)' : 'var(--text-muted)',
-                            padding: '2px 4px', fontSize: '10px', cursor: index === 0 ? 'not-allowed' : 'pointer',
-                            display: 'flex', alignItems: 'center'
+                            padding: '2px 4px',
+                            cursor: index === 0 ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
-                          title="Сдвинуть влево"
+                          title="Переместить левее"
                         >
-                          ←
+                          <ArrowLeft className="w-2.5 h-2.5" />
                         </button>
                         <button
                           onClick={() => handleMoveAccount(index, 'right')}
                           disabled={index === accounts.length - 1}
                           style={{
-                            background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px',
+                            background: 'var(--bg-main)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
                             color: index === accounts.length - 1 ? 'var(--border-color)' : 'var(--text-muted)',
-                            padding: '2px 4px', fontSize: '10px', cursor: index === accounts.length - 1 ? 'not-allowed' : 'pointer',
-                            display: 'flex', alignItems: 'center'
+                            padding: '2px 4px',
+                            cursor: index === accounts.length - 1 ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
-                          title="Сдвинуть вправо"
+                          title="Переместить правее"
                         >
-                          →
+                          <ArrowRight className="w-2.5 h-2.5" />
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card Body: Info pills */}
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    backgroundColor: 'var(--bg-main)',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    fontSize: '12px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Прокси-сервер</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>
-                          {acc.proxy_id ? `ID = ${acc.proxy_id}` : 'Не привязан'}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setEditingProxyAccount(acc);
-                            setSelectedProxyId(acc.proxy_id);
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--accent)',
-                            cursor: 'pointer',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            padding: '2px 4px',
-                            textDecoration: 'underline'
-                          }}
-                        >
-                          Изменить
-                        </button>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Добавлен</span>
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        {new Date(acc.created_at).toLocaleDateString()}
+                  {/* Card Body: Proxy Info */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--bg-main)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Globe className="w-3.5 h-3.5 text-muted" />
+                      <span style={{ color: 'var(--text-muted)' }}>Прокси:</span>
+                      <span style={{ fontWeight: 600, color: acc.proxy_id ? 'var(--text-main)' : '#eab308' }}>
+                        {acc.proxy_id ? `ID #${acc.proxy_id}` : 'Не привязан'}
                       </span>
                     </div>
+
+                    <button
+                      onClick={() => {
+                        setEditingProxyAccount(acc);
+                        setSelectedProxyId(acc.proxy_id || null);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--accent-text)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                      }}
+                    >
+                      {acc.proxy_id ? 'Сменить' : 'Привязать'}
+                    </button>
                   </div>
 
-                  {/* Card Footer: Quick Actions */}
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', borderTop: '1px dashed var(--border-color)', paddingTop: '12px' }}>
+                  {/* Card Actions Footer */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      borderTop: '1px solid var(--border-color)',
+                      paddingTop: '12px',
+                    }}
+                  >
                     <button
                       onClick={() => setSelectedProfileAccount(acc)}
-                      style={actionBtnStyle}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.color = 'var(--text-main)';
-                        e.currentTarget.style.borderColor = 'var(--accent)';
+                      style={{
+                        flex: 1,
+                        padding: '6px 0',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-main)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
                       }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.color = 'var(--text-muted)';
-                        e.currentTarget.style.borderColor = 'var(--border-color)';
-                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
                     >
                       Профиль
                     </button>
+
                     <button
                       onClick={() => {
                         localStorage.setItem('selected_inbox_account_id', String(acc.id));
                         navigate('/inbox');
                       }}
-                      style={actionBtnStyle}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.color = 'var(--text-main)';
-                        e.currentTarget.style.borderColor = 'var(--accent)';
+                      style={{
+                        flex: 1,
+                        padding: '6px 0',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-main)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
                       }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.color = 'var(--text-muted)';
-                        e.currentTarget.style.borderColor = 'var(--border-color)';
-                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
                     >
-                      Чаты
+                      <MessageSquare className="w-3 h-3 text-muted" />
+                      <span>Чаты</span>
                     </button>
+
                     <button
                       onClick={() => testConnection.mutate(acc.id)}
                       disabled={testConnection.isPending && testConnection.variables === acc.id}
-                      style={actionBtnStyle}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.color = 'var(--text-main)';
-                        e.currentTarget.style.borderColor = 'var(--accent)';
+                      style={{
+                        flex: 1,
+                        padding: '6px 0',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--bg-main)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-main)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        transition: 'all 0.15s ease',
                       }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.color = 'var(--text-muted)';
-                        e.currentTarget.style.borderColor = 'var(--border-color)';
-                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
                     >
                       {testConnection.isPending && testConnection.variables === acc.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-3 h-3 animate-spin text-muted" />
                       ) : (
-                        'Тест'
+                        <span>Тест</span>
                       )}
                     </button>
 
                     <button
                       onClick={() => setConfirmDeleteAccountId(acc.id)}
-                      disabled={deleteAccount.isPending}
                       style={{
-                        backgroundColor: 'rgba(239, 68, 68, 0.06)',
-                        border: '1px solid rgba(239, 68, 68, 0.15)',
-                        color: '#ef4444',
-                        padding: '5px 8px',
+                        padding: '6px 8px',
                         borderRadius: '6px',
-                        cursor: deleteAccount.isPending ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.15s',
+                        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        opacity: deleteAccount.isPending ? 0.6 : 1
                       }}
-                      onMouseEnter={e => {
-                        if (!deleteAccount.isPending) {
-                          e.currentTarget.style.backgroundColor = '#ef4444';
-                          e.currentTarget.style.color = '#fff';
-                        }
-                      }}
-                      onMouseLeave={e => {
-                        if (!deleteAccount.isPending) {
-                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.06)';
-                          e.currentTarget.style.color = '#ef4444';
-                        }
-                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)')}
+                      title="Удалить аккаунт"
                     >
-                      {deleteAccount.isPending && deleteAccount.variables === acc.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
-                      )}
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -1244,184 +1705,626 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ===== PROXY MANAGEMENT SECTION ===== */}
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      {/* 5. Proxy Management Module */}
+      <div
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '14px',
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Shield className="w-5 h-5" style={{ color: 'var(--accent-text)' }} />
-            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>Управление прокси</h2>
-            <span style={{
-              fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
-              backgroundColor: 'var(--accent-soft)', color: 'var(--accent-text)'
-            }}>{proxies.length}</span>
+            <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+              Управление прокси-серверами
+            </h2>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: '10px',
+                backgroundColor: 'var(--accent-soft)',
+                color: 'var(--accent-text)',
+              }}
+            >
+              {proxies.length}
+            </span>
           </div>
+
           <button
             onClick={() => setShowAddProxy(!showAddProxy)}
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '8px',
               backgroundColor: showAddProxy ? 'var(--bg-main)' : 'var(--accent)',
-              color: showAddProxy ? 'var(--text-muted)' : '#fff',
               border: showAddProxy ? '1px solid var(--border-color)' : 'none',
-              padding: '8px 14px', borderRadius: '8px', fontSize: '12px',
-              fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-              transition: 'all 0.15s'
+              color: showAddProxy ? 'var(--text-muted)' : '#ffffff',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
             }}
           >
             {showAddProxy ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-            {showAddProxy ? 'Скрыть' : 'Добавить прокси'}
+            <span>{showAddProxy ? 'Скрыть форму' : 'Добавить прокси'}</span>
           </button>
         </div>
 
         {/* Add Proxy Form */}
         {showAddProxy && (
-          <div style={{
-            backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
-            borderRadius: '12px', padding: '16px', marginBottom: '16px',
-            display: 'flex', flexDirection: 'column', gap: '10px'
-          }}>
+          <div
+            style={{
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '12px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
             <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                Прокси (по одному на строку)
+              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '6px', display: 'block' }}>
+                Список прокси (по одному на строку)
               </label>
               <textarea
-                placeholder={"ip:port\nip:port:user:pass\n192.168.1.1:1080:admin:secret"}
+                placeholder={'ip:port\nip:port:user:pass\n192.168.1.1:1080:admin:secret'}
                 value={proxyInput}
-                onChange={e => setProxyInput(e.target.value)}
-                rows={4}
+                onChange={(e) => setProxyInput(e.target.value)}
+                rows={3}
                 style={{
-                  ...inputStyle,
-                  resize: 'vertical',
+                  width: '100%',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  fontSize: '13px',
                   fontFamily: 'monospace',
-                  lineHeight: '1.6'
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  resize: 'vertical',
                 }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
-                  Протокол
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 180px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                  Протокол по умолчанию
                 </label>
                 <select
                   value={proxyProtocol}
-                  onChange={e => setProxyProtocol(e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer', appearance: 'none' as const }}
+                  onChange={(e) => setProxyProtocol(e.target.value)}
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '13px',
+                    color: 'var(--text-main)',
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
                 >
                   <option value="socks5">SOCKS5</option>
                   <option value="http">HTTP</option>
                 </select>
               </div>
+
               <button
                 onClick={() => addProxy.mutate()}
                 disabled={!proxyInput.trim() || addProxy.isPending}
                 style={{
-                  ...btnAccent,
-                  opacity: (!proxyInput.trim() || addProxy.isPending) ? 0.5 : 1,
-                  display: 'flex', alignItems: 'center', gap: '6px'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--accent)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: !proxyInput.trim() || addProxy.isPending ? 'not-allowed' : 'pointer',
+                  opacity: !proxyInput.trim() || addProxy.isPending ? 0.6 : 1,
                 }}
               >
                 {addProxy.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                {addProxy.isPending ? 'Добавляем...' : 'Добавить'}
+                <span>{addProxy.isPending ? 'Добавляем...' : 'Сохранить прокси'}</span>
               </button>
             </div>
           </div>
         )}
 
-        {/* Delete Proxy Confirm */}
-        {confirmDeleteProxyId && (
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
-              borderRadius: '16px', padding: '24px', maxWidth: '400px', width: '90%',
-              display: 'flex', flexDirection: 'column', gap: '16px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
-            }}>
-              <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>
-                Удалить этот прокси?
-              </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => deleteProxy.mutate(confirmDeleteProxyId)}
-                  style={{
-                    flex: 1, backgroundColor: '#ef4444', color: '#fff', border: 'none',
-                    borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
-                  }}
-                >Удалить</button>
-                <button
-                  onClick={() => setConfirmDeleteProxyId(null)}
-                  style={{
-                    backgroundColor: 'var(--bg-main)', color: 'var(--text-muted)',
-                    border: '1px solid var(--border-color)', borderRadius: '10px',
-                    padding: '10px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
-                  }}
-                >Отмена</button>
-              </div>
-            </div>
+        {/* Proxies List */}
+        {isLoadingProxies ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <Loader2 className="w-5 h-5 animate-spin mx-auto" />
           </div>
-        )}
-
-        {/* Proxy List */}
-        {proxies.length === 0 ? (
-          <div style={{
-            textAlign: 'center', padding: '24px', color: 'var(--text-muted)', fontSize: '13px'
-          }}>
-            <Shield className="w-8 h-8" style={{ color: 'var(--border-color)', margin: '0 auto 8px' }} />
-            <p style={{ fontWeight: 600 }}>Прокси не добавлены</p>
-            <p style={{ fontSize: '12px', marginTop: '4px' }}>Нажмите «Добавить прокси» для импорта</p>
+        ) : proxies.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-muted)' }}>
+            <ShieldAlert className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            <p style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 2px 0' }}>Прокси не добавлены</p>
+            <p style={{ fontSize: '12px', margin: 0 }}>Нажмите «Добавить прокси» для импорта ваших серверов</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {proxies.map((p: any) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+            {proxies.map((p) => (
               <div
                 key={p.id}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px', borderRadius: '8px',
-                  backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
-                  transition: 'all 0.15s'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{
-                    width: '8px', height: '8px', borderRadius: '50%',
-                    backgroundColor: p.status === 'active' ? '#10b981' : '#ef4444'
-                  }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)' }}>
-                    {p.ip}:{p.port}
-                  </span>
-                  <span style={{
-                    fontSize: '9px', fontWeight: 700, padding: '1px 5px',
-                    borderRadius: '4px', backgroundColor: 'rgba(99,102,241,0.1)',
-                    color: '#818cf8', textTransform: 'uppercase' as const
-                  }}>
-                    {p.protocol}
-                  </span>
-                  {p.username && (
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {p.username}
-                    </span>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: p.status === 'active' ? '#10b981' : '#ef4444',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.ip}:{p.port}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', gap: '4px' }}>
+                      <span style={{ textTransform: 'uppercase', color: '#818cf8', fontWeight: 700 }}>{p.protocol}</span>
+                      {p.username && <span>• {p.username}</span>}
+                    </div>
+                  </div>
                 </div>
+
                 <button
                   onClick={() => setConfirmDeleteProxyId(p.id)}
                   style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-muted)', padding: '4px', display: 'flex', alignItems: 'center',
-                    transition: 'color 0.15s'
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'color 0.15s ease',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* ===== MODAL: Profile Details ===== */}
+      {selectedProfileAccount && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setSelectedProfileAccount(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '24px',
+              width: '420px',
+              maxWidth: '92vw',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+                Профиль Telegram-аккаунта
+              </h3>
+              <button
+                onClick={() => setSelectedProfileAccount(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '14px',
+                  background: getAvatarGradient(selectedProfileAccount.id),
+                  color: '#ffffff',
+                  fontSize: '20px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {getInitials(selectedProfileAccount)}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+                  {getAccountDisplayName(selectedProfileAccount)}
+                </h4>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {selectedProfileAccount.username ? `@${selectedProfileAccount.username}` : 'Юзернейм отсутствует'}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: 'var(--bg-main)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                fontSize: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>ID аккаунта:</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>#{selectedProfileAccount.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Телефон:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{selectedProfileAccount.phone || '—'}</span>
+                  {selectedProfileAccount.phone && (
+                    <button
+                      onClick={() => copyToClipboard(selectedProfileAccount.phone, 'phone')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
+                    >
+                      {copiedKey === 'phone' ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Источник:</span>
+                <span style={{ fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-main)' }}>
+                  {selectedProfileAccount.source_type || 'tdata'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Статус:</span>
+                <span style={{ fontWeight: 700, color: selectedProfileAccount.status === 'active' ? '#22c55e' : '#ef4444' }}>
+                  {selectedProfileAccount.status}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Прокси:</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                  {selectedProfileAccount.proxy_id ? `ID #${selectedProfileAccount.proxy_id}` : 'Прямое подключение'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedProfileAccount(null)}
+              style={{
+                padding: '9px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--accent)',
+                color: '#ffffff',
+                border: 'none',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL: Edit Proxy ===== */}
+      {editingProxyAccount && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setEditingProxyAccount(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '24px',
+              width: '400px',
+              maxWidth: '92vw',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 4px 0' }}>
+                Назначение прокси
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                Выберите прокси для {getAccountDisplayName(editingProxyAccount)}:
+              </p>
+            </div>
+
+            <select
+              value={selectedProxyId || ''}
+              onChange={(e) => setSelectedProxyId(e.target.value ? Number(e.target.value) : null)}
+              style={{
+                width: '100%',
+                backgroundColor: 'var(--bg-main)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '9px 12px',
+                fontSize: '13px',
+                color: 'var(--text-main)',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="">Без прокси (Прямое подключение)</option>
+              {proxies.map((p) => (
+                <option key={p.id} value={p.id}>
+                  ID #{p.id}: {p.ip}:{p.port} ({p.protocol.toUpperCase()})
+                </option>
+              ))}
+            </select>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setEditingProxyAccount(null)}
+                style={{
+                  flex: 1,
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => updateProxy.mutate({ accountId: editingProxyAccount.id, proxyId: selectedProxyId })}
+                disabled={updateProxy.isPending}
+                style={{
+                  flex: 1,
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--accent)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: updateProxy.isPending ? 'not-allowed' : 'pointer',
+                  opacity: updateProxy.isPending ? 0.6 : 1,
+                }}
+              >
+                {updateProxy.isPending ? 'Сохранение...' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL: Delete Account Confirmation ===== */}
+      {confirmDeleteAccountId !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setConfirmDeleteAccountId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '24px',
+              width: '380px',
+              maxWidth: '92vw',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 6px 0' }}>
+                Удаление аккаунта
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                Вы действительно хотите удалить этот аккаунт? Сессия и сохраненные данные будут стерты из базы.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setConfirmDeleteAccountId(null)}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => deleteAccount.mutate(confirmDeleteAccountId)}
+                disabled={deleteAccount.isPending}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '8px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: deleteAccount.isPending ? 'not-allowed' : 'pointer',
+                  opacity: deleteAccount.isPending ? 0.6 : 1,
+                }}
+              >
+                {deleteAccount.isPending ? 'Удаляем...' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL: Delete Proxy Confirmation ===== */}
+      {confirmDeleteProxyId !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setConfirmDeleteProxyId(null)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '24px',
+              width: '380px',
+              maxWidth: '92vw',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-main)', margin: '0 0 6px 0' }}>
+                Удаление прокси
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                Удалить выбранный прокси-сервер? Аккаунты, привязанные к нему, останутся без прокси.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setConfirmDeleteProxyId(null)}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-main)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => deleteProxy.mutate(confirmDeleteProxyId)}
+                disabled={deleteProxy.isPending}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  borderRadius: '8px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: deleteProxy.isPending ? 'not-allowed' : 'pointer',
+                  opacity: deleteProxy.isPending ? 0.6 : 1,
+                }}
+              >
+                {deleteProxy.isPending ? 'Удаляем...' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

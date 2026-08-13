@@ -103,15 +103,68 @@ async def execute_scenario(
     target_chat_id = chat_id
     default_reply_to = discussion_message_id
 
-    if discussion_message_id:
+    # Check if target is a channel and resolve its discussion group
+    is_channel = False
+    try:
+        chat_info = await first_client.get_chat(chat_id)
+        is_channel = getattr(chat_info, 'type', None) and (
+            str(chat_info.type).lower().endswith('channel') or getattr(chat_info.type, 'value', '') == 'channel'
+        )
+    except Exception as e:
+        logger.warning(f"Notice inspecting chat type for {chat_id}: {e}")
+
+    if is_channel or discussion_message_id:
+        post_id = discussion_message_id
+        if not post_id and is_channel:
+            try:
+                async for p in first_client.get_chat_history(chat_id, limit=1):
+                    post_id = p.id
+                    break
+            except Exception:
+                post_id = None
+
+        if post_id:
+            try:
+                disc_msg = await first_client.get_discussion_message(chat_id, post_id)
+                if disc_msg and getattr(disc_msg, 'chat', None):
+                    target_chat_id = disc_msg.chat.id
+                    default_reply_to = disc_msg.id
+                    logger.info(f"Resolved discussion for channel {chat_id} post {post_id}: group={target_chat_id}, header_id={default_reply_to}")
+                else:
+                    raise ValueError("Discussion message has no valid chat")
+            except Exception as ex:
+                error_msg = f"У канала {chat_id} отключены комментарии или нет группы для обсуждений (post #{post_id}): {ex}"
+                logger.error(error_msg)
+                log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+                session.add(log)
+                await log_action(
+                    session,
+                    action_type="comment_send",
+                    status="error",
+                    target=str(chat_id),
+                    details={"error": error_msg, "channel": str(chat_id), "post_id": post_id},
+                    scenario_id=scenario_id
+                )
+                await session.commit()
+                for c in clients.values():
+                    await c.stop()
+                return
+        elif is_channel:
+            error_msg = f"В канале {chat_id} нет опубликованных постов для комментирования"
+            logger.error(error_msg)
+            log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+            session.add(log)
+            await session.commit()
+            for c in clients.values():
+                await c.stop()
+            return
+
+    # Pre-join discussion group for all participating clients
+    for c in clients.values():
         try:
-            disc_msg = await first_client.get_discussion_message(chat_id, discussion_message_id)
-            if disc_msg and getattr(disc_msg, 'chat', None):
-                target_chat_id = disc_msg.chat.id
-                default_reply_to = disc_msg.id
-                logger.info(f"Resolved discussion for channel post {discussion_message_id}: group={target_chat_id}, header_id={default_reply_to}")
-        except Exception as ex:
-            logger.warning(f"Could not resolve discussion message for post {discussion_message_id}: {ex}")
+            await c.join_chat(target_chat_id)
+        except Exception:
+            pass
 
     step_msg_map: Dict[int, int] = {}
     
@@ -127,15 +180,10 @@ async def execute_scenario(
             reply_to = step_msg_map[step.reply_to_step_id]
 
         try:
-            try:
-                await client.join_chat(target_chat_id)
-            except Exception:
-                pass
-
             delay = random.uniform(delay_min, delay_max)
             await asyncio.sleep(delay)
 
-            text_to_send = step.text or ""
+            text_to_send = (step.text or "").strip()
             if getattr(step, 'is_ai_dynamic', False) or getattr(scenario, 'mode', 'manual') == 'ai_dynamic':
                 try:
                     thread_history = []
@@ -156,8 +204,8 @@ async def execute_scenario(
                         override_provider=getattr(scenario, 'ai_provider', None),
                         override_model=getattr(scenario, 'ai_model', None)
                     )
-                    if gen_text:
-                        text_to_send = gen_text
+                    if gen_text and gen_text.strip():
+                        text_to_send = gen_text.strip()
                         setattr(step, '_gen_text', text_to_send)
                         await log_action(
                             session,
@@ -171,6 +219,13 @@ async def execute_scenario(
                         )
                 except Exception as ai_err:
                     logger.warning(f"Dynamic AI generation notice for step {step.id}: {ai_err}")
+
+            # Ensure message is never empty or invalid characters
+            text_to_send = text_to_send.replace('\x00', '').strip()
+            if not text_to_send:
+                fallbacks = ["👍", "Согласен", "Интересно", "Понятно", "🔥", "+", "Хорошая мысль"]
+                text_to_send = random.choice(fallbacks)
+                logger.warning(f"Step {step.id} had empty text; applied fallback: '{text_to_send}'")
 
             msg = await client.send_message(
                 chat_id=target_chat_id,
@@ -245,6 +300,16 @@ async def execute_scenario(
             logger.error(f"Ошибка на шаге {step.id}: {e}")
             log = TaskLog(account_id=role_account_map[role_id].id, scenario_id=scenario_id, status="error", error_message=str(e))
             session.add(log)
+            await log_action(
+                session,
+                action_type="comment_send",
+                status="error",
+                account_id=role_account_map[role_id].id,
+                target=str(target_chat_id),
+                target_id=f"step #{step.id}",
+                details={"error": str(e), "text": text_to_send},
+                scenario_id=scenario_id
+            )
             await session.commit()
             break
 

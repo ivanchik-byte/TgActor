@@ -1,9 +1,9 @@
 import logging
 from typing import Optional, Tuple
 from hydrogram import Client
+from hydrogram.enums import ChatType
 from hydrogram.types import Chat
 from hydrogram.errors import ChannelPrivate, ChatRestricted, PeerIdInvalid
-from app.models.models import ScenarioStep
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,8 @@ async def check_chat_availability(
             if not can_media:
                 return False, "Отправка медиа запрещена в этом чате."
 
-    if chat.type and hasattr(chat.type, 'CHANNEL') and chat.type == chat.type.CHANNEL:
+    is_channel = chat.type == ChatType.CHANNEL or str(chat.type).lower().endswith("channel")
+    if is_channel:
         if not getattr(chat, 'linked_chat', None):
             return False, "У канала нет привязанной группы для комментариев."
             
