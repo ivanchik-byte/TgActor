@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, Wand2, CheckCircle2, X } from 'lucide-react';
+import { useToast } from '../components/ToastContext';
 
 interface Replica {
   id: string; // React local temporary ID or database ID
@@ -77,6 +78,7 @@ const DEFAULT_PROMPT_TEMPLATES = [
 
 export default function Scenarios() {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   
   // Custom templates state
   const [promptTemplates, setPromptTemplates] = useState(() => {
@@ -125,9 +127,6 @@ export default function Scenarios() {
   // Confirm delete scenario ID state
   const [confirmDeleteScenarioId, setConfirmDeleteScenarioId] = useState<number | null>(null);
 
-  // Toast notification state
-  const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
-
   // Execution modal state
   const [executingScenarioId, setExecutingScenarioId] = useState<number | null>(null);
   const [execTarget, setExecTarget] = useState('');
@@ -151,14 +150,6 @@ export default function Scenarios() {
       showToast(err?.response?.data?.detail || 'Ошибка запуска сценария!', 'error');
     }
   });
-
-  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, text, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
 
   // Scenario config editing state
   const [scenarioName, setScenarioName] = useState('');
@@ -810,34 +801,6 @@ export default function Scenarios() {
 
   return (
     <div style={{ paddingBottom: '60px' }}>
-      {/* Custom Toast Notifications */}
-      <div style={{
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        zIndex: 9999,
-      }}>
-        {toasts.map(t => (
-          <div key={t.id} style={{
-            backgroundColor: t.type === 'error' ? '#ef4444' : t.type === 'info' ? '#3b82f6' : '#22c55e',
-            color: '#fff',
-            padding: '12px 20px',
-            borderRadius: '10px',
-            fontSize: '13px',
-            fontWeight: 600,
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}>
-            <span>{t.text}</span>
-          </div>
-        ))}
-      </div>
-
       {/* Custom Confirmation Modal */}
       {confirmDeleteScenarioId !== null && (
         <div style={{

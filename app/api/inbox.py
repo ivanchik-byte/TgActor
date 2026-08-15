@@ -6,15 +6,34 @@ from pydantic import BaseModel
 
 from app.core.database import async_session
 from app.models.models import InboxMessage, Account
-from app.services.inbox_service import sync_all_accounts_dialogs, sync_dialogs_for_account, send_inbox_message
+from app.services.inbox_service import (
+    sync_all_accounts_dialogs,
+    sync_dialogs_for_account,
+    clear_inbox_sync,
+    send_inbox_message,
+    edit_inbox_message,
+    delete_inbox_message,
+    download_media_for_message
+)
 
 router = APIRouter()
 
+class EditMessageRequest(BaseModel):
+    account_id: int
+    peer_id: int
+    message_id: int
+    new_text: str
+
+class DeleteMessageRequest(BaseModel):
+    account_id: int
+    peer_id: int
+    message_id: int
+
 @router.get("/api/inbox/chats")
-async def get_inbox_chats():
+async def get_inbox_chats(account_id: Optional[int] = None):
     """
     Get grouped chat dialog list enriched with account details and latest message timestamp.
-    If database has no dialogs, auto-triggers a background sync across accounts.
+    Optionally filter by account_id.
     """
     async with async_session() as session:
         # Select distinct account_id and peer_id pairs with latest message details
@@ -28,19 +47,22 @@ async def get_inbox_chats():
             .subquery()
         )
 
-        stmt = (
+        query = (
             select(InboxMessage, Account)
             .join(subq, (InboxMessage.account_id == subq.c.account_id) & (InboxMessage.peer_id == subq.c.peer_id) & (InboxMessage.id == subq.c.max_id))
             .join(Account, InboxMessage.account_id == Account.id)
             .order_by(desc(InboxMessage.created_at))
         )
         
-        result = await session.execute(stmt)
+        if account_id is not None:
+            query = query.where(InboxMessage.account_id == account_id)
+
+        result = await session.execute(query)
         chats = []
         for msg, acc in result.all():
             u_name = (msg.peer_username or "").lower()
             p_name = (msg.peer_name or "").lower()
-            if u_name.endswith("bot") or u_name in ["telegram", "wallet"] or msg.peer_id in [777000, 42777] or "bot" in p_name:
+            if u_name in ["telegram", "wallet"] or msg.peer_id in [777000, 42777]:
                 continue
 
             chats.append({
@@ -57,35 +79,29 @@ async def get_inbox_chats():
                 "updated_at": msg.created_at.isoformat() if msg.created_at else None
             })
 
-        # If database inbox is empty, perform a sync attempt
-        if not chats:
-            # Sync dialogs in background if empty
-            await sync_all_accounts_dialogs()
-            
-            # Re-query after sync
-            result = await session.execute(stmt)
-            for msg, acc in result.all():
-                chats.append({
-                    "account_id": msg.account_id,
-                    "peer_id": msg.peer_id,
-                    "peer_name": msg.peer_name,
-                    "peer_username": msg.peer_username,
-                    "sender_username": msg.peer_username or msg.peer_name,
-                    "account_username": acc.username,
-                    "account_phone": acc.phone,
-                    "account_name": f"{acc.first_name or ''} {acc.last_name or ''}".strip() or acc.phone,
-                    "account_custom_name": getattr(acc, 'custom_name', None),
-                    "last_message": msg.text,
-                    "updated_at": msg.created_at.isoformat() if msg.created_at else None
-                })
-
         return chats
 
 @router.api_route("/api/inbox/sync", methods=["GET", "POST"])
 async def sync_inbox_chats():
-    """Manual sync trigger to fetch latest Telegram chats and messages."""
+    """Manual sync trigger to fetch latest Telegram chats and messages across all accounts."""
     res = await sync_all_accounts_dialogs()
     return res
+
+@router.post("/api/inbox/sync/{account_id}")
+async def sync_inbox_for_single_account(account_id: int):
+    """Sync chats for a single account."""
+    count = await sync_dialogs_for_account(account_id)
+    return {"status": "ok", "account_id": account_id, "imported_messages": count}
+
+@router.delete("/api/inbox/sync")
+async def clear_all_inbox_sync():
+    """Clear all synced inbox messages from DB across all accounts."""
+    return await clear_inbox_sync(account_id=None)
+
+@router.delete("/api/inbox/sync/{account_id}")
+async def clear_account_inbox_sync(account_id: int):
+    """Clear synced inbox messages from DB for a specific account."""
+    return await clear_inbox_sync(account_id=account_id)
 
 @router.get("/api/inbox/messages/{account_id}/{peer_id}")
 async def get_inbox_messages_path(account_id: int, peer_id: int):
@@ -100,6 +116,7 @@ async def get_inbox_messages_path(account_id: int, peer_id: int):
         return [
             {
                 "id": m.id,
+                "message_id": m.message_id,
                 "account_id": m.account_id,
                 "peer_id": m.peer_id,
                 "peer_name": m.peer_name,
@@ -123,20 +140,54 @@ async def send_inbox_message_endpoint(
     account_id: int = Form(...),
     peer_id: int = Form(...),
     text: str = Form(""),
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = File(None),
+    reply_to_msg_id: Optional[int] = Form(None)
 ):
     """Send outgoing DM or file to a chat from specified account."""
     try:
-        res = await send_inbox_message(account_id=account_id, peer_id=peer_id, text=text, file=file)
+        res = await send_inbox_message(
+            account_id=account_id, 
+            peer_id=peer_id, 
+            text=text, 
+            file=file,
+            reply_to_msg_id=reply_to_msg_id
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/api/inbox/edit")
+async def edit_inbox_message_endpoint(req: EditMessageRequest):
+    """Edit text of a sent message."""
+    try:
+        res = await edit_inbox_message(
+            account_id=req.account_id,
+            peer_id=req.peer_id,
+            message_id=req.message_id,
+            new_text=req.new_text
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/api/inbox/delete")
+async def delete_inbox_message_endpoint(req: DeleteMessageRequest):
+    """Delete a message from Telegram and DB."""
+    try:
+        res = await delete_inbox_message(
+            account_id=req.account_id,
+            peer_id=req.peer_id,
+            message_id=req.message_id
+        )
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/api/inbox/download-media/{message_id}")
 async def download_inbox_media(message_id: int):
-    """Dummy or actual media download endpoint."""
-    async with async_session() as session:
-        msg = await session.get(InboxMessage, message_id)
-        if not msg:
-            raise HTTPException(404, detail="Сообщение не найдено")
-        return {"status": "ok", "media_path": msg.media_path or ""}
+    """Media download endpoint on button click."""
+    try:
+        media_url = await download_media_for_message(message_id)
+        return {"status": "ok", "media_path": media_url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
