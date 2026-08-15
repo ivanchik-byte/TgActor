@@ -11,7 +11,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-active_websockets = set()
+active_websockets: set[WebSocket] = set()
+
+async def broadcast_inbox_event(event_dict: dict):
+    """Broadcast an inbox event to Redis pubsub and all connected WebSocket clients."""
+    payload = json.dumps(event_dict)
+    try:
+        await redis_client.publish("inbox_events", payload)
+    except Exception as e:
+        logger.debug(f"Redis publish inbox event warning: {e}")
+
+    for ws in list(active_websockets):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            active_websockets.discard(ws)
 
 async def lifespan(app):
     port = os.getenv("PORT", "8000")
@@ -49,10 +63,12 @@ async def inbox_websocket_endpoint(websocket: WebSocket):
         await pubsub.subscribe("inbox_events")
         async for message in pubsub.listen():
             if message["type"] == "message":
-                await websocket.send_text(message["data"])
+                data = message["data"]
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8")
+                await websocket.send_text(data)
     except WebSocketDisconnect:
-        active_websockets.remove(websocket)
+        active_websockets.discard(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        if websocket in active_websockets:
-            active_websockets.remove(websocket)
+        logger.debug(f"WebSocket client disconnected or error: {e}")
+        active_websockets.discard(websocket)

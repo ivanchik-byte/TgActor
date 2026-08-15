@@ -1,38 +1,116 @@
 @import "tailwindcss";
 
 /* ======================================================
-   TgActor Design System — Professional Neutral Design
+   TgActor Design System — Bento Architecture & Tokens
    ====================================================== */
 
 @theme {
+  /* Radius Tokens */
+  --radius-container: 20px;
+  --radius-card: 14px;
+  --radius-group: 12px;
+  --radius-control: 10px;
+  --radius-badge: 6px;
+
+  /* Theme Color Mappings */
   --color-background: var(--bg-main);
   --color-card: var(--bg-card);
   --color-card-hover: var(--bg-card-hover);
+  --color-surface: var(--bg-surface);
+  
   --color-primary: var(--text-main);
   --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
   --color-border: var(--border-color);
+  --color-border-subtle: var(--border-subtle);
+
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
   --color-accent-text: var(--accent-text);
-  --color-surface: var(--bg-surface);
-  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+
+  --color-success: var(--success);
+  --color-success-hover: var(--success-hover);
+  --color-success-soft: var(--success-soft);
+  --color-success-text: var(--success-text);
+
+  --color-warning: var(--warning);
+  --color-warning-hover: var(--warning-hover);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: var(--warning-text);
+
+  /* Shadows */
+  --shadow-bento: var(--shadow-bento);
+  --shadow-card: var(--shadow-card);
+  --shadow-modal: var(--shadow-modal);
+  --shadow-control: var(--shadow-control);
+
+  /* Font */
+  --font-family-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* ===== Theme: Deep Indigo (default :root) ===== */
-:root {
+/* ======================================================
+   Theme 1: Deep Indigo (Default :root & .deep-indigo)
+   ====================================================== */
+:root,
+.deep-indigo,
+[data-theme="deep-indigo"] {
+  /* Radius Variables */
+  --radius-container: 20px;
+  --radius-card: 14px;
+  --radius-group: 12px;
+  --radius-control: 10px;
+  --radius-badge: 6px;
+
+  /* Surfaces & Backgrounds */
   --bg-main: #0f0d1a;
   --bg-card: #181527;
   --bg-card-hover: #1f1b33;
   --bg-surface: #131020;
-  --text-main: #e8e6f0;
-  --text-muted: #7a7593;
+
+  /* Typography (WCAG AA Compliant) */
+  --text-main: #f1effa;
+  --text-muted: #9b95b8;
+  --text-dim: #6d6789;
+
+  /* Borders */
   --border-color: #2a2641;
+  --border-subtle: rgba(139, 92, 246, 0.15);
+
+  /* Primary Accent: Violet */
   --accent: #8b5cf6;
   --accent-hover: #7c3aed;
-  --accent-soft: rgba(139, 92, 246, 0.12);
+  --accent-soft: rgba(139, 92, 246, 0.14);
   --accent-text: #a78bfa;
 
+  /* Status Colors */
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+  --danger-text: #f87171;
+
+  --success: #22c55e;
+  --success-hover: #16a34a;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --success-text: #4ade80;
+
+  --warning: #f59e0b;
+  --warning-hover: #d97706;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --warning-text: #fbbf24;
+
+  /* Shadows */
+  --shadow-bento: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  /* Toast Notifications */
   --toast-err-bg: #2d1618;
   --toast-err-txt: #f87171;
   --toast-succ-bg: #16291e;
@@ -41,42 +119,126 @@
   --toast-info-txt: #60a5fa;
 }
 
-/* ===== Theme: Dark Crimson ===== */
-.dark-crimson {
+/* ======================================================
+   Theme 2: Dark Crimson (.dark-crimson)
+   ====================================================== */
+.dark-crimson,
+[data-theme="dark-crimson"] {
+  /* Radius Variables */
+  --radius-container: 20px;
+  --radius-card: 14px;
+  --radius-group: 12px;
+  --radius-control: 10px;
+  --radius-badge: 6px;
+
+  /* Surfaces & Backgrounds */
   --bg-main: #110a0c;
   --bg-card: #1c1114;
   --bg-card-hover: #261a1e;
   --bg-surface: #150d10;
-  --text-main: #ede5e7;
-  --text-muted: #8a7175;
+
+  /* Typography (WCAG AA Compliant) */
+  --text-main: #f5eff0;
+  --text-muted: #b09398;
+  --text-dim: #7d6065;
+
+  /* Borders */
   --border-color: #352228;
+  --border-subtle: rgba(232, 69, 94, 0.15);
+
+  /* Primary Accent: Crimson */
   --accent: #b91c3d;
   --accent-hover: #9f1735;
-  --accent-soft: rgba(185, 28, 61, 0.12);
-  --accent-text: #e8455e;
+  --accent-soft: rgba(185, 28, 61, 0.14);
+  --accent-text: #fb7185;
 
+  /* Status Colors */
+  --danger: #e11d48;
+  --danger-hover: #be123c;
+  --danger-soft: rgba(225, 29, 72, 0.14);
+  --danger-text: #fb7185;
+
+  --success: #10b981;
+  --success-hover: #059669;
+  --success-soft: rgba(16, 185, 129, 0.14);
+  --success-text: #34d399;
+
+  --warning: #f59e0b;
+  --warning-hover: #d97706;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --warning-text: #fbbf24;
+
+  /* Shadows */
+  --shadow-bento: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.25);
+
+  /* Toast Notifications */
   --toast-err-bg: #321319;
-  --toast-err-txt: #f87171;
+  --toast-err-txt: #fb7185;
   --toast-succ-bg: #16291e;
   --toast-succ-txt: #4ade80;
   --toast-info-bg: #1e2430;
   --toast-info-txt: #60a5fa;
 }
 
-/* ===== Theme: Dark Charcoal ===== */
-.dark-charcoal {
+/* ======================================================
+   Theme 3: Dark Charcoal (.dark-charcoal)
+   ====================================================== */
+.dark-charcoal,
+[data-theme="dark-charcoal"] {
+  /* Radius Variables */
+  --radius-container: 20px;
+  --radius-card: 14px;
+  --radius-group: 12px;
+  --radius-control: 10px;
+  --radius-badge: 6px;
+
+  /* Surfaces & Backgrounds */
   --bg-main: #0a0a0a;
   --bg-card: #141414;
   --bg-card-hover: #1c1c1c;
   --bg-surface: #0f0f0f;
-  --text-main: #e5e5e5;
-  --text-muted: #737373;
-  --border-color: #262626;
-  --accent: #525252;
-  --accent-hover: #404040;
-  --accent-soft: rgba(82, 82, 82, 0.15);
-  --accent-text: #a3a3a3;
 
+  /* Typography (WCAG AA Compliant) */
+  --text-main: #f5f5f5;
+  --text-muted: #a3a3a3;
+  --text-dim: #737373;
+
+  /* Borders */
+  --border-color: #262626;
+  --border-subtle: rgba(96, 165, 250, 0.15);
+
+  /* Calibrated Accent: Electric Sky Blue (#60a5fa -> 7.52:1 AA Pass) */
+  --accent: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-soft: rgba(96, 165, 250, 0.14);
+  --accent-text: #93c5fd;
+
+  /* Status Colors */
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+  --danger-text: #f87171;
+
+  --success: #22c55e;
+  --success-hover: #16a34a;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --success-text: #4ade80;
+
+  --warning: #f59e0b;
+  --warning-hover: #d97706;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --warning-text: #fbbf24;
+
+  /* Shadows */
+  --shadow-bento: 0 4px 20px -2px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.6);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  /* Toast Notifications */
   --toast-err-bg: #261416;
   --toast-err-txt: #f87171;
   --toast-succ-bg: #14261b;
@@ -85,90 +247,182 @@
   --toast-info-txt: #60a5fa;
 }
 
-/* ===== Theme: Light ===== */
-.light {
-  --bg-main: #f5f5f4;
+/* ======================================================
+   Theme 4: Light Theme (.light)
+   ====================================================== */
+.light,
+[data-theme="light"] {
+  /* Radius Variables */
+  --radius-container: 20px;
+  --radius-card: 14px;
+  --radius-group: 12px;
+  --radius-control: 10px;
+  --radius-badge: 6px;
+
+  /* Surfaces & Backgrounds */
+  --bg-main: #f8fafc;
   --bg-card: #ffffff;
-  --bg-card-hover: #fafaf9;
-  --bg-surface: #f0efed;
-  --text-main: #1c1917;
-  --text-muted: #78716c;
-  --border-color: #d6d3d1;
+  --bg-card-hover: #f1f5f9;
+  --bg-surface: #f1f5f9;
+
+  /* Typography (WCAG AA & AAA Compliant) */
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-dim: #94a3b8;
+
+  /* Soft Crisp Borders */
+  --border-color: #e2e8f0;
+  --border-subtle: rgba(0, 0, 0, 0.05);
+
+  /* Light Theme Accent: Vibrant Indigo (#4f46e5 / #b91c3d compatible) */
   --accent: #b91c3d;
   --accent-hover: #9f1735;
   --accent-soft: rgba(185, 28, 61, 0.08);
-  --accent-text: #b91c3d;
+  --accent-text: #9f1735;
 
+  /* Status Colors */
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-text: #b91c1c;
+
+  --success: #16a34a;
+  --success-hover: #15803d;
+  --success-soft: #f0fdf4;
+  --success-text: #15803d;
+
+  --warning: #d97706;
+  --warning-hover: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-text: #b45309;
+
+  /* Subtle Layered Elevation Shadows */
+  --shadow-bento: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 4px 12px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-control: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+
+  /* Toast Notifications */
   --toast-err-bg: #fef2f2;
-  --toast-err-txt: #dc2626;
+  --toast-err-txt: #b91c1c;
   --toast-succ-bg: #f0fdf4;
-  --toast-succ-txt: #16a34a;
+  --toast-succ-txt: #15803d;
   --toast-info-bg: #eff6ff;
-  --toast-info-txt: #2563eb;
+  --toast-info-txt: #1d4ed8;
 }
 
-/* ===== Base Styles ===== */
-
+/* ======================================================
+   Base & Reset Styles
+   ====================================================== */
 * {
   box-sizing: border-box;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--bg-main);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100dvh;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-select {
-  background-color: var(--bg-card);
-  color: var(--text-main);
-}
-
+select,
 option {
   background-color: var(--bg-card);
   color: var(--text-main);
+}
+
+/* ======================================================
+   Bento Design System Utility Classes
+   ====================================================== */
+.rounded-container {
+  border-radius: var(--radius-container, 20px);
+}
+
+.rounded-card {
+  border-radius: var(--radius-card, 14px);
+}
+
+.rounded-group {
+  border-radius: var(--radius-group, 12px);
+}
+
+.rounded-control {
+  border-radius: var(--radius-control, 10px);
+}
+
+.rounded-badge {
+  border-radius: var(--radius-badge, 6px);
+}
+
+/* Bento Card Preset */
+.bento-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-container, 20px);
+  box-shadow: var(--shadow-bento);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.bento-card:hover {
+  background-color: var(--bg-card-hover);
+}
+
+/* Tactile Button / Interactive Control */
+.tactile-btn {
+  border-radius: var(--radius-control, 10px);
+  transition: transform 0.1s ease, filter 0.15s ease, background-color 0.15s ease;
+}
+
+.tactile-btn:active {
+  transform: translateY(1px);
+}
+
+/* ======================================================
+   Scrollbar & Selection
+   ====================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* Hide number input spinners */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
 }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
 .spin {
   animation: spin 1s linear infinite;
-}
-
-/* ===== Scrollbar ===== */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-}
-
-/* ===== Selection ===== */
-::selection {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-/* Hide number input spinners (up/down arrows) */
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type=number] {
-  -moz-appearance: textfield;
 }

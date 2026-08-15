@@ -4,9 +4,11 @@ import axios from 'axios';
 import {
   Radio, Trash2, Plus, Power, PowerOff, Loader2,
   Clock, Shuffle, Search, ExternalLink, Activity,
-  CheckCircle2, AlertCircle, ShieldAlert,
+  ShieldAlert,
   Layers, Terminal, Check
 } from 'lucide-react';
+import { useToast } from '../components/ToastContext';
+import { ModalOverlay } from '../components/ModalOverlay';
 
 interface ChannelItem {
   id: number;
@@ -20,14 +22,7 @@ interface ChannelItem {
 
 export default function Channels() {
   const queryClient = useQueryClient();
-
-  // Toast state
-  const [toasts, setToasts] = useState<{ id: string; text: string; type: 'success' | 'error' | 'info' }[]>([]);
-  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, text, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
-  };
+  const { showToast } = useToast();
 
   // Add channel form state
   const [newChannels, setNewChannels] = useState('');
@@ -175,82 +170,56 @@ export default function Channels() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '40px' }}>
-      {/* Toast Notifications */}
-      <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {toasts.map(t => (
-          <div key={t.id} style={{
-            padding: '12px 18px', borderRadius: '12px', fontSize: '13px', fontWeight: 600,
-            color: '#fff', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
-            backgroundColor: t.type === 'success' ? '#10b981' : t.type === 'error' ? '#ef4444' : '#6366f1',
-            display: 'flex', alignItems: 'center', gap: '8px',
-            border: '1px solid rgba(255,255,255,0.15)',
-            backdropFilter: 'blur(8px)'
-          }}>
-            {t.type === 'success' && <CheckCircle2 className="w-4 h-4" />}
-            {t.type === 'error' && <AlertCircle className="w-4 h-4" />}
-            {t.type === 'info' && <Radio className="w-4 h-4" />}
-            <span>{t.text}</span>
-          </div>
-        ))}
-      </div>
-
       {/* Delete Confirmation Modal */}
-      {confirmDeleteId && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          padding: '16px'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
-            borderRadius: '18px', padding: '28px', maxWidth: '420px', width: '100%',
-            display: 'flex', flexDirection: 'column', gap: '20px',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.7)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{
-                width: '44px', height: '44px', borderRadius: '12px',
-                backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', flexShrink: 0
-              }}>
-                <ShieldAlert className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)' }}>Удаление канала</h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  Канал будет исключен из очереди автоматического сканирования.
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => deleteChannel.mutate(confirmDeleteId)}
-                disabled={deleteChannel.isPending}
-                style={{
-                  flex: 1, backgroundColor: '#ef4444', color: '#fff', border: 'none',
-                  borderRadius: '10px', padding: '11px', fontSize: '13px', fontWeight: 700,
-                  cursor: 'pointer', transition: 'opacity 0.2s',
-                  opacity: deleteChannel.isPending ? 0.6 : 1
-                }}
-              >
-                {deleteChannel.isPending ? 'Удаление...' : 'Да, удалить'}
-              </button>
-              <button
-                onClick={() => setConfirmDeleteId(null)}
-                style={{
-                  backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
-                  border: '1px solid var(--border-color)', borderRadius: '10px',
-                  padding: '11px 18px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
-                }}
-              >
-                Отмена
-              </button>
-            </div>
+      <ModalOverlay
+        isOpen={confirmDeleteId !== null}
+        onClose={() => setConfirmDeleteId(null)}
+        title="Удаление канала"
+        subtitle="Канал будет исключен из очереди автоматического сканирования"
+        icon={<ShieldAlert className="w-5 h-5 text-red-500" />}
+        footer={
+          <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+            <button
+              onClick={() => setConfirmDeleteId(null)}
+              style={{
+                flex: 1,
+                backgroundColor: 'var(--bg-main)',
+                color: 'var(--text-main)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                padding: '10px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Отмена
+            </button>
+            <button
+              onClick={() => confirmDeleteId && deleteChannel.mutate(confirmDeleteId)}
+              disabled={deleteChannel.isPending}
+              style={{
+                flex: 1,
+                backgroundColor: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '10px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: deleteChannel.isPending ? 'not-allowed' : 'pointer',
+                opacity: deleteChannel.isPending ? 0.6 : 1,
+              }}
+            >
+              {deleteChannel.isPending ? 'Удаление...' : 'Да, удалить'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+          Вы уверены, что хотите удалить этот канал? Сценарии комментирования больше не будут запускаться по его новым публикациям.
+        </p>
+      </ModalOverlay>
 
       {/* Hero Control Station */}
       <div style={{
