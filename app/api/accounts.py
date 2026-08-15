@@ -90,7 +90,7 @@ async def upload_tdata(
             if user_info.get("username"):
                 existing.username = user_info.get("username")
             await session.commit()
-            background_tasks.add_task(sync_dialogs_for_account, existing)
+            background_tasks.add_task(sync_dialogs_for_account, existing.id)
             return {"status": "ok", "id": existing.id, "message": "Account updated"}
         else:
             acc = Account(
@@ -106,7 +106,7 @@ async def upload_tdata(
             )
             session.add(acc)
             await session.commit()
-            background_tasks.add_task(sync_dialogs_for_account, acc)
+            background_tasks.add_task(sync_dialogs_for_account, acc.id)
             return {"status": "ok", "id": acc.id}
 
 @router.api_route("/api/accounts/{account_id}/test", methods=["GET", "POST"])

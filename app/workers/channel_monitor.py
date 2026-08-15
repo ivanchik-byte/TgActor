@@ -63,11 +63,19 @@ async def run_channel_monitor():
                                 except Exception:
                                     latest_msg_id = None
 
-                                # Check if already processed
+                                # Check if already processed or establishing initial baseline
                                 if latest_msg_id is not None:
-                                    if _last_checked_msg_id.get(ch_user) == latest_msg_id:
-                                        # No new post, skip to avoid spamming
+                                    if ch_user not in _last_checked_msg_id:
+                                        # First run after start/restart: record baseline post ID without spamming
+                                        _last_checked_msg_id[ch_user] = latest_msg_id
+                                        logger.info(f"Channel monitor: initialized baseline for {ch_user} at msg #{latest_msg_id}")
                                         continue
+
+                                    if latest_msg_id <= _last_checked_msg_id[ch_user]:
+                                        # No genuinely new post, skip to avoid spamming
+                                        continue
+
+                                    # Genuinely new post detected!
                                     _last_checked_msg_id[ch_user] = latest_msg_id
 
                                 scenario = await pick_random_scenario(session, channel)
