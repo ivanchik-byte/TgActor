@@ -92,6 +92,57 @@ def sanitize_telegram_comment(text: str) -> str:
 
     return cleaned
 
+def robust_json_loads(raw: str) -> Any:
+    """Robustly extract and parse JSON from LLM outputs, tolerating markdown, think tags, trailing commas, and formatting quirks."""
+    if not raw:
+        raise ValueError("Empty response from AI")
+    
+    text = raw.strip()
+    
+    # Remove <think>...</think> if present
+    if "<think>" in text:
+        if "</think>" in text:
+            text = text.split("</think>")[-1].strip()
+        else:
+            text = text.split("<think>")[0].strip()
+            
+    # Extract from markdown block ```json ... ``` or ``` ... ```
+    if "```" in text:
+        match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+        if match:
+            text = match.group(1).strip()
+
+    # Find the outermost { ... } or [ ... ]
+    brace_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', text)
+    if brace_match:
+        text = brace_match.group(1).strip()
+
+    # Attempt 1: Direct standard parse
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Attempt 2: Strip trailing commas before } or ]
+    clean_commas = re.sub(r',\s*([\}\]])', r'\1', text)
+    try:
+        return json.loads(clean_commas)
+    except Exception:
+        pass
+
+    # Attempt 3: Ast literal eval if single quotes were used
+    try:
+        import ast
+        val = ast.literal_eval(text)
+        if isinstance(val, (dict, list)):
+            return val
+    except Exception:
+        pass
+
+    # Attempt 4: Clean control characters
+    clean_ctrl = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', clean_commas)
+    return json.loads(clean_ctrl)
+
 # Default model fallbacks per provider
 DEFAULT_MODELS = {
     "openai": "gpt-4o-mini",
@@ -224,6 +275,7 @@ async def generate_scenario_from_prompt(
     session: AsyncSession,
     prompt: str,
     accounts_count: int = 3,
+    steps_count: Optional[int] = None,
     reactions_enabled: bool = False,
     override_provider: Optional[str] = None,
     override_model: Optional[str] = None,
@@ -250,58 +302,111 @@ async def generate_scenario_from_prompt(
         extra_needed = accounts_count - len(available_roles)
         available_roles.extend([max_id + i + 1 for i in range(extra_needed)])
 
+    # Determine desired steps count
+    target_steps = steps_count
+    if not target_steps:
+        match = re.search(r'(\d+)\s*(?:-|до)?\s*(\d+)?\s*(?:смс|сообщен|реплик|шаг)', prompt.lower())
+        if match:
+            try:
+                g1 = int(match.group(1))
+                g2 = int(match.group(2)) if match.group(2) else g1
+                target_steps = max(g1, g2)
+            except Exception:
+                target_steps = 7
+        else:
+            target_steps = 7
+    target_steps = max(3, min(25, target_steps))
+
     persona_system_rules = override_system_prompt or settings.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
 
     system_prompt = f"""# БАЗОВЫЙ СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА
 {persona_system_rules}
 
-# РЕЖИМ ГЕНЕРАТОРА СЦЕНАРИЯ ДИАЛОГА В TELEGRAM
-Ты должен составить структурированный диалог между {accounts_count} участниками в формате JSON.
+# РЕЖИМ ГЕНЕРАТОРА КОНСТРУКТИВНОГО СЦЕНАРИЯ ДИАЛОГА В TELEGRAM
+Ты должен составить логичный, глубоко связный и конструктивный диалог между {accounts_count} участниками в формате JSON.
 Участники (ID ролей: {available_roles}) — АБСОЛЮТНО НЕЗНАКОМЫЕ люди в интернете, общаются на «ты».
 
 ВСЕ ПРАВИЛА ПЕРСОНАЖА ВЫШЕ СТРОЖАЙШЕ ОБЯЗАТЕЛЬНЫ ДЛЯ КАЖДОЙ РЕПЛИКИ:
 1. ВООБЩЕ НИ ОДНОГО ЭМОДЗИ (никаких смайликов, значков, эмодзи).
 2. НИКАКИХ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ.
 3. НИКАКИХ ДЛИННЫХ ТИРЕ (—).
-4. НИКАКИХ ИИ-ШТАМПОВ И ЛЕСТИ. Только живой разговорный сленг незнакомцев от первого лица."""
+4. НИКАКОГО ПЕРЕГРУЗА ЗАПЯТЫМИ — пиши небрежно, просто, без книжных оборотов.
+5. НИКАКИХ ИИ-ШТАМПОВ И ЛЕСТИ. Только живой технический/разговорный язык незнакомцев от первого лица."""
 
     user_instructions = f"""
-Создай сценарий общения по следующему описанию:
+Создай сценарий логичного, связного и реалистичного диалога по заданию пользователя:
 "{prompt}"
 
-Требования к сценарию:
-1. Количество участников (ролей): {accounts_count} (это незнакомые между собой люди, общающиеся на "ты").
-2. Список доступных ID ролей: {available_roles}.
-3. Сгенерируй от 4 до 7 естественных шагов (реплик общения).
-4. Каждому шагу укажи:
-   - step_order (1, 2, 3...)
-   - role_id (один из доступных ID ролей: {available_roles})
-   - text (живой текст реплики БЕЗ ЭМОДЗИ И БЕЗ ТОЧКИ В КОНЦЕ)
-   - reply_to_index (null для первого шага, или номер шага N 1-based, на который отвечает реплика)
-   - delay_before_min (от 4.0 до 8.0)
-   - delay_before_max (от 10.0 до 20.0)
-   - reactions (null)
-   - reaction_count (0)
+ТРЕБОВАНИЯ К ДИАЛОГУ:
+1. Количество участников (ролей): {accounts_count}. Доступные ID ролей: {available_roles}.
+2. Количество реплик: СТРОГО {target_steps} шагов.
+
+3. РАСПРЕДЕЛЕНИЕ И ДРАМАТУРГИЯ РОЛЕЙ:
+   - Строго следуй сюжету, теме и указаниям из задания пользователя.
+   - РОЛЬ 1 (ID {available_roles[0]}): Начинает диалог по теме задания (reply_to_step = null), задает уточнения по ходу ветки, и на последнем шаге подводит логический финал (благодарит / резюмирует).
+   - РОЛЬ 2 (ID {available_roles[1] if len(available_roles) > 1 else available_roles[0]}): Отвечает Роли 1 по сути, высказывает мнение или рекомендацию согласно заданию пользователя.
+   - РОЛЬ 3 (ID {available_roles[2] if len(available_roles) > 2 else (available_roles[1] if len(available_roles) > 1 else available_roles[0])}): Подключается в ветку диалога с живой реакцией, удивлением или подтверждением по теме задания.
+
+4. ПРАВИЛА ВЕТВЛЕНИЯ (ОТВЕТЫ ПО СМЫСЛУ):
+   - Шаг 1: reply_to_step = null.
+   - Шаги 2..{target_steps}: reply_to_step ДОЛЖЕН указывать на номер того шага, на который адресно отвечает собеседник (не по порядку N-1, а логический адресат).
+   - СТРОГО: reply_to_step < текущего step_order.
+
+5. УМНЫЕ РЕАКЦИИ:
+   {'- Поставь одиночную уместную реакцию ("👍", "🔥", "⚡", "❤️", "🤝") и reaction_count: 1 ТОЛЬКО на 1-2 ключевых шага. На остальных: reactions: null, reaction_count: 0.' if reactions_enabled else '- reactions: null, reaction_count: 0 для всех шагов.'}
+
+6. СТИЛЬ:
+   - СТРОГО БЕЗ ЭМОДЗИ В ТЕКСТЕ СООБЩЕНИЙ, БЕЗ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ, БЕЗ ДЛИННЫХ ТИРЕ, БЕЗ ЛИШНИХ ЗАПЯТЫХ.
+   - Живой разговорный язык незнакомцев в Telegram от первого лица.
 
 Верни строго JSON объект следующей структуры:
 {{
-  "title": "Название сценария",
+  "title": "Название темы диалога",
   "min_delay": 5.0,
   "max_delay": 15.0,
   "steps": [
     {{
       "step_order": 1,
       "role_id": {available_roles[0]},
-      "text": "Текст первого сообщения без точки в конце",
-      "reply_to_index": null,
+      "text": "текст первого вопроса или темы без точки в конце",
+      "reply_to_step": null,
       "delay_before_min": 5.0,
       "delay_before_max": 10.0,
       "reactions": null,
       "reaction_count": 0
+    }},
+    {{
+      "step_order": 2,
+      "role_id": {available_roles[1] if len(available_roles) > 1 else available_roles[0]},
+      "text": "текст ответа второго участника на первый шаг",
+      "reply_to_step": 1,
+      "delay_before_min": 4.0,
+      "delay_before_max": 9.0,
+      "reactions": "👍",
+      "reaction_count": 1
+    }},
+    {{
+      "step_order": 3,
+      "role_id": {available_roles[2] if len(available_roles) > 2 else available_roles[0]},
+      "text": "текст удивления третьего участника что кто-то тоже в теме",
+      "reply_to_step": 2,
+      "delay_before_min": 5.0,
+      "delay_before_max": 11.0,
+      "reactions": null,
+      "reaction_count": 0
+    }},
+    {{
+      "step_order": 4,
+      "role_id": {available_roles[0]},
+      "text": "уточняющий вопрос первого участника ко второму",
+      "reply_to_step": 2,
+      "delay_before_min": 4.0,
+      "delay_before_max": 8.0,
+      "reactions": null,
+      "reaction_count": 0
     }}
   ]
-}}
-"""
+}}"""
 
     raw_response = await call_ai_completion(
         provider=provider,
@@ -335,24 +440,68 @@ async def generate_scenario_from_prompt(
         for idx, step in enumerate(steps_list):
             if not isinstance(step, dict):
                 continue
+            step_num = idx + 1
             role_val = step.get("role_id") or step.get("role") or available_roles[idx % len(available_roles)]
             try:
                 role_int = int(role_val)
             except Exception:
                 role_int = available_roles[idx % len(available_roles)]
 
+            # Ensure role alternation if possible
+            if idx > 0 and len(available_roles) > 1 and role_int == sanitized_steps[idx-1]["role_id"]:
+                other_roles = [r for r in available_roles if r != role_int]
+                if other_roles:
+                    role_int = other_roles[(idx) % len(other_roles)]
+
+            # Parse reply_to_step / reply_to_index
+            raw_reply = step.get("reply_to_step")
+            if raw_reply is None:
+                raw_reply = step.get("reply_to_index")
+            
+            target_reply_step = None
+            if step_num > 1:
+                if raw_reply is not None:
+                    try:
+                        r_int = int(raw_reply)
+                        # If 1-based step: 1 <= r_int < step_num
+                        if 1 <= r_int < step_num:
+                            target_reply_step = r_int
+                        # If 0-based index: 0 <= r_int < idx
+                        elif 0 <= r_int < idx:
+                            target_reply_step = r_int + 1
+                        else:
+                            # Fallback to previous step
+                            target_reply_step = step_num - 1
+                    except Exception:
+                        target_reply_step = step_num - 1
+                else:
+                    target_reply_step = step_num - 1
+
             raw_txt = step.get("text") or step.get("message") or ""
             clean_txt = sanitize_telegram_comment(str(raw_txt))
 
+            # Reaction filter
+            step_reactions = None
+            step_reaction_count = 0
+            if reactions_enabled and step.get("reactions"):
+                raw_react = str(step.get("reactions")).strip()
+                valid_emojis = ["👍", "🔥", "⚡", "❤️", "🤝", "👏", "🎉", "🤩", "💯"]
+                for ve in valid_emojis:
+                    if ve in raw_react:
+                        step_reactions = ve
+                        step_reaction_count = max(1, min(3, int(step.get("reaction_count") or 1)))
+                        break
+
             sanitized_steps.append({
-                "step_order": idx + 1,
+                "step_order": step_num,
                 "role_id": role_int,
                 "text": clean_txt,
-                "reply_to_index": step.get("reply_to_index") if step.get("reply_to_index") is not None else (idx if idx > 0 and (idx % 2 == 1) else None),
-                "delay_before_min": float(step.get("delay_before_min") or 5.0),
-                "delay_before_max": float(step.get("delay_before_max") or 12.0),
-                "reactions": step.get("reactions") or None,
-                "reaction_count": int(step.get("reaction_count") or 0)
+                "reply_to_step": target_reply_step,
+                "reply_to_index": (target_reply_step - 1) if target_reply_step is not None else None,
+                "delay_before_min": float(step.get("delay_before_min") or 4.0),
+                "delay_before_max": float(step.get("delay_before_max") or 10.0),
+                "reactions": step_reactions,
+                "reaction_count": step_reaction_count
             })
 
         data["steps"] = sanitized_steps

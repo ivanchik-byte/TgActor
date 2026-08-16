@@ -1,5 +1,6 @@
 import re
 import asyncio
+import logging
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -12,6 +13,7 @@ from app.models.schemas import ScenarioCreate, ScenarioUpdate, ScenarioResponse,
 from app.services.scenario_service import execute_scenario
 from app.services.ai_service import generate_scenario_from_prompt
 
+logger = logging.getLogger("tgactor.scenarios")
 router = APIRouter()
 
 class ScenarioExecuteRequest(BaseModel):
@@ -100,6 +102,7 @@ async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
                 session=session,
                 prompt=req.prompt,
                 accounts_count=req.accounts_count or 3,
+                steps_count=req.steps_count,
                 reactions_enabled=req.reactions_enabled if req.reactions_enabled is not None else True,
                 override_provider=req.provider,
                 override_model=req.model,
@@ -107,6 +110,7 @@ async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
             )
             return {"status": "ok", "scenario": generated}
         except Exception as e:
+            logger.error(f"AI Scenario Generation failed: {e}", exc_info=True)
             raise HTTPException(400, detail=f"AI Scenario Generation failed: {str(e)}")
 
 @router.post("/api/scenarios/{scenario_id}/steps/bulk")
