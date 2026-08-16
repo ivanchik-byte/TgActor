@@ -93,6 +93,23 @@ async def run_channel_monitor():
                                     )
                                     await asyncio.sleep(delay)
                                     await execute_scenario(session, scenario.id, ch_user, discussion_message_id=latest_msg_id)
+                                else:
+                                    warning_msg = f"В канале {ch_user} вышел новый пост (msg #{latest_msg_id}), но нет активных сценариев с сообщениями для ответа."
+                                    logger.warning(warning_msg)
+                                    await log_action(
+                                        session,
+                                        action_type="channel_monitor",
+                                        status="error",
+                                        target=ch_user,
+                                        target_id=f"Нет сценариев • {ch_user}",
+                                        details={
+                                            "summary": "Нет активных сценариев с шагами",
+                                            "category": "no_scenarios",
+                                            "badge": "Нет сценария",
+                                            "error": warning_msg,
+                                            "msg_id": latest_msg_id
+                                        }
+                                    )
                             except Exception as ex:
                                 diag = classify_telegram_error(ex)
                                 logger.warning(f"Error monitoring channel {ch_user} ({diag['badge']}): {ex}")

@@ -17,7 +17,7 @@ from app.core.logging_config import setup_terminal_logging
 setup_terminal_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="TgActor API", version="2.2.2", lifespan=lifespan)
+app = FastAPI(title="TgActor API", version="3.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

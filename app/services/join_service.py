@@ -87,12 +87,17 @@ async def _smooth_join_worker(
                     if not acc:
                         continue
 
-                    acc_label = acc.custom_name or (f"@{acc.username}" if acc.username else (acc.first_name or f"Бот #{acc.id}"))
-                    _join_state["current_account"] = f"{acc_label} ({acc.phone or ''})"
-
                     client = get_hydrogram_client(acc, acc.proxy)
                     try:
                         await client.start()
+                        try:
+                            me = await client.get_me()
+                            live_label = acc.custom_name or (f"@{me.username}" if getattr(me, 'username', None) else (me.first_name or f"Бот #{acc.id}"))
+                            live_phone = getattr(me, 'phone_number', None) or acc.phone or ''
+                            _join_state["current_account"] = f"{live_label} ({live_phone})"
+                            acc_label = live_label
+                        except Exception:
+                            pass
                         
                         # 1. Join main chat / channel / invite link
                         target_to_join = clean_target
@@ -101,11 +106,13 @@ async def _smooth_join_worker(
                         elif "t.me/" in target_to_join:
                             target_to_join = target_to_join.split("t.me/")[-1].replace("@", "").strip().split("/")[0]
 
+                        was_already_member = False
                         try:
                             joined_chat = await client.join_chat(target_to_join)
                         except Exception as join_err:
                             err_str = str(join_err).lower()
                             if any(k in err_str for k in ["useralreadyparticipant", "already participant", "already a participant"]):
+                                was_already_member = True
                                 joined_chat = await client.get_chat(target_to_join)
                             else:
                                 raise join_err
@@ -135,7 +142,10 @@ async def _smooth_join_worker(
                                         logger.warning(f"Could not join linked discussion {linked.id}: {link_err}")
 
                         _join_state["joined_count"] += 1
-                        _join_state["logs"].insert(0, f"✅ {acc_label} успешно вступил в {clean_target}")
+                        if was_already_member:
+                            _join_state["logs"].insert(0, f"✅ {acc_label} уже состоит в {clean_target}")
+                        else:
+                            _join_state["logs"].insert(0, f"✅ {acc_label} успешно вступил в {clean_target}")
                         
                         await log_action(
                             session,
@@ -144,7 +154,7 @@ async def _smooth_join_worker(
                             account_id=acc.id,
                             target=clean_target,
                             target_id=f"join • {acc_label}",
-                            details={"chat": clean_target, "account": acc_label}
+                            details={"chat": clean_target, "account": acc_label, "already_member": was_already_member}
                         )
                         await session.commit()
                     except Exception as e:
@@ -171,17 +181,21 @@ async def _smooth_join_worker(
                     current_op += 1
                     _join_state["progress_percent"] = int((current_op / total_ops) * 100)
 
-                    # Pause between account joins to avoid Telegram spam/antiban filters
+                    # Pause between account joins ONLY if a bot freshly joined (no pause needed if already a participant)
                     if current_op < total_ops and _join_state["status"] == "running":
-                        delay = random.randint(max(1, min_delay), max(min_delay, max_delay))
-                        _join_state["next_delay_seconds"] = delay
-                        _join_state["logs"].insert(0, f"⏳ Пауза {delay} сек перед входом следующего бота...")
-                        
-                        for _ in range(delay):
-                            if _join_state["status"] == "cancelled":
-                                break
-                            await asyncio.sleep(1)
-                            _join_state["next_delay_seconds"] = max(0, _join_state["next_delay_seconds"] - 1)
+                        if was_already_member:
+                            # Instant transition for existing members
+                            await asyncio.sleep(0.5)
+                        else:
+                            delay = random.randint(max(1, min_delay), max(min_delay, max_delay))
+                            _join_state["next_delay_seconds"] = delay
+                            _join_state["logs"].insert(0, f"⏳ Пауза {delay} сек перед входом следующего бота...")
+                            
+                            for _ in range(delay):
+                                if _join_state["status"] == "cancelled":
+                                    break
+                                await asyncio.sleep(1)
+                                _join_state["next_delay_seconds"] = max(0, _join_state["next_delay_seconds"] - 1)
 
             if _join_state["status"] != "cancelled":
                 _join_state["status"] = "done"

@@ -183,18 +183,41 @@ async def execute_scenario(
                 except Exception:
                     pass
 
-    # If we found bots already in the group, use ONLY them!
-    if in_group_accounts:
-        logger.info(f"🎯 Group {target_chat_id}: found {len(in_group_accounts)} existing member bots in pool. Restricting scenario execution strictly to them.")
-        chosen_pool = in_group_accounts
-    else:
-        logger.info(f"ℹ️ Group {target_chat_id}: no member bots found yet. Using general commenting pool with lazy join.")
-        chosen_pool = list(commenting_pool)
-        random.shuffle(chosen_pool)
+    # SMART BOT SELECTION: Prioritize member bots, but ensure DISTINCT bots for distinct roles!
+    from app.services.join_service import get_known_chat_members, record_chat_member
+    known_member_ids = get_known_chat_members(str(target_chat_id)) | get_known_chat_members(str(chat_id))
+    
+    in_group_accounts = [acc for acc in commenting_pool if acc.id in known_member_ids]
+    
+    # Priority ordered pool: in-group bots first, then remaining active commenting bots
+    candidate_pool = list(in_group_accounts)
+    for acc in commenting_pool:
+        if acc not in candidate_pool:
+            candidate_pool.append(acc)
 
     role_account_map: Dict[int, Account] = {}
-    for idx, role_id in enumerate(roles_needed):
-        role_account_map[role_id] = chosen_pool[idx % len(chosen_pool)]
+    used_account_ids = set()
+
+    # Step 1: Check if role_id directly matches an account in pool
+    for role_id in roles_needed:
+        exact_match = next((a for a in candidate_pool if a.id == role_id and a.id not in used_account_ids), None)
+        if exact_match:
+            role_account_map[role_id] = exact_match
+            used_account_ids.add(exact_match.id)
+
+    # Step 2: Assign distinct accounts to remaining roles
+    for role_id in roles_needed:
+        if role_id not in role_account_map:
+            available = [a for a in candidate_pool if a.id not in used_account_ids]
+            if available:
+                chosen = available[0]
+                role_account_map[role_id] = chosen
+                used_account_ids.add(chosen.id)
+            else:
+                # If there are genuinely fewer accounts in pool than roles, cycle from candidate_pool
+                role_account_map[role_id] = candidate_pool[len(role_account_map) % len(candidate_pool)]
+
+    logger.info(f"🎭 Scenario {scenario_id} assigned roles: {[(r_id, acc.custom_name or acc.username or acc.first_name or acc.id) for r_id, acc in role_account_map.items()]}")
 
     clients: Dict[int, Any] = {}
     unique_accounts = {acc.id: acc for acc in role_account_map.values()}

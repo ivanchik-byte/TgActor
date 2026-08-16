@@ -1027,7 +1027,7 @@ export const HistoryPage: React.FC = () => {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Terminal size={16} style={{ color: 'var(--accent-text)' }} />
-              <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>TG_ACTOR_STREAM_LOGGER v2.0</span>
+              <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>TG_ACTOR_STREAM_LOGGER v3.0</span>
               <span style={{ color: '#34d399', fontSize: '0.72rem' }}>● LIVE</span>
             </div>
 

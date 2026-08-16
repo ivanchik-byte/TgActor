@@ -205,7 +205,9 @@ async def call_ai_completion(
     system_prompt: str,
     user_prompt: str,
     json_mode: bool = False,
-    base_url: Optional[str] = None
+    base_url: Optional[str] = None,
+    max_tokens: Optional[int] = None,
+    temperature: float = 0.8
 ) -> str:
     """Execute chat completion against target AI provider with fallback and strict validation."""
     if not api_key:
@@ -231,13 +233,16 @@ async def call_ai_completion(
     body: Dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "temperature": 0.75,
+        "temperature": temperature,
     }
+
+    if max_tokens:
+        body["max_tokens"] = max_tokens
 
     if json_mode and provider in ["openai", "deepseek", "openrouter"]:
         body["response_format"] = {"type": "json_object"}
 
-    logger.info(f"AI request -> {endpoint} model={model}")
+    logger.info(f"AI request -> {endpoint} model={model} (temp={temperature}, max_tokens={max_tokens or 'auto'})")
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=20.0)) as client:
@@ -545,15 +550,16 @@ async def generate_dynamic_step_text(
 
 {history_str}
 
-Инструкция к твоей текущей реплике:
+Замысел твоей реплики:
 "{step_prompt or 'Напиши уместный короткий комментарий по теме'}"
 
 СТРОГИЕ ПРАВИЛА:
-1. Ты общаешься с другими комментаторами как случайный незнакомец в интернете на 'ты'.
-2. Напиши короткий, естественный ответ (1-2 предложения), как живой пользователь Telegram.
-3. ВООБЩЕ БЕЗ ЭМОДЗИ (ни одного эмодзи в тексте).
-4. БЕЗ ТОЧКИ В КОНЦЕ СООБЩЕНИЯ.
-5. Не используй кавычки вокруг ответа.
+1. ПЕРЕФРАЗИРУЙ СВОИМИ СЛОВАМИ: Не копируй формулировки из замысла! Напиши реплику свежо, живо и оригинально.
+2. Стиль: живой разговорный русский язык Telegram (сленг по делу: хз, по факту, норм, рил, годнота, бро, шарит).
+3. Формат: 1-2 коротких предложения, строго от первого лица на 'ты'.
+4. ВООБЩЕ БЕЗ ЭМОДЗИ (ни одного эмодзи в тексте).
+5. БЕЗ ТОЧКИ В КОНЦЕ СООБЩЕНИЯ.
+6. Не используй кавычки вокруг ответа.
 """
 
     reply_text = await call_ai_completion(
@@ -563,7 +569,9 @@ async def generate_dynamic_step_text(
         system_prompt=system_prompt,
         user_prompt=user_instructions,
         json_mode=False,
-        base_url=settings.get("base_url")
+        base_url=settings.get("base_url"),
+        max_tokens=90,
+        temperature=0.92
     )
 
     cleaned = sanitize_telegram_comment(reply_text)
