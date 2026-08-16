@@ -223,7 +223,8 @@ async def generate_scenario_from_prompt(
     accounts_count: int = 3,
     reactions_enabled: bool = False,
     override_provider: Optional[str] = None,
-    override_model: Optional[str] = None
+    override_model: Optional[str] = None,
+    override_system_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
     """Generate full scenario steps structure from user prompt strictly without emojis, without trailing dots, as random strangers on 'ты'."""
     settings = await get_ai_settings(session)
