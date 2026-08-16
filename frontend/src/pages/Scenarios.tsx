@@ -2694,37 +2694,7 @@ export default function Scenarios() {
                   <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-участие в ротации ролей" />
                 </div>
 
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label style={{ ...labelStyle, marginBottom: 0 }}>Интервал между репликами</label>
-                    <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>внутри диалога</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>от</span>
-                      <input
-                        type="number"
-                        value={defaultMinDelay}
-                        onChange={e => setDefaultMinDelay(Number(e.target.value))}
-                        style={inputStyle}
-                      />
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>до</span>
-                      <input
-                        type="number"
-                        value={defaultMaxDelay}
-                        onChange={e => setDefaultMaxDelay(Number(e.target.value))}
-                        style={inputStyle}
-                      />
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    💡 Пауза между сообщениями разных ботов при проигрывании сценария.
-                  </p>
-                </div>
+
 
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
