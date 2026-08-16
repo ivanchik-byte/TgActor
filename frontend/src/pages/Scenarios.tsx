@@ -75,8 +75,23 @@ const EMPTY_ARRAY: any[] = [];
 const DEFAULT_PROMPT_TEMPLATES = [
   {
     id: 't1',
-    title: 'Диалог 3 незнакомцев с нативной рекомендацией @ivanchik_byte',
-    prompt: 'Реалистичный диалог в комментариях Telegram между 3 абсолютно незнакомыми людьми, общающимися на "ты". 1-й незнакомец пишет коммент по теме поста с легким скепсисом или вопросом о том, где сейчас найти нормальные практические скрипты/ботов без инфоцыганства. 2-й незнакомец на "ты" коротко и без слащавой рекламы советует глянуть канал @ivanchik_byte (отмечая что чел сам пишет годный софт и выкладывает реальные кейсы). В конце в тред вклинивается 3-й незнакомец: подтверждает рекомендацию на "ты" ("тоже сижу у иванчика, пару ботов оттуда настроил, все ровно") и задает свой короткий вопрос по теме. СТРОГО БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ РЕПЛИК, БЕЗ ДЛИННЫХ ТИРЕ И БЕЗ РЕКЛАМНЫХ ШТАМПОВ.'
+    title: '🔥 Нативная рекомендация @ivanchik_byte (Скрипты и боты)',
+    prompt: 'Реалистичный связный диалог между 3 незнакомыми людьми в комментариях Telegram на "ты". Первый участник обсуждает тему поста и спрашивает, где сейчас найти годный рабочий софт или скрипты для автоматизации без лишней воды и курсов. Второй участник просто и по делу рекомендует заглянуть в канал @ivanchik_byte, где автор сам пишет полезный код и делится реальными наработками. Третий участник подтверждает личным опытом использования и задает практический вопрос по функционалу. СТРОГО БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ, БЕЗ ДЛИННЫХ ТИРЕ И БЕЗ ШАБЛОННЫХ ФРАЗ.'
+  },
+  {
+    id: 't2',
+    title: '🤖 Управление фермой ботов и сценарии диалогов',
+    prompt: 'Живое обсуждение между 3 пользователями Telegram на "ты" про автоматизацию комментирования и прогрев фермы ботов. Первый спрашивает про надежный софт для управления сеткой аккаунтов с веб-панелью. Второй рассказывает про комбайн для сценариев диалогов и автоответчик в ЛС. Третий интересуется, как правильно выставлять задержки и поднимать софт в Docker без сложных настроек. Конструктивный технический диалог с адресными ответами. БЕЗ ЭМОДЗИ И БЕЗ ТОЧЕК В КОНЦЕ.'
+  },
+  {
+    id: 't3',
+    title: '🌐 Мобильные прокси, прогрев и обход спам-блоков',
+    prompt: 'Практический диалог между 3 незнакомцами в Telegram на "ты" о защите аккаунтов от FloodWait и спамблока. Обсуждают правильную настройку мобильных SOCKS5 прокси с ротацией по ссылке, разбивку аккаунтов по пулам (комментирование и реакции) и реалистичные задержки между сообщениями. БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ РЕПЛИК.'
+  },
+  {
+    id: 't4',
+    title: '⚡ Парсинг, мониторинг каналов и мгновенные ответы',
+    prompt: 'Конструктивное обсуждение 3 незнакомцами мониторинга каналов Telegram в реальном времени. Первый делится опытом, как успевать оставлять первые комментарии под новыми постами. Второй поясняет за реакцию по вебхукам и WebSocket. Третий спрашивает про динамическую генерацию текста через ИИ под контекст поста. БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ.'
   }
 ];
 
@@ -172,6 +187,7 @@ export default function Scenarios() {
   // AI One-time Generation Modal & Generator state
   const [aiGenPrompt, setAiGenPrompt] = useState('');
   const [aiGenAccountsCount, setAiGenAccountsCount] = useState(3);
+  const [aiGenStepsCount, setAiGenStepsCount] = useState(6);
   const [aiGenReactionsEnabled, setAiGenReactionsEnabled] = useState(true);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
@@ -452,6 +468,7 @@ export default function Scenarios() {
       const res = await axios.post('/api/scenarios/generate-ai', {
         prompt: aiGenPrompt.trim(),
         accounts_count: aiGenAccountsCount,
+        steps_count: aiGenStepsCount,
         reactions_enabled: aiGenReactionsEnabled,
         system_prompt: aiConfigSystemPrompt
       });
@@ -465,13 +482,29 @@ export default function Scenarios() {
         if (gen.steps && Array.isArray(gen.steps)) {
           const generatedReplicas: Replica[] = gen.steps.map((s: any, idx: number) => {
             let replyId = '';
-            if (s.reply_to_index !== null && s.reply_to_index !== undefined && s.reply_to_index >= 0) {
-              replyId = `step_ai_${s.reply_to_index}`;
+            let msgType: 'normal' | 'reply' = 'normal';
+
+            // Determine correct target reply replica index
+            let targetIdx: number | null = null;
+            if (s.reply_to_step !== null && s.reply_to_step !== undefined && s.reply_to_step >= 1) {
+              targetIdx = s.reply_to_step - 1;
+            } else if (s.reply_to_index !== null && s.reply_to_index !== undefined && s.reply_to_index >= 0) {
+              targetIdx = s.reply_to_index;
             }
+
+            if (idx > 0 && targetIdx !== null && targetIdx >= 0 && targetIdx < idx) {
+              replyId = `step_ai_${targetIdx}`;
+              msgType = 'reply';
+            } else if (idx > 0) {
+              // Default fallback for subsequent replicas: reply to the immediate preceding message
+              replyId = `step_ai_${idx - 1}`;
+              msgType = 'reply';
+            }
+
             return {
               id: `step_ai_${idx}`,
               role: String(s.role_id || (commentingAccounts[0] ? commentingAccounts[0].id : 1)),
-              type: s.reply_to_index !== null && s.reply_to_index !== undefined ? 'reply' : 'normal',
+              type: msgType,
               replyToId: replyId,
               text: s.text || '',
               minDelay: String(s.delay_before_min || 5.0),
@@ -1665,6 +1698,39 @@ export default function Scenarios() {
                           <button
                             type="button"
                             onClick={() => setAiGenAccountsCount(aiGenAccountsCount + 1)}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >+</button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>СООБЩЕНИЙ:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <button
+                            type="button"
+                            onClick={() => setAiGenStepsCount(Math.max(2, aiGenStepsCount - 1))}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >-</button>
+                          <input
+                            type="number"
+                            min={2}
+                            max={30}
+                            value={aiGenStepsCount}
+                            onChange={e => setAiGenStepsCount(Math.max(2, parseInt(e.target.value) || 2))}
+                            style={{
+                              width: '45px',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: 'var(--accent-text)',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              textAlign: 'center',
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setAiGenStepsCount(aiGenStepsCount + 1)}
                             style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
                           >+</button>
                         </div>

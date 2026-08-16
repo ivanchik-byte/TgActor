@@ -22,10 +22,52 @@ async def get_proxies():
 @router.post("/api/proxies")
 async def create_proxy(pr: ProxyCreate):
     async with async_session() as session:
-        proxy = Proxy(**pr.model_dump())
+        data = pr.model_dump()
+        data.pop("ip", None)
+        proxy = Proxy(**data)
         session.add(proxy)
         await session.commit()
         return {"status": "ok", "id": proxy.id}
+
+@router.post("/api/proxies/check")
+async def check_raw_proxy(pr: ProxyCreate):
+    from app.services.proxy_service import check_proxy_connectivity
+    data = pr.model_dump()
+    data.pop("ip", None)
+    dummy_proxy = Proxy(**data)
+    result = await check_proxy_connectivity(dummy_proxy, timeout=6.0)
+    return result
+
+@router.post("/api/proxies/{proxy_id}/check")
+async def check_saved_proxy(proxy_id: int):
+    from app.services.proxy_service import check_proxy_connectivity
+    async with async_session() as session:
+        pr = await session.get(Proxy, proxy_id)
+        if not pr:
+            raise HTTPException(404, "Proxy not found")
+        result = await check_proxy_connectivity(pr, timeout=6.0)
+        return result
+
+@router.post("/api/proxies/check-all")
+async def check_all_proxies():
+    import asyncio
+    from app.services.proxy_service import check_proxy_connectivity
+    async with async_session() as session:
+        res = await session.execute(select(Proxy).order_by(Proxy.id.asc()))
+        proxies = res.scalars().all()
+        if not proxies:
+            return {"results": []}
+
+        tasks = [check_proxy_connectivity(p, timeout=6.0) for p in proxies]
+        check_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        output = []
+        for p, r in zip(proxies, check_results):
+            if isinstance(r, Exception):
+                output.append({"id": p.id, "status": "error", "error": str(r)})
+            else:
+                output.append({"id": p.id, **r})
+        return {"results": output}
 
 @router.delete("/api/proxies/{proxy_id}")
 async def delete_proxy(proxy_id: int):

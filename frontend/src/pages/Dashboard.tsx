@@ -49,7 +49,8 @@ interface Account {
 
 interface ProxyItem {
   id: number;
-  ip: string;
+  host?: string;
+  ip?: string;
   port: number;
   protocol: string;
   username?: string | null;
@@ -240,6 +241,42 @@ export default function Dashboard() {
     },
   });
 
+  const [proxyCheckState, setProxyCheckState] = useState<Record<number, { loading?: boolean; status?: string; latency_ms?: number; error?: string }>>({});
+  const [isCheckingAllProxies, setIsCheckingAllProxies] = useState(false);
+
+  const checkSingleProxy = async (id: number) => {
+    setProxyCheckState((prev) => ({ ...prev, [id]: { loading: true } }));
+    try {
+      const res = await axios.post(`/api/proxies/${id}/check`);
+      setProxyCheckState((prev) => ({ ...prev, [id]: { loading: false, ...res.data } }));
+      if (res.data.status === 'ok') {
+        showToast(`Прокси #${id} доступен (${res.data.latency_ms}мс)`, 'success');
+      } else {
+        showToast(`Прокси #${id}: ${res.data.error || 'Ошибка соединения'}`, 'error');
+      }
+    } catch (e: any) {
+      setProxyCheckState((prev) => ({ ...prev, [id]: { loading: false, status: 'error', error: e.message } }));
+      showToast(`Ошибка проверки #${id}`, 'error');
+    }
+  };
+
+  const checkAllProxies = async () => {
+    setIsCheckingAllProxies(true);
+    try {
+      const res = await axios.post('/api/proxies/check-all');
+      const newMap: Record<number, any> = {};
+      for (const item of res.data.results || []) {
+        newMap[item.id] = { loading: false, ...item };
+      }
+      setProxyCheckState(newMap);
+      showToast('Все прокси проверены', 'info');
+    } catch {
+      showToast('Ошибка при проверке прокси', 'error');
+    } finally {
+      setIsCheckingAllProxies(false);
+    }
+  };
+
   const addProxy = useMutation({
     mutationFn: async () => {
       const lines = proxyInput.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -259,7 +296,7 @@ export default function Dashboard() {
           username = parts[3];
           password = parts[4];
         }
-        await axios.post('/api/proxies', { ip, port, protocol, username, password });
+        await axios.post('/api/proxies', { host: ip, ip, port, protocol, username, password });
       }
     },
     onSuccess: () => {
@@ -1737,26 +1774,50 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <button
-            onClick={() => setShowAddProxy(!showAddProxy)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 14px',
-              borderRadius: '8px',
-              backgroundColor: showAddProxy ? 'var(--bg-main)' : 'var(--accent)',
-              border: showAddProxy ? '1px solid var(--border-color)' : 'none',
-              color: showAddProxy ? 'var(--text-muted)' : '#ffffff',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            {showAddProxy ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-            <span>{showAddProxy ? 'Скрыть форму' : 'Добавить прокси'}</span>
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={checkAllProxies}
+              disabled={isCheckingAllProxies || proxies.length === 0}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 14px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--bg-main)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-main)',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: isCheckingAllProxies || proxies.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: isCheckingAllProxies || proxies.length === 0 ? 0.6 : 1,
+              }}
+            >
+              {isCheckingAllProxies ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              <span>{isCheckingAllProxies ? 'Проверяем...' : 'Проверить все'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowAddProxy(!showAddProxy)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 14px',
+                borderRadius: '8px',
+                backgroundColor: showAddProxy ? 'var(--bg-main)' : 'var(--accent)',
+                border: showAddProxy ? '1px solid var(--border-color)' : 'none',
+                color: showAddProxy ? 'var(--text-muted)' : '#ffffff',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {showAddProxy ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              <span>{showAddProxy ? 'Скрыть форму' : 'Добавить прокси'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Add Proxy Form */}
@@ -1858,60 +1919,95 @@ export default function Dashboard() {
             <p style={{ fontSize: '12px', margin: 0 }}>Нажмите «Добавить прокси» для импорта ваших серверов</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
-            {proxies.map((p) => (
-              <div
-                key={p.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--bg-main)',
-                  border: '1px solid var(--border-color)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: p.status === 'active' ? '#10b981' : '#ef4444',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.ip}:{p.port}
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', gap: '4px' }}>
-                      <span style={{ textTransform: 'uppercase', color: '#818cf8', fontWeight: 700 }}>{p.protocol}</span>
-                      {p.username && <span>• {p.username}</span>}
-                    </div>
-                  </div>
-                </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+            {proxies.map((p) => {
+              const checkInfo = proxyCheckState[p.id];
+              const isChecked = checkInfo && !checkInfo.loading;
+              const isSuccess = checkInfo?.status === 'ok';
 
-                <button
-                  onClick={() => setConfirmDeleteProxyId(p.id)}
+              return (
+                <div
+                  key={p.id}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer',
-                    padding: '4px',
                     display: 'flex',
                     alignItems: 'center',
-                    transition: 'color 0.15s ease',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-main)',
+                    border: '1px solid var(--border-color)',
+                    gap: '8px'
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        backgroundColor: isChecked ? (isSuccess ? '#10b981' : '#ef4444') : '#818cf8',
+                        flexShrink: 0,
+                      }}
+                      title={isChecked ? (isSuccess ? `Пинг к Telegram DC: ${checkInfo.latency_ms}мс` : checkInfo.error) : 'Не проверен'}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {p.host || p.ip}:{p.port}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span style={{ textTransform: 'uppercase', color: '#818cf8', fontWeight: 700 }}>{p.protocol || 'socks5'}</span>
+                        {p.username && <span>• {p.username}</span>}
+                        {isChecked && (
+                          <span style={{ color: isSuccess ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                            • {isSuccess ? `${checkInfo.latency_ms}ms` : (checkInfo.error?.slice(0, 15) || 'Ошибка')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                    <button
+                      onClick={() => checkSingleProxy(p.id)}
+                      disabled={checkInfo?.loading}
+                      title="Проверить подключение к серверам Telegram"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: checkInfo?.loading ? 'not-allowed' : 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'color 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                    >
+                      {checkInfo?.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    </button>
+
+                    <button
+                      onClick={() => setConfirmDeleteProxyId(p.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transition: 'color 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
