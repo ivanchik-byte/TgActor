@@ -302,7 +302,8 @@ async def execute_scenario(
                             await r_client.start()
                             # Telegram API requires strictly 1 emoji per reaction
                             emoji = random.choice(reactions)
-                            await asyncio.sleep(random.uniform(0.5, 2.0))
+                            # Realistic human delay before placing reaction (3 to 6 seconds)
+                            await asyncio.sleep(random.uniform(3.0, 6.0))
                             await r_client.send_reaction(target_chat_id, msg_id, emoji)
                             logger.info(f"Аккаунт {r_acc.id} поставил реакцию {emoji}")
                             await log_action(

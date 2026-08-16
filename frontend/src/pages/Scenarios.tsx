@@ -72,26 +72,72 @@ const DEFAULT_SYSTEM_PROMPT = `# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНА�
 
 const EMPTY_ARRAY: any[] = [];
 
-const DEFAULT_PROMPT_TEMPLATES = [
+const DEFAULT_DYNAMIC_TEMPLATES = [
   {
-    id: 't1',
-    title: '🔥 Нативная рекомендация @ivanchik_byte (Скрипты и боты)',
-    prompt: 'Реалистичный связный диалог между 3 незнакомыми людьми в комментариях Telegram на "ты". Первый участник обсуждает тему поста и спрашивает, где сейчас найти годный рабочий софт или скрипты для автоматизации без лишней воды и курсов. Второй участник просто и по делу рекомендует заглянуть в канал @ivanchik_byte, где автор сам пишет полезный код и делится реальными наработками. Третий участник подтверждает личным опытом использования и задает практический вопрос по функционалу. СТРОГО БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ, БЕЗ ДЛИННЫХ ТИРЕ И БЕЗ ШАБЛОННЫХ ФРАЗ.'
+    id: 'dt1',
+    title: '🔥 Нативная реклама софта @ivanchik_byte (Роли 1-2-3)',
+    prompt: `Динамический сценарий нативной ненавязчивой рекламы канала @ivanchik_byte между 3 абсолютно незнакомыми людьми в комментариях Telegram на "ты".
+
+ПОШАГОВАЯ ДРАМАТУРГИЯ И ИНСТРУКЦИИ ДЛЯ БОТОВ:
+1. РОЛЬ 1 (Инициатор): Начинает диалог по теме поста. С легким скепсисом или вопросом поднимает реальную проблему (где взять рабочий софт для Telegram, скрипты без инфоцыганских курсов и лишней воды).
+2. РОЛЬ 2 (Советчик / Практик): Отвечает Роли 1 по делу. Без слащавой рекламы советует заглянуть в канал @ivanchik_byte. Отмечает, что автор сам пишет качественный софт, выкладывает реальные кейсы, Docker-шаблоны и скрипты.
+3. РОЛЬ 3 (Единомышленник): Вклинивается в ветку с живым удивлением («ого, не ожидал тут увидеть тех кто в теме», «тоже сижу у иванчика»). Подтверждает личным опытом (настроил комбайн / ботов, всё летает). Задает уточняющий вопрос по фишкам (например, про ротацию прокси или задержки).
+4. РОЛЬ 2: Раскрывает детали Роли 3 и Роли 1 (как работают задержки, веб-панель и безопасность).
+5. РОЛЬ 1: Задает короткий финальный вопрос о настройке.
+6. РОЛЬ 3: Дополняет ответ своим практическим советом.
+7. РОЛЬ 1: Благодарит собеседников и подводит логический итог (говорит, что пошел чекать канал и тестировать).
+
+СТРОГИЕ ПРАВИЛА: Без эмодзи в тексте сообщений, без точек в конце, разговорный сленг незнакомцев, адресные ответы по смыслу.`
   },
   {
-    id: 't2',
-    title: '🤖 Управление фермой ботов и сценарии диалогов',
-    prompt: 'Живое обсуждение между 3 пользователями Telegram на "ты" про автоматизацию комментирования и прогрев фермы ботов. Первый спрашивает про надежный софт для управления сеткой аккаунтов с веб-панелью. Второй рассказывает про комбайн для сценариев диалогов и автоответчик в ЛС. Третий интересуется, как правильно выставлять задержки и поднимать софт в Docker без сложных настроек. Конструктивный технический диалог с адресными ответами. БЕЗ ЭМОДЗИ И БЕЗ ТОЧЕК В КОНЦЕ.'
+    id: 'dt2',
+    title: '🤖 Автоматизация комментирования и прогрев фермы ботов',
+    prompt: `Динамический сценарий технической дискуссии об автоматизации комментирования в Telegram и безопасном прогреве сетки аккаунтов.
+
+ПОШАГОВАЯ ДРАМАТУРГИЯ И ИНСТРУКЦИИ ДЛЯ БОТОВ:
+1. РОЛЬ 1 (Новичок-практик): Задает вопрос в комментариях под постом о том, как сейчас автоматизировать комментирование каналов и не ловить бан аккаунтов.
+2. РОЛЬ 2 (Опытный разработчик/арбитражник): Поясняет за архитектуру: рандомизация задержек (3-15 сек), использование мобильных прокси с ротацией и разделение аккаунтов на пулы (комментирование и реакции).
+3. РОЛЬ 3 (Участник с опытом): Подключается к обсуждению, отмечает важность динамических ИИ-ответов на лету, чтобы каждое сообщение было уникальным под контекст поста.
+4. РОЛЬ 1: Уточняет, сложно ли развернуть такую систему в Docker на VPS сервере.
+5. РОЛЬ 2: Объясняет, что в Docker всё поднимается одной командой за пару минут через docker-compose.
+6. РОЛЬ 3: Дополняет рекомендацией по контролю лимитов сообщений в сутки.
+7. РОЛЬ 1: Благодарит за практическую инфу и резюмирует ветку.
+
+СТРОГИЕ ПРАВИЛА: Без эмодзи в тексте сообщений, без точек в конце, живой язык на "ты", адресные ответы.`
   },
   {
-    id: 't3',
-    title: '🌐 Мобильные прокси, прогрев и обход спам-блоков',
-    prompt: 'Практический диалог между 3 незнакомцами в Telegram на "ты" о защите аккаунтов от FloodWait и спамблока. Обсуждают правильную настройку мобильных SOCKS5 прокси с ротацией по ссылке, разбивку аккаунтов по пулам (комментирование и реакции) и реалистичные задержки между сообщениями. БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ РЕПЛИК.'
+    id: 'dt3',
+    title: '🌐 Мобильные SOCKS5 прокси, прогрев и защита от спамблока',
+    prompt: `Динамический сценарий профессионального обсуждения безопасности аккаунтов Telegram и настройки мобильных прокси.
+
+ПОШАГОВАЯ ДРАМАТУРГИЯ И ИНСТРУКЦИИ ДЛЯ БОТОВ:
+1. РОЛЬ 1: Поднимает тему частых блокировок или FloodWait при работе с несколькими Telegram аккаунтами.
+2. РОЛЬ 2: Делится проверенным решением: приватные мобильные SOCKS5 прокси с автосменой IP по ссылке, разнесение сессий по независимым IP и отлежка новых аккаунтов.
+3. РОЛЬ 3: Вклинивается с подтверждением, рассказывает про свой опыт разделения пулов (отдельные прокси для чтения и для реакций).
+4. РОЛЬ 1: Спрашивает про оптимальное количество аккаунтов на один мобильный порт прокси.
+5. РОЛЬ 2: Отвечает конкретными цифрами (не более 3-5 аккаунтов на канал с ротацией IP).
+6. РОЛЬ 3: Добавляет совет по установке умных задержек перед отправкой реакций (3-6 секунд).
+7. РОЛЬ 1: Подводит итог ветки и благодарит за понятный гайд.
+
+СТРОГИЕ ПРАВИЛА: Без эмодзи в тексте, без точек на конце, естественный сленг (норм, спс, щас, чекнуть, хз), ветвление ответов по смыслу.`
+  }
+];
+
+const DEFAULT_STATIC_TEMPLATES = [
+  {
+    id: 'st1',
+    title: '💬 Обсуждение надежности криптокошельков',
+    prompt: 'Реалистичный диалог 3 незнакомцев про некастодиальные криптокошельки. Первый спрашивает какой кошелек безопаснее для холодного хранения. Второй советует Tangem и Trust, поясняя про приватные ключи. Третий делится опытом восстановления сид-фразы и подтверждает надежность.'
   },
   {
-    id: 't4',
-    title: '⚡ Парсинг, мониторинг каналов и мгновенные ответы',
-    prompt: 'Конструктивное обсуждение 3 незнакомцами мониторинга каналов Telegram в реальном времени. Первый делится опытом, как успевать оставлять первые комментарии под новыми постами. Второй поясняет за реакцию по вебхукам и WebSocket. Третий спрашивает про динамическую генерацию текста через ИИ под контекст поста. БЕЗ ЭМОДЗИ, БЕЗ ТОЧЕК В КОНЦЕ.'
+    id: 'st2',
+    title: '⚡ Парсинг аудитории и мониторинг новых постов',
+    prompt: 'Диалог 3 участников на "ты" про скорость реакции на новые публикации. Первый спрашивает как успевать комментировать первым. Второй рассказывает про мониторинг по вебхукам. Третий делится своим опытом фильтрации каналов.'
+  },
+  {
+    id: 'st3',
+    title: '📊 Спор про облачные VPS и деплой скриптов',
+    prompt: 'Конструктивный диалог 3 человек про выбор VPS под Telegram ботов. Первый спрашивает где дешевле и стабильнее брать сервер. Второй советует конфигурации с 2GB RAM под Docker. Третий подтверждает что на чистом Linux в докере ничего не падает.'
   }
 ];
 
@@ -99,43 +145,69 @@ export default function Scenarios() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   
-  // Custom templates state
-  const [promptTemplates, setPromptTemplates] = useState(() => {
+  // Dynamic templates state
+  const [dynamicTemplates, setDynamicTemplates] = useState(() => {
     try {
-      const saved = localStorage.getItem('tgactor_ai_templates_v6');
-      return saved ? JSON.parse(saved) : DEFAULT_PROMPT_TEMPLATES;
+      const saved = localStorage.getItem('tgactor_ai_dyn_templates_v1');
+      return saved ? JSON.parse(saved) : DEFAULT_DYNAMIC_TEMPLATES;
     } catch {
-      return DEFAULT_PROMPT_TEMPLATES;
+      return DEFAULT_DYNAMIC_TEMPLATES;
     }
   });
+
+  // Static templates state
+  const [staticTemplates, setStaticTemplates] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tgactor_ai_stat_templates_v1');
+      return saved ? JSON.parse(saved) : DEFAULT_STATIC_TEMPLATES;
+    } catch {
+      return DEFAULT_STATIC_TEMPLATES;
+    }
+  });
+
   const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
+  const [addTemplateTarget, setAddTemplateTarget] = useState<'dynamic' | 'static'>('dynamic');
   const [newTemplateTitle, setNewTemplateTitle] = useState('');
   const [newTemplatePrompt, setNewTemplatePrompt] = useState('');
 
   const handleAddCustomTemplate = () => {
     if (!newTemplateTitle.trim() || !newTemplatePrompt.trim()) return;
-    const updated = [
-      ...promptTemplates,
-      {
-        id: Math.random().toString(36).substring(2, 9),
-        title: newTemplateTitle.trim(),
-        prompt: newTemplatePrompt.trim()
-      }
-    ];
-    setPromptTemplates(updated);
-    try { localStorage.setItem('tgactor_ai_templates_v3', JSON.stringify(updated)); } catch {}
+    const newT = {
+      id: Math.random().toString(36).substring(2, 9),
+      title: newTemplateTitle.trim(),
+      prompt: newTemplatePrompt.trim()
+    };
+
+    if (addTemplateTarget === 'dynamic') {
+      const updated = [...dynamicTemplates, newT];
+      setDynamicTemplates(updated);
+      try { localStorage.setItem('tgactor_ai_dyn_templates_v1', JSON.stringify(updated)); } catch {}
+    } else {
+      const updated = [...staticTemplates, newT];
+      setStaticTemplates(updated);
+      try { localStorage.setItem('tgactor_ai_stat_templates_v1', JSON.stringify(updated)); } catch {}
+    }
+
     setNewTemplateTitle('');
     setNewTemplatePrompt('');
     setShowAddTemplateModal(false);
     showToast('Новый шаблон сохранен!', 'success');
   };
 
-  const handleDeleteCustomTemplate = (id: string, e: React.MouseEvent) => {
+  const handleDeleteDynamicTemplate = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = promptTemplates.filter((t: any) => t.id !== id);
-    setPromptTemplates(updated);
-    try { localStorage.setItem('tgactor_ai_templates_v3', JSON.stringify(updated)); } catch {}
-    showToast('Шаблон удален', 'info');
+    const updated = dynamicTemplates.filter((t: any) => t.id !== id);
+    setDynamicTemplates(updated);
+    try { localStorage.setItem('tgactor_ai_dyn_templates_v1', JSON.stringify(updated)); } catch {}
+    showToast('Динамический шаблон удален', 'info');
+  };
+
+  const handleDeleteStaticTemplate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = staticTemplates.filter((t: any) => t.id !== id);
+    setStaticTemplates(updated);
+    try { localStorage.setItem('tgactor_ai_stat_templates_v1', JSON.stringify(updated)); } catch {}
+    showToast('Статический шаблон удален', 'info');
   };
   
   // Active Scenario state
@@ -458,7 +530,7 @@ export default function Scenarios() {
     event.target.value = '';
   };
 
-  const handleGenerateScenarioAI = async () => {
+  const handleGenerateScenarioAI = async (isDynamic: boolean = false) => {
     if (!aiGenPrompt.trim()) {
       showToast('Введите описание диалога для ИИ!', 'error');
       return;
@@ -470,6 +542,7 @@ export default function Scenarios() {
         accounts_count: aiGenAccountsCount,
         steps_count: aiGenStepsCount,
         reactions_enabled: aiGenReactionsEnabled,
+        is_dynamic: isDynamic,
         system_prompt: aiConfigSystemPrompt
       });
 
@@ -496,17 +569,19 @@ export default function Scenarios() {
               replyId = `step_ai_${targetIdx}`;
               msgType = 'reply';
             } else if (idx > 0) {
-              // Default fallback for subsequent replicas: reply to the immediate preceding message
               replyId = `step_ai_${idx - 1}`;
               msgType = 'reply';
             }
+
+            const stepIsDyn = Boolean(s.is_ai_dynamic || isDynamic);
+            const promptVal = s.ai_prompt || (stepIsDyn ? (s.text || '') : '');
 
             return {
               id: `step_ai_${idx}`,
               role: String(s.role_id || (commentingAccounts[0] ? commentingAccounts[0].id : 1)),
               type: msgType,
               replyToId: replyId,
-              text: s.text || '',
+              text: s.text || promptVal,
               minDelay: String(s.delay_before_min || 5.0),
               maxDelay: String(s.delay_before_max || 10.0),
               reactions: s.reactions || '',
@@ -514,14 +589,19 @@ export default function Scenarios() {
               reactionSource: 'pool',
               fileName: '',
               noAttachmentIfForbidden: false,
-              isAiDynamic: false,
-              aiPrompt: ''
+              isAiDynamic: stepIsDyn,
+              aiPrompt: promptVal
             };
           });
           setReplicas(generatedReplicas);
         }
         setScenarioMode('manual');
-        showToast('🎉 Сценарий сгенерирован ИИ! Режим переключен в Ручной для просмотра и сохранения.', 'success');
+        showToast(
+          isDynamic
+            ? '🎉 Динамический ИИ-сценарий сгенерирован! Шаги содержат промпты для генерации текста на лету.'
+            : '🎉 Сценарий сгенерирован ИИ! Режим переключен в Ручной для просмотра и сохранения.',
+          'success'
+        );
       }
     } catch (err: any) {
       showToast(err?.response?.data?.detail || 'Ошибка генерации сценария ИИ', 'error');
@@ -1493,8 +1573,9 @@ export default function Scenarios() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: '4px' }}>Режим:</span>
                   {[
-                    { id: 'manual', label: '📝 Статический', desc: 'Ручной конструктор сценария' },
-                    { id: 'ai_generated', label: '🚀 Сгенерировать ИИ', desc: 'Разовая генерация по описанию' },
+                    { id: 'manual', label: '📝 Статический', desc: 'Ручной конструктор шагов сценария' },
+                    { id: 'ai_generated', label: '🚀 Сгенерировать ИИ', desc: 'Разовая генерация готовых текстовых сообщений' },
+                    { id: 'ai_dynamic', label: '✨ Динамический ИИ', desc: 'Генерация шагов с динамическими ИИ-промптами вместо текста' },
                   ].map(m => (
                     <button
                       key={m.id}
@@ -1560,8 +1641,238 @@ export default function Scenarios() {
                 </div>
               </div>
 
-              {/* Option 2: Full-screen AI Generator Studio (hides previous steps while in generator mode) */}
-              {scenarioMode === 'ai_generated' ? (
+              {/* Option 2: Full-screen AI Dynamic Studio (Dynamic Prompts instead of static SMS) */}
+              {scenarioMode === 'ai_dynamic' ? (
+                <div style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid rgba(139, 92, 246, 0.5)',
+                  borderRadius: '20px',
+                  padding: '24px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      backgroundColor: 'rgba(139, 92, 246, 0.15)',
+                      padding: '10px',
+                      borderRadius: '12px',
+                      color: '#a78bfa'
+                    }}>
+                      <Zap className="w-6 h-6 text-accent" />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
+                          Мастер Динамических ИИ-Сценариев (Промпты вместо СМС)
+                        </h3>
+                        <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '12px', backgroundColor: 'rgba(139, 92, 246, 0.2)', color: '#c4b5fd', fontWeight: 700 }}>
+                          УНИКАЛЬНЫЙ ТЕКСТ НА ЛЕТУ
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Вместо фиксированных текстов боты получают гибкие промпты. При каждом запуске под любым постом в Telegram боты сами формулируют уникальные сообщения от первого лица в реальном времени.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label style={labelStyle}>Тема или канва диалога для динамических промптов</label>
+                    <textarea
+                      rows={5}
+                      placeholder="Например: Обсуждение софта для автоматизации Telegram. 1-й участник задает вопрос о надежных скриптах, 2-й советует канал @ivanchik_byte без слащавой рекламы, 3-й подтверждает опыт настройки..."
+                      value={aiGenPrompt}
+                      onChange={e => setAiGenPrompt(e.target.value)}
+                      style={{ ...inputStyle, resize: 'vertical', fontSize: '13px', lineHeight: '1.5' }}
+                    />
+                  </div>
+
+                  {/* Quick prompt suggestion chips for Dynamic Studio */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ ...labelStyle, fontSize: '10px', marginBottom: 0 }}>ШАБЛОНЫ ДИНАМИЧЕСКИХ ПРОМПТОВ (ПОШАГОВАЯ ДРАМАТУРГИЯ):</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddTemplateTarget('dynamic');
+                          setShowAddTemplateModal(true);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#a78bfa',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        + Добавить динамический шаблон
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {dynamicTemplates.map((t: any) => (
+                        <div
+                          key={t.id}
+                          onClick={() => setAiGenPrompt(t.prompt)}
+                          style={{
+                            backgroundColor: 'var(--bg-main)',
+                            border: '1px solid rgba(139, 92, 246, 0.3)',
+                            borderRadius: '8px',
+                            padding: '6px 10px',
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                          title={t.prompt}
+                        >
+                          <span>{t.title}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteDynamicTemplate(t.id, e)}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              padding: '0 2px',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              lineHeight: 1
+                            }}
+                            title="Удалить этот шаблон"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>УЧАСТНИКОВ (БОТОВ):</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <button
+                            type="button"
+                            onClick={() => setAiGenAccountsCount(Math.max(1, aiGenAccountsCount - 1))}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >-</button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={aiGenAccountsCount}
+                            onChange={e => setAiGenAccountsCount(Math.max(1, parseInt(e.target.value) || 1))}
+                            style={{
+                              width: '45px',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: 'var(--accent-text)',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              textAlign: 'center',
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setAiGenAccountsCount(aiGenAccountsCount + 1)}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >+</button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>ПРОМПТОВ (ШАГОВ):</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <button
+                            type="button"
+                            onClick={() => setAiGenStepsCount(Math.max(2, aiGenStepsCount - 1))}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >-</button>
+                          <input
+                            type="number"
+                            min={2}
+                            max={30}
+                            value={aiGenStepsCount}
+                            onChange={e => setAiGenStepsCount(Math.max(2, parseInt(e.target.value) || 2))}
+                            style={{
+                              width: '45px',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: 'var(--accent-text)',
+                              fontWeight: 800,
+                              fontSize: '13px',
+                              textAlign: 'center',
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setAiGenStepsCount(aiGenStepsCount + 1)}
+                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
+                          >+</button>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
+                        title="ИИ изредка ставит максимум 1 реакцию на весь диалог на самое ключевое сообщение"
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          border: aiGenReactionsEnabled ? '1px solid #22c55e' : '1px solid var(--border-color)',
+                          backgroundColor: aiGenReactionsEnabled ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-main)',
+                          color: aiGenReactionsEnabled ? '#4ade80' : 'var(--text-muted)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        {aiGenReactionsEnabled ? '👍 Реакции (Умный выбор)' : '🚫 Реакции ВЫКЛ'}
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateScenarioAI(true)}
+                      disabled={isGeneratingAI || !aiGenPrompt.trim()}
+                      style={{
+                        backgroundColor: '#8b5cf6',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '10px',
+                        padding: '10px 20px',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        opacity: (isGeneratingAI || !aiGenPrompt.trim()) ? 0.5 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
+                      }}
+                    >
+                      <Zap className="w-4 h-4" />
+                      {isGeneratingAI ? 'Генерация промптов...' : '✨ Сгенерировать Динамические Промпты'}
+                    </button>
+                  </div>
+                </div>
+              ) : scenarioMode === 'ai_generated' ? (
                 <div style={{
                   backgroundColor: 'var(--bg-card)',
                   border: '1px solid var(--accent)',
@@ -1584,10 +1895,10 @@ export default function Scenarios() {
                     </div>
                     <div>
                       <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
-                        Мастер ИИ-Генерации Сценариев
+                        Мастер Статической ИИ-Генерации Сценариев
                       </h3>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Задайте тему или заготовку — нейросеть выстроит последовательность реплик, свяжет ответы ботов и расставит эмодзи-реакции.
+                        Задайте тему — нейросеть выстроит последовательность готовых текстовых сообщений, свяжет ответы ботов и расставит эмодзи-реакции.
                       </p>
                     </div>
                   </div>
@@ -1603,13 +1914,16 @@ export default function Scenarios() {
                     />
                   </div>
 
-                  {/* Quick prompt suggestion chips with Delete & Add custom template capabilities */}
+                  {/* Quick prompt suggestion chips for Static Studio */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ ...labelStyle, fontSize: '10px', marginBottom: 0 }}>ГОТОВЫЕ ШАБЛОНЫ (НАЖМИТЕ ДЛЯ ПОДСТАНОВКИ):</label>
+                      <label style={{ ...labelStyle, fontSize: '10px', marginBottom: 0 }}>ШАБЛОНЫ СТАТИЧЕСКИХ ДИАЛОГОВ:</label>
                       <button
                         type="button"
-                        onClick={() => setShowAddTemplateModal(true)}
+                        onClick={() => {
+                          setAddTemplateTarget('static');
+                          setShowAddTemplateModal(true);
+                        }}
                         style={{
                           background: 'none',
                           border: 'none',
@@ -1622,11 +1936,11 @@ export default function Scenarios() {
                           gap: '4px'
                         }}
                       >
-                        + Добавить свой шаблон
+                        + Добавить статический шаблон
                       </button>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {promptTemplates.map((t: any) => (
+                      {staticTemplates.map((t: any) => (
                         <div
                           key={t.id}
                           onClick={() => setAiGenPrompt(t.prompt)}
@@ -1648,7 +1962,7 @@ export default function Scenarios() {
                           <span>{t.title}</span>
                           <button
                             type="button"
-                            onClick={(e) => handleDeleteCustomTemplate(t.id, e)}
+                            onClick={(e) => handleDeleteStaticTemplate(t.id, e)}
                             style={{
                               border: 'none',
                               background: 'none',
@@ -1739,7 +2053,7 @@ export default function Scenarios() {
                       <button
                         type="button"
                         onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
-                        title="ИИ выборочно ставит реакции только на ключевые реплики (~35% сообщений)"
+                        title="ИИ изредка ставит максимум 1 реакцию на весь диалог на самое ключевое сообщение"
                         style={{
                           padding: '6px 12px',
                           borderRadius: '8px',
@@ -1760,7 +2074,7 @@ export default function Scenarios() {
 
                     <button
                       type="button"
-                      onClick={handleGenerateScenarioAI}
+                      onClick={() => handleGenerateScenarioAI(false)}
                       disabled={isGeneratingAI || !aiGenPrompt.trim()}
                       style={{
                         backgroundColor: 'var(--accent)',
@@ -1779,7 +2093,7 @@ export default function Scenarios() {
                       }}
                     >
                       <Sparkles className="w-4 h-4" />
-                      {isGeneratingAI ? 'Генерация...' : '✨ Сгенерировать готовый сценарий'}
+                      {isGeneratingAI ? 'Генерация...' : '🚀 Сгенерировать готовый сценарий'}
                     </button>
                   </div>
                 </div>
@@ -1919,7 +2233,7 @@ export default function Scenarios() {
                             </button>
                           </div>
 
-                          {replica.isAiDynamic || scenarioMode === 'ai_dynamic' ? (
+                          {replica.isAiDynamic ? (
                             <div>
                               <label style={{ ...labelStyle, color: 'var(--accent-text)' }}>
                                 Инструкция (промпт) для ИИ на этом шаге:
