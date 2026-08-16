@@ -56,6 +56,32 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
             added_ids.append(channel.id)
 
         await session.commit()
+
+        # If auto-join is requested, trigger background smooth join for these channels
+        auto_join_bots = bool(payload.get("auto_join_bots", False))
+        auto_join_count = int(payload.get("auto_join_count") or 3)
+        if auto_join_bots and lines:
+            try:
+                from app.services.join_service import start_smooth_join
+                from app.models.models import Account
+                stmt = select(Account).where(Account.is_active == True, Account.pool == "commenting")
+                res = await session.execute(stmt)
+                accounts = res.scalars().all()
+                if not accounts:
+                    stmt_all = select(Account).where(Account.is_active == True)
+                    res_all = await session.execute(stmt_all)
+                    accounts = res_all.scalars().all()
+                if accounts:
+                    target_accs = accounts[:auto_join_count]
+                    await start_smooth_join(
+                        chat_links=lines,
+                        account_ids=[a.id for a in target_accs],
+                        min_delay=30,
+                        max_delay=90
+                    )
+            except Exception as e:
+                pass
+
         return {"status": "ok", "added_ids": added_ids}
 
 @router.patch("/api/channels/{channel_id}")
@@ -103,3 +129,60 @@ async def start_monitor():
 async def stop_monitor():
     await stop_channel_monitor()
     return {"running": is_monitor_running()}
+
+# Smooth Fleet Joiner Endpoints
+@router.get("/api/channels/smooth-join/status")
+async def get_smooth_join_status_endpoint():
+    from app.services.join_service import get_join_status
+    return get_join_status()
+
+@router.post("/api/channels/smooth-join/start")
+async def start_smooth_join_endpoint(payload: Dict[str, Any] = Body(...)):
+    from app.services.join_service import start_smooth_join
+    from app.models.models import Account
+
+    raw_links = str(payload.get("chat_links") or payload.get("chat_link") or "").strip()
+    account_ids = payload.get("account_ids")
+    account_count = int(payload.get("account_count") or 0)
+    min_delay = int(payload.get("min_delay") or 30)
+    max_delay = int(payload.get("max_delay") or 90)
+
+    if not raw_links:
+        raise HTTPException(400, "Укажите ссылку на канал или группу (например, t.me/example)")
+
+    links = [l.strip() for l in raw_links.replace(",", "\n").split("\n") if l.strip()]
+
+    async with async_session() as session:
+        if not account_ids:
+            # Query active commenting accounts
+            stmt = select(Account).where(Account.is_active == True, Account.pool == "commenting")
+            res = await session.execute(stmt)
+            accounts = res.scalars().all()
+            if not accounts:
+                # Fallback to any active accounts
+                stmt_all = select(Account).where(Account.is_active == True)
+                res_all = await session.execute(stmt_all)
+                accounts = res_all.scalars().all()
+
+            if not accounts:
+                raise HTTPException(400, "Нет активных Telegram аккаунтов для входа в группу")
+
+            if account_count > 0:
+                accounts = accounts[:account_count]
+
+            account_ids = [a.id for a in accounts]
+
+    res = await start_smooth_join(
+        chat_links=links,
+        account_ids=account_ids,
+        min_delay=min_delay,
+        max_delay=max_delay
+    )
+    return res
+
+@router.post("/api/channels/smooth-join/cancel")
+async def cancel_smooth_join_endpoint():
+    from app.services.join_service import cancel_smooth_join
+    success = await cancel_smooth_join()
+    return {"status": "ok", "cancelled": success}
+
