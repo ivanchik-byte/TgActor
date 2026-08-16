@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.models.models import Scenario, ScenarioStep, TaskLog, Account
 from app.services.pool_service import get_commenting_pool, get_reaction_pool
-from app.services.log_service import log_action
+from app.services.log_service import log_action, classify_telegram_error
 from app.services.ai_service import generate_dynamic_step_text
 from app.telegram.client import get_hydrogram_client
 from app.telegram.preflight import check_chat_availability
@@ -133,7 +133,8 @@ async def execute_scenario(
                 else:
                     raise ValueError("Discussion message has no valid chat")
             except Exception as ex:
-                error_msg = f"У канала {chat_id} отключены комментарии или нет группы для обсуждений (post #{post_id}): {ex}"
+                diag = classify_telegram_error(ex)
+                error_msg = f"{diag['badge']}: У канала {chat_id} отключены комментарии или нет группы для обсуждений (post #{post_id})"
                 logger.error(error_msg)
                 log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
                 session.add(log)
@@ -142,7 +143,15 @@ async def execute_scenario(
                     action_type="comment_send",
                     status="error",
                     target=str(chat_id),
-                    details={"error": error_msg, "channel": str(chat_id), "post_id": post_id},
+                    target_id=f"{diag['badge']} • post #{post_id}",
+                    details={
+                        "summary": diag["summary"],
+                        "category": diag["category"],
+                        "badge": diag["badge"],
+                        "error": str(ex),
+                        "channel": str(chat_id),
+                        "post_id": post_id
+                    },
                     scenario_id=scenario_id
                 )
                 await session.commit()
@@ -150,10 +159,25 @@ async def execute_scenario(
                     await c.stop()
                 return
         elif is_channel:
-            error_msg = f"В канале {chat_id} нет опубликованных постов для комментирования"
+            diag = classify_telegram_error("нет опубликованных постов")
+            error_msg = f"{diag['badge']}: В канале {chat_id} нет опубликованных постов для комментирования"
             logger.error(error_msg)
             log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
             session.add(log)
+            await log_action(
+                session,
+                action_type="comment_send",
+                status="error",
+                target=str(chat_id),
+                target_id=f"{diag['badge']} • {chat_id}",
+                details={
+                    "summary": diag["summary"],
+                    "category": diag["category"],
+                    "badge": diag["badge"],
+                    "channel": str(chat_id)
+                },
+                scenario_id=scenario_id
+            )
             await session.commit()
             for c in clients.values():
                 await c.stop()
@@ -297,8 +321,9 @@ async def execute_scenario(
                             await r_client.stop()
 
         except Exception as e:
-            logger.error(f"Ошибка на шаге {step.id}: {e}")
-            log = TaskLog(account_id=role_account_map[role_id].id, scenario_id=scenario_id, status="error", error_message=str(e))
+            diag = classify_telegram_error(e)
+            logger.error(f"Ошибка на шаге {step.id} ({diag['badge']}): {e}")
+            log = TaskLog(account_id=role_account_map[role_id].id, scenario_id=scenario_id, status="error", error_message=f"{diag['badge']}: {str(e)}")
             session.add(log)
             await log_action(
                 session,
@@ -306,8 +331,14 @@ async def execute_scenario(
                 status="error",
                 account_id=role_account_map[role_id].id,
                 target=str(target_chat_id),
-                target_id=f"step #{step.id}",
-                details={"error": str(e), "text": text_to_send},
+                target_id=f"{diag['badge']} • шаг #{step.step_order or step.id}",
+                details={
+                    "summary": diag["summary"],
+                    "category": diag["category"],
+                    "badge": diag["badge"],
+                    "error": str(e),
+                    "text": text_to_send
+                },
                 scenario_id=scenario_id
             )
             await session.commit()

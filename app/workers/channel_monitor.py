@@ -9,7 +9,7 @@ from app.models.models import MonitoredChannel, Account
 from app.services.monitor_service import pick_random_scenario
 from app.services.scenario_service import execute_scenario
 from app.telegram.client import get_hydrogram_client
-from app.services.log_service import log_action
+from app.services.log_service import log_action, classify_telegram_error
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +94,20 @@ async def run_channel_monitor():
                                     await asyncio.sleep(delay)
                                     await execute_scenario(session, scenario.id, ch_user, discussion_message_id=latest_msg_id)
                             except Exception as ex:
-                                logger.warning(f"Error monitoring channel {ch_user}: {ex}")
+                                diag = classify_telegram_error(ex)
+                                logger.warning(f"Error monitoring channel {ch_user} ({diag['badge']}): {ex}")
                                 await log_action(
                                     session,
                                     action_type="channel_monitor",
                                     status="error",
                                     target=ch_user,
-                                    details={"error": str(ex)}
+                                    target_id=f"{diag['badge']} • {ch_user}",
+                                    details={
+                                        "summary": diag["summary"],
+                                        "category": diag["category"],
+                                        "badge": diag["badge"],
+                                        "error": str(ex)
+                                    }
                                 )
                     finally:
                         await client.stop()
