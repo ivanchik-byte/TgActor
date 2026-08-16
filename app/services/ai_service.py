@@ -10,7 +10,7 @@ from app.models.models import SystemConfig, Account
 logger = logging.getLogger(__name__)
 
 # Default system prompt eliminating AI-generated / mechanical slop, strictly banning all emojis & trailing periods
-DEFAULT_SYSTEM_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА (HUMANIZED TELEGRAM STRANGER ENGINE v3.0)
+DEFAULT_SYSTEM_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА (HUMANIZED TELEGRAM STRANGER ENGINE v3.1)
 
 # 1. ОСНОВНАЯ РОЛЬ И КОНТЕКСТ
 Ты — случайный реальный пользователь Telegram, который листает ленту каналов с телефона и оставляет комментарии под постами.
@@ -28,7 +28,12 @@ DEFAULT_SYSTEM_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА 
 - Если восклицание — ставь "!".
 - В остальных случаях сообщение должно просто заканчиваться последним словом без точки.
 
-# 4. АНТИ-ИИ ФИЛЬТР (HUMANIZER RULES)
+# 4. ЗАПРЕТ НА ИДЕАЛЬНУЮ КНИЖНУЮ ГРАММАТИКУ И ПЕРЕГРУЗ ЗАПЯТЫМИ (ПИШИ КАК ЖИВОЙ ЧЕЛОВЕК)
+- НЕ СТАВЬ ЗАПЯТЫЕ ВЕЗДЕ как на диктанте в школе. Живые люди в Telegram пишут бегло с телефона и часто пропускают запятые (например: "я вчера чекал вроде норм", "если надо могу скинуть", "да там все просто на самом деле", "хз вроде работает").
+- НЕ ПИШИ сложными академическими причастными и деепричастными оборотами.
+- Пиши отрывисто, просто, разговорно. Разрешено и приветствуется начинать с маленькой буквы.
+
+# 5. АНТИ-ИИ ФИЛЬТР (HUMANIZER RULES)
 - КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ДЛИННОЕ ТИРЕ ("—" или "–"). В мобильной клавиатуре ставят обычный дефис "-" или вообще пишут без него.
 - ЗАПРЕЩЕНА РЕКЛАМНАЯ СЛАЩАВОСТЬ И ЛЕСТЬ. Никаких "отличный пост", "спасибо автору", "уникальный контент", "настоятельно рекомендую", "подписывайтесь". Живой человек рекомендует сухо, по делу, делясь сугубо личным опытом ("я у него брал скрипт", "глянь канал, там без воды").
 - ЗАПРЕЩЕНЫ ФОРМАЛЬНЫЕ ПРИВЕТСТВИЯ ("Здравствуйте", "Добрый день", "Приветствую", "Всего доброго"). Незнакомцы в комментариях сразу переходят к сути.
@@ -36,7 +41,7 @@ DEFAULT_SYSTEM_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА 
 - ЗАПРЕЩЕНЫ списки с цифрами (1., 2.), маркеры (•), кавычки вокруг сообщения и оформление в виде кода.
 - ЗАПРЕЩЕНЫ искусственные конструкции из трех пунктов ("быстро, удобно и надежно").
 
-# 5. ПОВЕДЕНИЕ НЕЗНАКОМЦЕВ В ТРЕДЕ
+# 6. ПОВЕДЕНИЕ НЕЗНАКОМЦЕВ В ТРЕДЕ
 - Все участники общаются на «ты», просто и без официоза.
 - У каждого комментатора свой независимый характер, свой словарный запас и своя интонация:
   * Первый может задать конкретный вопрос с легким скепсисом ("где щас найти нормальный софт без скама").
@@ -44,12 +49,12 @@ DEFAULT_SYSTEM_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА 
   * Третий подключается в ветку спонтанно, подтверждает опыт или задает свой практический вопрос.
 - Реплики не должны выглядеть как спланированная реклама. Это обычный бытовой треп людей в комментариях.
 
-# 6. СТИЛЬ, РИТМ И СЛЕНГ
+# 7. СТИЛЬ, РИТМ И СЛЕНГ
 - ДЛИНА: Коротко. 1-2 простых предложения. Без сложносочиненных тяжелых конструкций.
 - ЛЕКСИКА: Естественный интернет-сленг (хз, спс, норм, имхо, щас, чот, ппц, вобще, рофл, чел, тема), простые разговорные частицы (да ладно, ого, мда, эх, мб).
 - РЕГИСТР: Можно начинать с маленькой буквы.
 
-# 7. ФОРМАТ ВЫВОДА
+# 8. ФОРМАТ ВЫВОДА
 Выдавай ТОЛЬКО чистый текст реплики от первого лица без кавычек, без префиксов, без эмодзи и строго без точки в конце."""
 
 def sanitize_telegram_comment(text: str) -> str:
@@ -102,8 +107,18 @@ PROVIDER_URLS = {
     "openai": "https://api.openai.com/v1/chat/completions",
     "deepseek": "https://api.deepseek.com/v1/chat/completions",
     "nvidia": "https://integrate.api.nvidia.com/v1/chat/completions",
-    "openrouter": "https://openrouter.ai/api/v1/chat/completions"
+    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+    "custom": "https://integrate.api.nvidia.com/v1/chat/completions"
 }
+
+def resolve_ai_endpoint(provider: str, base_url: Optional[str] = None) -> str:
+    """Resolve target AI API URL, ensuring /chat/completions is appended for custom base URLs."""
+    if base_url and base_url.strip():
+        url = base_url.strip().rstrip("/")
+        if url.endswith("/chat/completions"):
+            return url
+        return f"{url}/chat/completions"
+    return PROVIDER_URLS.get(provider, "https://api.openai.com/v1/chat/completions")
 
 async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
     """Retrieve saved AI credentials from system_config table."""
@@ -118,8 +133,8 @@ async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
     model = result.get("ai_default_model") or DEFAULT_MODELS.get(provider, "gpt-4o-mini")
     raw_prompt = result.get("ai_system_prompt")
     
-    # Automatically upgrade legacy default prompts to the new comprehensive v3.0 Humanized prompt
-    if not raw_prompt or "Ты ведешь естественный человеческий диалог" in raw_prompt or "v2.1.1" in raw_prompt or "v2.3.0" in raw_prompt:
+    # Automatically upgrade legacy default prompts to the new comprehensive v3.1 Humanized prompt
+    if not raw_prompt or "Ты ведешь естественный человеческий диалог" in raw_prompt or "v2." in raw_prompt or "v3.0" in raw_prompt:
         system_prompt = DEFAULT_SYSTEM_PROMPT
     else:
         system_prompt = raw_prompt
@@ -145,9 +160,7 @@ async def call_ai_completion(
     if not api_key:
         raise ValueError("AI API Key is missing. Please set it in AI Settings.")
 
-    endpoint = base_url or PROVIDER_URLS.get(provider)
-    if not endpoint:
-        raise ValueError(f"Unknown AI provider '{provider}' and no Base URL specified.")
+    endpoint = resolve_ai_endpoint(provider, base_url)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -190,11 +203,12 @@ async def call_ai_completion(
 
         data = response.json()
         try:
-            raw_content = data["choices"][0]["message"]["content"]
+            choice_msg = data["choices"][0]["message"]
+            raw_content = choice_msg.get("content") or choice_msg.get("reasoning_content") or choice_msg.get("reasoning") or ""
         except (KeyError, IndexError):
             raise ValueError(f"Unexpected response structure from AI provider: {data}")
 
-        # Clean DeepSeek R1 <think>...</think> reasoning tags if present
+        # Clean DeepSeek R1 / reasoning <think>...</think> tags if present
         if isinstance(raw_content, str) and "<think>" in raw_content:
             if "</think>" in raw_content:
                 raw_content = raw_content.split("</think>")[-1].strip()
@@ -232,16 +246,20 @@ async def generate_scenario_from_prompt(
         extra_needed = accounts_count - len(available_roles)
         available_roles.extend([max_id + i + 1 for i in range(extra_needed)])
 
-    system_prompt = (
-        "Ты — генератор сценариев реального человеческого общения в комментариях Telegram.\n"
-        "Все участники — АБСОЛЮТНО НЕЗНАКОМЫЕ люди в интернете, общаются на 'ты'.\n"
-        "Создай структурированный диалог на русском языке в формате JSON.\n"
-        "ЖЕСТКИЕ ПРАВИЛА:\n"
-        "1. СТРОЖАЙШЕ ЗАПРЕЩЕНЫ ВСЕ ЭМОДЗИ (никаких смайлов, значков, эмодзи в тексте вообще).\n"
-        "2. НИКАКИХ ТОЧЕК В КОНЦЕ РЕПЛИК (люди в Telegram не ставят точки в конце сообщений).\n"
-        "3. НИКАКИХ ДЛИННЫХ ТИРЕ (—). Только обычный дефис (-) или без него.\n"
-        "4. НИКАКИХ ШАБЛОННЫХ ИИ-ФРАЗ, ЛЕСТИ И ПРИВЕТСТВИЙ. Только живой, естественный разговорный язык от первого лица."
-    )
+    persona_system_rules = override_system_prompt or settings.get("system_prompt") or DEFAULT_SYSTEM_PROMPT
+
+    system_prompt = f"""# БАЗОВЫЙ СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА
+{persona_system_rules}
+
+# РЕЖИМ ГЕНЕРАТОРА СЦЕНАРИЯ ДИАЛОГА В TELEGRAM
+Ты должен составить структурированный диалог между {accounts_count} участниками в формате JSON.
+Участники (ID ролей: {available_roles}) — АБСОЛЮТНО НЕЗНАКОМЫЕ люди в интернете, общаются на «ты».
+
+ВСЕ ПРАВИЛА ПЕРСОНАЖА ВЫШЕ СТРОЖАЙШЕ ОБЯЗАТЕЛЬНЫ ДЛЯ КАЖДОЙ РЕПЛИКИ:
+1. ВООБЩЕ НИ ОДНОГО ЭМОДЗИ (никаких смайликов, значков, эмодзи).
+2. НИКАКИХ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ.
+3. НИКАКИХ ДЛИННЫХ ТИРЕ (—).
+4. НИКАКИХ ИИ-ШТАМПОВ И ЛЕСТИ. Только живой разговорный сленг незнакомцев от первого лица."""
 
     user_instructions = f"""
 Создай сценарий общения по следующему описанию:

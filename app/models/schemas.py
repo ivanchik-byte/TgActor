@@ -94,6 +94,7 @@ class AIScenarioGenerateRequest(BaseModel):
     reactions_enabled: Optional[bool] = True
     provider: Optional[str] = None
     model: Optional[str] = None
+    system_prompt: Optional[str] = None
 
 class ProxyBase(BaseModel):
     host: str
