@@ -1677,6 +1677,23 @@ export default function Scenarios() {
                       </p>
                     </div>
                   </div>
+
+                  <div style={{
+                    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+                    border: '1px solid rgba(139, 92, 246, 0.25)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    fontSize: '12px',
+                    color: '#c4b5fd',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <Zap className="w-4 h-4 text-accent" style={{ flexShrink: 0 }} />
+                    <span>
+                      <strong>Логика тайминга:</strong> Задержка таймера срабатывает <strong>ПОСЛЕ</strong> ответа нейросети и отправки сообщения в Telegram, выдерживая паузу перед запуском следующего бота в очереди.
+                    </span>
+                  </div>
                   
                   <div>
                     <label style={labelStyle}>Тема или канва диалога для динамических промптов</label>
@@ -2388,7 +2405,14 @@ export default function Scenarios() {
                           )}
 
                           <div>
-                            <label style={labelStyle}>Задержка перед отправкой</label>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                              <label style={{ ...labelStyle, marginBottom: 0 }}>Пауза перед следующим шагом</label>
+                              {replica.isAiDynamic && (
+                                <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>
+                                  ⚡ После ответа ИИ
+                                </span>
+                              )}
+                            </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>от</span>
@@ -2415,6 +2439,11 @@ export default function Scenarios() {
                                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
                               </div>
                             </div>
+                            {replica.isAiDynamic && (
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                                💡 Задержка выдерживается ПОСЛЕ отправки этого сообщения и перед стартом следующего бота.
+                              </span>
+                            )}
                           </div>
 
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
@@ -2665,25 +2694,36 @@ export default function Scenarios() {
                   <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-участие в ротации ролей" />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={labelStyle}>Задержка от (сек)</label>
-                    <input
-                      type="number"
-                      value={defaultMinDelay}
-                      onChange={e => setDefaultMinDelay(Number(e.target.value))}
-                      style={inputStyle}
-                    />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>Интервал между репликами</label>
+                    <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>внутри диалога</span>
                   </div>
-                  <div>
-                    <label style={labelStyle}>Задержка до (сек)</label>
-                    <input
-                      type="number"
-                      value={defaultMaxDelay}
-                      onChange={e => setDefaultMaxDelay(Number(e.target.value))}
-                      style={inputStyle}
-                    />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>от</span>
+                      <input
+                        type="number"
+                        value={defaultMinDelay}
+                        onChange={e => setDefaultMinDelay(Number(e.target.value))}
+                        style={inputStyle}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>до</span>
+                      <input
+                        type="number"
+                        value={defaultMaxDelay}
+                        onChange={e => setDefaultMaxDelay(Number(e.target.value))}
+                        style={inputStyle}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>сек</span>
+                    </div>
                   </div>
+                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    💡 Пауза между сообщениями разных ботов при проигрывании сценария.
+                  </p>
                 </div>
 
                 <div>
