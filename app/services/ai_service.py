@@ -188,34 +188,37 @@ async def call_ai_completion(
 
     logger.info(f"AI request -> {endpoint} model={model}")
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        response = await client.post(endpoint, headers=headers, json=body)
-        
-        if response.status_code != 200:
-            error_text = response.text
-            logger.error(f"AI API Error ({response.status_code}): {error_text}")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=20.0)) as client:
+            response = await client.post(endpoint, headers=headers, json=body)
+            
+            if response.status_code != 200:
+                error_text = response.text
+                logger.error(f"AI API Error ({response.status_code}): {error_text}")
+                try:
+                    err_json = response.json()
+                    err_msg = err_json.get("error", {}).get("message", error_text)
+                except Exception:
+                    err_msg = error_text
+                raise ValueError(f"AI Provider error ({response.status_code}): {err_msg}")
+
+            data = response.json()
             try:
-                err_json = response.json()
-                err_msg = err_json.get("error", {}).get("message", error_text)
-            except Exception:
-                err_msg = error_text
-            raise ValueError(f"AI Provider error ({response.status_code}): {err_msg}")
+                choice_msg = data["choices"][0]["message"]
+                raw_content = choice_msg.get("content") or choice_msg.get("reasoning_content") or choice_msg.get("reasoning") or ""
+            except (KeyError, IndexError):
+                raise ValueError(f"Unexpected response structure from AI provider: {data}")
 
-        data = response.json()
-        try:
-            choice_msg = data["choices"][0]["message"]
-            raw_content = choice_msg.get("content") or choice_msg.get("reasoning_content") or choice_msg.get("reasoning") or ""
-        except (KeyError, IndexError):
-            raise ValueError(f"Unexpected response structure from AI provider: {data}")
+            # Clean DeepSeek R1 / reasoning <think>...</think> tags if present
+            if isinstance(raw_content, str) and "<think>" in raw_content:
+                if "</think>" in raw_content:
+                    raw_content = raw_content.split("</think>")[-1].strip()
+                else:
+                    raw_content = raw_content.split("<think>")[0].strip()
 
-        # Clean DeepSeek R1 / reasoning <think>...</think> tags if present
-        if isinstance(raw_content, str) and "<think>" in raw_content:
-            if "</think>" in raw_content:
-                raw_content = raw_content.split("</think>")[-1].strip()
-            else:
-                raw_content = raw_content.split("<think>")[0].strip()
-
-        return raw_content
+            return raw_content
+    except httpx.TimeoutException:
+        raise ValueError(f"Таймаут соединения с ИИ: модель '{model}' генерировала ответ дольше 120 сек. Попробуйте более быструю модель или повторите запрос.")
 
 async def generate_scenario_from_prompt(
     session: AsyncSession,
@@ -310,31 +313,56 @@ async def generate_scenario_from_prompt(
         base_url=settings.get("base_url")
     )
 
-    # Clean markdown backticks and extract valid JSON object
-    cleaned = raw_response.strip()
-    if "```" in cleaned:
-        if "```json" in cleaned:
-            cleaned = cleaned.split("```json")[-1].split("```")[0].strip()
-        else:
-            parts = cleaned.split("```")
-            if len(parts) >= 3:
-                cleaned = parts[1].strip()
-    if not cleaned.startswith("{") and "{" in cleaned:
-        cleaned = "{" + cleaned.split("{", 1)[-1]
-    if not cleaned.endswith("}") and "}" in cleaned:
-        cleaned = cleaned.rsplit("}", 1)[0] + "}"
-
+    # Robustly parse JSON from raw response
     try:
-        data = json.loads(cleaned)
-        # Sanitize all step texts
-        if "steps" in data and isinstance(data["steps"], list):
-            for step in data["steps"]:
-                if "text" in step and step["text"]:
-                    step["text"] = sanitize_telegram_comment(step["text"])
+        data = robust_json_loads(raw_response)
+        if isinstance(data, list):
+            data = {"title": "Диалог в комментариях", "steps": data}
+        elif isinstance(data, dict) and "scenario" in data and isinstance(data["scenario"], dict):
+            data = data["scenario"]
+
+        # Ensure steps array is present
+        steps_list = data.get("steps") or []
+        if not isinstance(steps_list, list) and isinstance(data, dict):
+            # Check if steps were keyed differently
+            for k in ["replicas", "items", "messages", "dialogue"]:
+                if k in data and isinstance(data[k], list):
+                    steps_list = data[k]
+                    break
+
+        # Sanitize and validate every step
+        sanitized_steps = []
+        for idx, step in enumerate(steps_list):
+            if not isinstance(step, dict):
+                continue
+            role_val = step.get("role_id") or step.get("role") or available_roles[idx % len(available_roles)]
+            try:
+                role_int = int(role_val)
+            except Exception:
+                role_int = available_roles[idx % len(available_roles)]
+
+            raw_txt = step.get("text") or step.get("message") or ""
+            clean_txt = sanitize_telegram_comment(str(raw_txt))
+
+            sanitized_steps.append({
+                "step_order": idx + 1,
+                "role_id": role_int,
+                "text": clean_txt,
+                "reply_to_index": step.get("reply_to_index") if step.get("reply_to_index") is not None else (idx if idx > 0 and (idx % 2 == 1) else None),
+                "delay_before_min": float(step.get("delay_before_min") or 5.0),
+                "delay_before_max": float(step.get("delay_before_max") or 12.0),
+                "reactions": step.get("reactions") or None,
+                "reaction_count": int(step.get("reaction_count") or 0)
+            })
+
+        data["steps"] = sanitized_steps
+        if not data.get("title"):
+            data["title"] = "Диалог в комментариях"
+
         return data
     except Exception as e:
-        logger.error(f"Failed to parse AI generated scenario JSON: {e}, raw: {cleaned}")
-        raise ValueError(f"AI returned invalid JSON: {cleaned[:200]}")
+        logger.error(f"Failed to parse AI generated scenario JSON: {e}, raw: {raw_response[:300]}")
+        raise ValueError(f"Ошибка обработки ответа ИИ: {str(e)}")
 
 async def generate_dynamic_step_text(
     session: AsyncSession,
