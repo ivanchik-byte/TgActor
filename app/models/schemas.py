@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional, List, Any
 
 class AccountBase(BaseModel):
@@ -91,6 +91,7 @@ class AiPresetResponse(BaseModel):
 class AIScenarioGenerateRequest(BaseModel):
     prompt: str
     accounts_count: Optional[int] = 3
+    steps_count: Optional[int] = None
     reactions_enabled: Optional[bool] = True
     provider: Optional[str] = None
     model: Optional[str] = None
@@ -103,11 +104,48 @@ class ProxyBase(BaseModel):
     password: Optional[str] = None
     protocol: Optional[str] = "socks5"
 
-class ProxyCreate(ProxyBase):
-    pass
+class ProxyCreate(BaseModel):
+    host: Optional[str] = None
+    ip: Optional[str] = None
+    port: int
+    username: Optional[str] = None
+    password: Optional[str] = None
+    protocol: Optional[str] = "socks5"
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_host_or_ip(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            h = data.get("host") or data.get("ip")
+            if not h:
+                raise ValueError("Host or IP is required for proxy")
+            data["host"] = str(h).strip()
+            data["ip"] = str(h).strip()
+        return data
 
 class ProxyResponse(ProxyBase):
     id: int
+    host: str
+    ip: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_ip_from_host(cls, data: Any) -> Any:
+        if hasattr(data, "host"):
+            return {
+                "id": getattr(data, "id", None),
+                "host": data.host,
+                "ip": data.host,
+                "port": data.port,
+                "username": data.username,
+                "password": data.password,
+                "protocol": data.protocol
+            }
+        elif isinstance(data, dict):
+            h = data.get("host") or data.get("ip")
+            data["host"] = h
+            data["ip"] = h
+        return data
 
     class Config:
         from_attributes = True
