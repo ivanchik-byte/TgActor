@@ -63,10 +63,9 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
         if auto_join_bots and lines:
             try:
                 from app.services.join_service import start_smooth_join
+                from app.services.pool_service import get_commenting_pool
                 from app.models.models import Account
-                stmt = select(Account).where(Account.is_active == True, Account.pool == "commenting")
-                res = await session.execute(stmt)
-                accounts = res.scalars().all()
+                accounts = await get_commenting_pool(session)
                 if not accounts:
                     stmt_all = select(Account).where(Account.is_active == True)
                     res_all = await session.execute(stmt_all)
@@ -76,11 +75,11 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
                     await start_smooth_join(
                         chat_links=lines,
                         account_ids=[a.id for a in target_accs],
-                        min_delay=30,
-                        max_delay=90
+                        min_delay=15,
+                        max_delay=45
                     )
             except Exception as e:
-                pass
+                logger.error(f"Error starting auto smooth join on channel creation: {e}")
 
         return {"status": "ok", "added_ids": added_ids}
 
@@ -106,6 +105,7 @@ async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
 
 @router.delete("/api/channels/{channel_id}")
 async def delete_channel(channel_id: int):
+    """Remove channel from monitoring."""
     async with async_session() as session:
         ch = await session.get(MonitoredChannel, channel_id)
         if not ch:
@@ -139,6 +139,7 @@ async def get_smooth_join_status_endpoint():
 @router.post("/api/channels/smooth-join/start")
 async def start_smooth_join_endpoint(payload: Dict[str, Any] = Body(...)):
     from app.services.join_service import start_smooth_join
+    from app.services.pool_service import get_commenting_pool
     from app.models.models import Account
 
     raw_links = str(payload.get("chat_links") or payload.get("chat_link") or "").strip()
@@ -155,9 +156,7 @@ async def start_smooth_join_endpoint(payload: Dict[str, Any] = Body(...)):
     async with async_session() as session:
         if not account_ids:
             # Query active commenting accounts
-            stmt = select(Account).where(Account.is_active == True, Account.pool == "commenting")
-            res = await session.execute(stmt)
-            accounts = res.scalars().all()
+            accounts = await get_commenting_pool(session)
             if not accounts:
                 # Fallback to any active accounts
                 stmt_all = select(Account).where(Account.is_active == True)
