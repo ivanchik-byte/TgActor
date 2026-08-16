@@ -24,6 +24,7 @@ ENV/
 
 # Temporary files & uploads
 uploads/
+media/
 *.zip
 *.tar.gz
 *.rar

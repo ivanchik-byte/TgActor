@@ -13,8 +13,8 @@ from app.core.config import ADMIN_PASSWORD, SECRET_KEY
 from app.core.database import engine, Base
 from app.api.router import router as api_router
 from app.workers.inbox_ws import router as ws_router, lifespan
-
-logging.basicConfig(level=logging.INFO)
+from app.core.logging_config import setup_terminal_logging
+setup_terminal_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="TgActor API", version="2.2.2", lifespan=lifespan)

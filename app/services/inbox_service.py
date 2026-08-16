@@ -399,9 +399,29 @@ async def download_media_for_message(message_id: int) -> Optional[str]:
             os.makedirs("media/inbox", exist_ok=True)
             saved_path = await client.download_media(tg_msg, file_name="media/inbox/")
             if saved_path:
-                rel_path = "/" + saved_path.replace("\\", "/").lstrip("/")
+                saved_str = str(saved_path).replace("\\", "/")
+                if "/media/" in saved_str:
+                    rel_path = "/media/" + saved_str.split("/media/", 1)[1]
+                elif saved_str.startswith("media/"):
+                    rel_path = "/" + saved_str
+                else:
+                    rel_path = "/" + saved_str.lstrip("/")
                 msg.media_path = rel_path
                 await session.commit()
+
+                # Broadcast update so UI instantly displays the image
+                try:
+                    from app.workers.inbox_ws import broadcast_inbox_event
+                    await broadcast_inbox_event({
+                        "event": "media_downloaded",
+                        "message_id": message_id,
+                        "account_id": msg.account_id,
+                        "peer_id": msg.peer_id,
+                        "media_path": rel_path
+                    })
+                except Exception:
+                    pass
+
                 return rel_path
             raise ValueError("Не удалось сохранить медиафайл")
         finally:

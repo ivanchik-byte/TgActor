@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +8,78 @@ from sqlalchemy import select, func, delete, or_
 
 from app.models.models import ActionLog, Account
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("tgactor.actions")
+
+def classify_telegram_error(ex: Any) -> Dict[str, str]:
+    """
+    Classifies error into high-priority human readable diagnostics:
+    - 'chat_closed': Чат закрыт / комментарии отключены
+    - 'realtime_drift': Реальное время слетело / таймаут триггера
+    - 'flood_wait': Лимит Telegram (FloodWait)
+    - 'peer_flood': Спам-блок или ограничение (PeerFlood)
+    - 'slowmode': Медленный режим чата (Slowmode)
+    - 'session_expired': Сессия аккаунта слетела / заблокирован
+    - 'no_posts': В канале нет постов для комментариев
+    - 'error': Общая ошибка
+    """
+    err_str = str(ex).lower()
+
+    if any(k in err_str for k in ["chatwriteforbidden", "chat_write_forbidden", "chatadminrequired", "channelprivate", "msg_id_invalid", "msgidinvalid", "discussion", "отключены комментарии", "нет группы"]):
+        return {
+            "category": "chat_closed",
+            "badge": "Чат закрыт",
+            "summary": "У канала отключены комментарии или закрыта группа для обсуждений"
+        }
+
+    if any(k in err_str for k in ["floodwait", "flood_wait", "420", "flood"]):
+        sec_match = re.search(r'(\d+)\s*(?:seconds|s|сек)', err_str)
+        sec_text = f" на {sec_match.group(1)} сек" if sec_match else ""
+        return {
+            "category": "flood_wait",
+            "badge": "FloodWait лимит",
+            "summary": f"Временное ограничение Telegram по частоте (FloodWait{sec_text})"
+        }
+
+    if any(k in err_str for k in ["peerflood", "peer_flood", "userrestricted", "user_restricted", "spambot"]):
+        return {
+            "category": "peer_flood",
+            "badge": "Спам-блок аккаунта",
+            "summary": "Telegram временно ограничил отправку с этого аккаунта (PeerFlood / Спам-блок)"
+        }
+
+    if any(k in err_str for k in ["slowmode", "slow_mode", "slowmodewait"]):
+        return {
+            "category": "slowmode",
+            "badge": "Slowmode ожидание",
+            "summary": "В группе включен медленный режим (Slowmode), нужно выждать паузу"
+        }
+
+    if any(k in err_str for k in ["sessionrevoked", "authkeyunregistered", "userdeactivated", "session_revoked", "auth_key_unregistered", "user_deactivated", "unauthorized"]):
+        return {
+            "category": "session_expired",
+            "badge": "Сессия слетела",
+            "summary": "Сессия аккаунта недействительна или аккаунт был сброшен/заблокирован"
+        }
+
+    if any(k in err_str for k in ["нет опубликованных постов", "no posts", "no message"]):
+        return {
+            "category": "no_posts",
+            "badge": "Нет постов",
+            "summary": "В канале нет опубликованных постов для комментирования"
+        }
+
+    if any(k in err_str for k in ["timeout", "timed out", "connect", "proxy", "connection", "drift", "слетело"]):
+        return {
+            "category": "realtime_drift",
+            "badge": "Реальное время слетело",
+            "summary": "Слетело реальное время синхронизации или возник таймаут соединения через прокси"
+        }
+
+    return {
+        "category": "error",
+        "badge": "Ошибка",
+        "summary": str(ex)
+    }
 
 async def log_action(
     session: AsyncSession,
@@ -21,7 +93,7 @@ async def log_action(
     executed_at: Optional[datetime] = None,
     commit: bool = True
 ) -> ActionLog:
-    """Record detailed real backend action in bot_action_log table."""
+    """Record detailed real backend action in bot_action_log table and print to terminal log."""
     if isinstance(details, (dict, list)):
         details_str = json.dumps(details, ensure_ascii=False)
     else:
@@ -48,6 +120,22 @@ async def log_action(
         executed_at=executed_at or datetime.now(timezone.utc).replace(tzinfo=None)
     )
     session.add(log_entry)
+
+    # Print clean formatted event to terminal
+    acc_label = f"Account #{valid_acc_id}" if valid_acc_id else "System"
+    tgt_label = f" -> {target}" if target else ""
+    t_id_label = f" [{target_id}]" if target_id else ""
+    summary_label = f" | {details_str}" if details_str and len(details_str) < 120 else ""
+
+    log_line = f"{action_type.upper()}: {acc_label}{tgt_label}{t_id_label}{summary_label}"
+
+    if status == "error":
+        logger.error(log_line)
+    elif status in ["warning", "cooldown"]:
+        logger.warning(log_line)
+    else:
+        logger.info(log_line)
+
     if commit:
         try:
             await session.commit()
@@ -56,12 +144,8 @@ async def log_action(
             logger.warning(f"log_action commit note: {ex}")
     return log_entry
 
-async def seed_demo_action_logs(session: AsyncSession):
-    """No-op: Demo seeding removed. Only real backend actions are logged."""
-    pass
-
 async def get_action_log_stats(session: AsyncSession) -> Dict[str, Any]:
-    """Calculate summary metrics for action logs UI header."""
+    """Calculate KPI metrics for action logs."""
     total_stmt = select(func.count(ActionLog.id))
     total = (await session.execute(total_stmt)).scalar() or 0
 
@@ -69,10 +153,10 @@ async def get_action_log_stats(session: AsyncSession) -> Dict[str, Any]:
     ok_count = (await session.execute(ok_stmt)).scalar() or 0
 
     err_stmt = select(func.count(ActionLog.id)).where(ActionLog.status == 'error')
-    err_count = (await session.execute(err_stmt)).scalar() or 0
+    error_count = (await session.execute(err_stmt)).scalar() or 0
 
     warn_stmt = select(func.count(ActionLog.id)).where(ActionLog.status.in_(['warning', 'cooldown']))
-    warn_count = (await session.execute(warn_stmt)).scalar() or 0
+    warning_count = (await session.execute(warn_stmt)).scalar() or 0
 
     unique_acc_stmt = select(func.count(func.distinct(ActionLog.account_id))).where(ActionLog.account_id.isnot(None))
     active_accounts = (await session.execute(unique_acc_stmt)).scalar() or 0
@@ -86,9 +170,13 @@ async def get_action_log_stats(session: AsyncSession) -> Dict[str, Any]:
     return {
         "total": total,
         "ok_count": ok_count,
-        "error_count": err_count,
-        "warning_count": warn_count,
+        "error_count": error_count,
+        "warning_count": warning_count,
         "active_accounts": active_accounts,
         "count_24h": count_24h,
         "success_rate": success_rate
     }
+
+async def seed_demo_action_logs(session: AsyncSession):
+    """No-op: Demo seeding removed. Only real backend actions are logged."""
+    pass
