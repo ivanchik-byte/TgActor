@@ -277,6 +277,7 @@ async def generate_scenario_from_prompt(
     accounts_count: int = 3,
     steps_count: Optional[int] = None,
     reactions_enabled: bool = False,
+    is_dynamic: bool = False,
     override_provider: Optional[str] = None,
     override_model: Optional[str] = None,
     override_system_prompt: Optional[str] = None
@@ -322,8 +323,8 @@ async def generate_scenario_from_prompt(
     system_prompt = f"""# БАЗОВЫЙ СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА
 {persona_system_rules}
 
-# РЕЖИМ ГЕНЕРАТОРА КОНСТРУКТИВНОГО СЦЕНАРИЯ ДИАЛОГА В TELEGRAM
-Ты должен составить логичный, глубоко связный и конструктивный диалог между {accounts_count} участниками в формате JSON.
+# РЕЖИМ ГЕНЕРАТОРА {'ДИНАМИЧЕСКОГО (ПРОМПТЫ ВМЕСТО СМС)' if is_dynamic else 'КОНСТРУКТИВНОГО'} СЦЕНАРИЯ ДИАЛОГА В TELEGRAM
+Ты должен составить логичный, глубоко связный диалог между {accounts_count} участниками в формате JSON.
 Участники (ID ролей: {available_roles}) — АБСОЛЮТНО НЕЗНАКОМЫЕ люди в интернете, общаются на «ты».
 
 ВСЕ ПРАВИЛА ПЕРСОНАЖА ВЫШЕ СТРОЖАЙШЕ ОБЯЗАТЕЛЬНЫ ДЛЯ КАЖДОЙ РЕПЛИКИ:
@@ -333,10 +334,17 @@ async def generate_scenario_from_prompt(
 4. НИКАКОГО ПЕРЕГРУЗА ЗАПЯТЫМИ — пиши небрежно, просто, без книжных оборотов.
 5. НИКАКИХ ИИ-ШТАМПОВ И ЛЕСТИ. Только живой технический/разговорный язык незнакомцев от первого лица."""
 
+    dynamic_instructions = """
+РЕЖИМ: ДИНАМИЧЕСКИЕ ПРОМПТЫ ШАГОВ (ВМЕСТО ФИКСИРОВАННЫХ СМС):
+Для каждого шага укажи поле "ai_prompt" — чёткую, содержательную инструкцию для бота (что именно бот должен спросить, посоветовать или подтвердить в реальном времени под постом в канале).
+В поле "text" укажи короткую тему реплики, а в "is_ai_dynamic" укажи true.
+""" if is_dynamic else ""
+
     user_instructions = f"""
-Создай сценарий логичного, связного и реалистичного диалога по заданию пользователя:
+Создай сценарий {'динамического (промпты для нейросети)' if is_dynamic else 'реалистичного'} диалога по заданию пользователя:
 "{prompt}"
 
+{dynamic_instructions}
 ТРЕБОВАНИЯ К ДИАЛОГУ:
 1. Количество участников (ролей): {accounts_count}. Доступные ID ролей: {available_roles}.
 2. Количество реплик: СТРОГО {target_steps} шагов.
@@ -352,8 +360,8 @@ async def generate_scenario_from_prompt(
    - Шаги 2..{target_steps}: reply_to_step ДОЛЖЕН указывать на номер того шага, на который адресно отвечает собеседник (не по порядку N-1, а логический адресат).
    - СТРОГО: reply_to_step < текущего step_order.
 
-5. УМНЫЕ РЕАКЦИИ:
-   {'- Поставь одиночную уместную реакцию ("👍", "🔥", "⚡", "❤️", "🤝") и reaction_count: 1 ТОЛЬКО на 1-2 ключевых шага. На остальных: reactions: null, reaction_count: 0.' if reactions_enabled else '- reactions: null, reaction_count: 0 для всех шагов.'}
+5. УМНЫЕ РЕАКЦИИ (СТРОГО ИЗРЕДКА, МАКСИМУМ 1 НА ВЕСЬ ДИАЛОГ):
+   {'- Ставь одиночную реакцию ("👍", "🔥", "⚡", "❤️") с reaction_count: 1 ТОЛЬКО ИЗРЕДКА — максимум на 1 полезное сообщение за весь тред (либо 0 реакций, если явного повода нет). На всех остальных сообщениях: reactions: null, reaction_count: 0.' if reactions_enabled else '- reactions: null, reaction_count: 0 для всех шагов.'}
 
 6. СТИЛЬ:
    - СТРОГО БЕЗ ЭМОДЗИ В ТЕКСТЕ СООБЩЕНИЙ, БЕЗ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ, БЕЗ ДЛИННЫХ ТИРЕ, БЕЗ ЛИШНИХ ЗАПЯТЫХ.
@@ -368,7 +376,9 @@ async def generate_scenario_from_prompt(
     {{
       "step_order": 1,
       "role_id": {available_roles[0]},
-      "text": "текст первого вопроса или темы без точки в конце",
+      "text": "краткая суть первого вопроса без точки в конце",
+      "ai_prompt": "Инструкция боту: Напиши комментарий по теме поста с вопросом о надежном софте",
+      "is_ai_dynamic": {str(is_dynamic).lower()},
       "reply_to_step": null,
       "delay_before_min": 5.0,
       "delay_before_max": 10.0,
@@ -378,32 +388,14 @@ async def generate_scenario_from_prompt(
     {{
       "step_order": 2,
       "role_id": {available_roles[1] if len(available_roles) > 1 else available_roles[0]},
-      "text": "текст ответа второго участника на первый шаг",
+      "text": "краткая суть ответа второго участника",
+      "ai_prompt": "Инструкция боту: Ответь первому собеседнику и порекомендуй проверенный канал без лишней рекламы",
+      "is_ai_dynamic": {str(is_dynamic).lower()},
       "reply_to_step": 1,
       "delay_before_min": 4.0,
       "delay_before_max": 9.0,
       "reactions": "👍",
       "reaction_count": 1
-    }},
-    {{
-      "step_order": 3,
-      "role_id": {available_roles[2] if len(available_roles) > 2 else available_roles[0]},
-      "text": "текст удивления третьего участника что кто-то тоже в теме",
-      "reply_to_step": 2,
-      "delay_before_min": 5.0,
-      "delay_before_max": 11.0,
-      "reactions": null,
-      "reaction_count": 0
-    }},
-    {{
-      "step_order": 4,
-      "role_id": {available_roles[0]},
-      "text": "уточняющий вопрос первого участника ко второму",
-      "reply_to_step": 2,
-      "delay_before_min": 4.0,
-      "delay_before_max": 8.0,
-      "reactions": null,
-      "reaction_count": 0
     }}
   ]
 }}"""
@@ -480,6 +472,12 @@ async def generate_scenario_from_prompt(
             raw_txt = step.get("text") or step.get("message") or ""
             clean_txt = sanitize_telegram_comment(str(raw_txt))
 
+            # Dynamic AI step instructions
+            step_is_dynamic = bool(step.get("is_ai_dynamic") or is_dynamic)
+            step_ai_prompt = step.get("ai_prompt") or step.get("prompt")
+            if step_is_dynamic and not step_ai_prompt:
+                step_ai_prompt = clean_txt or "Напиши уместный живой комментарий по теме поста"
+
             # Reaction filter
             step_reactions = None
             step_reaction_count = 0
@@ -501,7 +499,9 @@ async def generate_scenario_from_prompt(
                 "delay_before_min": float(step.get("delay_before_min") or 4.0),
                 "delay_before_max": float(step.get("delay_before_max") or 10.0),
                 "reactions": step_reactions,
-                "reaction_count": step_reaction_count
+                "reaction_count": step_reaction_count,
+                "is_ai_dynamic": step_is_dynamic,
+                "ai_prompt": step_ai_prompt
             })
 
         data["steps"] = sanitized_steps
@@ -564,4 +564,46 @@ async def generate_dynamic_step_text(
     )
 
     cleaned = sanitize_telegram_comment(reply_text)
+    return cleaned
+
+async def generate_prompt_idea(
+    session: AsyncSession,
+    topic: Optional[str] = None,
+    override_provider: Optional[str] = None,
+    override_model: Optional[str] = None
+) -> str:
+    """Generate a flexible, varied, natural prompt idea for scenario generation."""
+    settings = await get_ai_settings(session)
+    provider = override_provider or settings.get("provider") or "deepseek"
+    api_key = settings.get("api_key")
+    model = override_model or settings.get("default_model") or settings.get("model") or "deepseek-chat"
+
+    system_prompt = """Ты — эксперт по созданию сценариев для естественного комментирования в Telegram.
+Твоя задача — составить ёмкую, гибкую и живую инструкцию (промпт) для сценария между 3 незнакомыми людьми в комментариях.
+Промпт должен задавать общую канву и контекст (какую проблему обсуждают, какой инструмент/канал/софт упомянуть, какой опыт подтвердить), но НЕ должен содержать заученных дословных цитат в кавычках.
+Текст должен быть лаконичным (2-4 предложения) на русском языке."""
+
+    user_prompt = f"""Сгенерируй идеальный вариативный промпт для диалога в Telegram.
+Тема/пожелание: {topic if topic and topic.strip() else 'Случайная актуальная тема: полезный софт / Telegram комбайн @ivanchik_byte / крипта и кошельки / прокси и защита от спамблока / парсеры и боты'}.
+
+Структура промпта:
+1. Кратко опиши, какой вопрос или тему поднимает первый участник.
+2. Что по делу рекомендует второй участник (без слащавой рекламы).
+3. Как вклинивается третий участник (подтверждает опыт или удивляется).
+4. Укажи: строго без эмодзи в тексте, без точек на конце, живой разговорный сленг.
+
+Верни ТОЛЬКО чистый текст промпта без лишних пояснений."""
+
+    raw_text = await call_ai_completion(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        json_mode=False,
+        base_url=settings.get("base_url")
+    )
+    cleaned = raw_text.strip().strip('"').strip("'")
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
     return cleaned

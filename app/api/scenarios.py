@@ -93,6 +93,28 @@ async def get_scenario_steps(scenario_id: int):
         result = await session.execute(stmt)
         return result.scalars().all()
 
+class AIPromptGenerateRequest(BaseModel):
+    topic: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+
+@router.post("/api/scenarios/generate-prompt")
+async def generate_scenario_prompt_endpoint(req: AIPromptGenerateRequest):
+    """Generate a high-converting natural prompt idea using AI."""
+    async with async_session() as session:
+        try:
+            from app.services.ai_service import generate_prompt_idea
+            prompt_idea = await generate_prompt_idea(
+                session=session,
+                topic=req.topic,
+                override_provider=req.provider,
+                override_model=req.model
+            )
+            return {"status": "ok", "prompt": prompt_idea}
+        except Exception as e:
+            logger.error(f"AI Prompt Idea Generation failed: {e}", exc_info=True)
+            raise HTTPException(400, detail=f"Не удалось сгенерировать тему: {str(e)}")
+
 @router.post("/api/scenarios/generate-ai")
 async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
     """Generate scenario steps structure from AI prompt."""
@@ -104,6 +126,7 @@ async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
                 accounts_count=req.accounts_count or 3,
                 steps_count=req.steps_count,
                 reactions_enabled=req.reactions_enabled if req.reactions_enabled is not None else True,
+                is_dynamic=req.is_dynamic or False,
                 override_provider=req.provider,
                 override_model=req.model,
                 override_system_prompt=req.system_prompt
