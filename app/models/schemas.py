@@ -93,6 +93,7 @@ class AIScenarioGenerateRequest(BaseModel):
     accounts_count: Optional[int] = 3
     steps_count: Optional[int] = None
     reactions_enabled: Optional[bool] = True
+    is_dynamic: Optional[bool] = False
     provider: Optional[str] = None
     model: Optional[str] = None
     system_prompt: Optional[str] = None
