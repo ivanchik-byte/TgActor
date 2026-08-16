@@ -39,7 +39,7 @@ async def execute_scenario(
     session.add(TaskLog(scenario_id=scenario_id, status="bots_engaged", error_message=exec_msg))
     await session.commit()
 
-    roles_needed = set(step.role_id for step in steps)
+    roles_needed = sorted(list(set(step.role_id for step in steps)))
     commenting_pool = await get_commenting_pool(session)
     reaction_pool = await get_reaction_pool(session)
     
@@ -51,53 +51,16 @@ async def execute_scenario(
         await session.commit()
         return
 
-    role_account_map: Dict[int, Account] = {}
-    available_pool = list(commenting_pool)
-    random.shuffle(available_pool)
-    
-    unassigned_roles = []
-    for role_id in roles_needed:
-        match = next((a for a in available_pool if a.id == role_id), None)
-        if match:
-            role_account_map[role_id] = match
-            available_pool.remove(match)
-        else:
-            unassigned_roles.append(role_id)
-            
-    for role_id in unassigned_roles:
-        if available_pool:
-            fallback = available_pool.pop()
-            role_account_map[role_id] = fallback
-        else:
-            role_account_map[role_id] = random.choice(commenting_pool)
-
-    clients: Dict[int, Any] = {}
-    for role_id, account in role_account_map.items():
-        client = get_hydrogram_client(account, account.proxy)
-        try:
-            await client.start()
-            clients[role_id] = client
-        except Exception as e:
-            logger.error(f"Не удалось запустить клиент для аккаунта {account.id}: {e}")
-            for c in clients.values():
-                await c.stop()
-            log = TaskLog(account_id=account.id, scenario_id=scenario_id, status="error", error_message=f"Init client failed: {e}")
-            session.add(log)
-            await session.commit()
-            return
-
-    first_client = next(iter(clients.values()))
-    requires_media = any(step.media_path for step in steps)
-    
-    is_available, error_msg = await check_chat_availability(first_client, chat_id, requires_media)
-    if not is_available:
-        logger.error(f"Preflight failed: {error_msg}")
-        log = TaskLog(scenario_id=scenario_id, status="error", error_message=f"Preflight: {error_msg}")
+    # Probe client to inspect chat and resolve discussion target
+    probe_account = commenting_pool[0]
+    probe_client = get_hydrogram_client(probe_account, probe_account.proxy)
+    try:
+        await probe_client.start()
+    except Exception as e:
+        logger.error(f"Не удалось запустить зонд-клиент для аккаунта {probe_account.id}: {e}")
+        log = TaskLog(account_id=probe_account.id, scenario_id=scenario_id, status="error", error_message=f"Probe client init failed: {e}")
         session.add(log)
         await session.commit()
-        
-        for c in clients.values():
-            await c.stop()
         return
 
     target_chat_id = chat_id
@@ -106,7 +69,7 @@ async def execute_scenario(
     # Check if target is a channel and resolve its discussion group
     is_channel = False
     try:
-        chat_info = await first_client.get_chat(chat_id)
+        chat_info = await probe_client.get_chat(chat_id)
         is_channel = getattr(chat_info, 'type', None) and (
             str(chat_info.type).lower().endswith('channel') or getattr(chat_info.type, 'value', '') == 'channel'
         )
@@ -117,7 +80,7 @@ async def execute_scenario(
         post_id = discussion_message_id
         if not post_id and is_channel:
             try:
-                async for p in first_client.get_chat_history(chat_id, limit=1):
+                async for p in probe_client.get_chat_history(chat_id, limit=1):
                     post_id = p.id
                     break
             except Exception:
@@ -125,7 +88,7 @@ async def execute_scenario(
 
         if post_id:
             try:
-                disc_msg = await first_client.get_discussion_message(chat_id, post_id)
+                disc_msg = await probe_client.get_discussion_message(chat_id, post_id)
                 if disc_msg and getattr(disc_msg, 'chat', None):
                     target_chat_id = disc_msg.chat.id
                     default_reply_to = disc_msg.id
@@ -155,8 +118,7 @@ async def execute_scenario(
                     scenario_id=scenario_id
                 )
                 await session.commit()
-                for c in clients.values():
-                    await c.stop()
+                await probe_client.stop()
                 return
         elif is_channel:
             diag = classify_telegram_error("нет опубликованных постов")
@@ -179,23 +141,98 @@ async def execute_scenario(
                 scenario_id=scenario_id
             )
             await session.commit()
-            for c in clients.values():
-                await c.stop()
+            await probe_client.stop()
             return
 
-    # Pre-join discussion group for all participating clients
-    for c in clients.values():
-        try:
-            await c.join_chat(target_chat_id)
-        except Exception:
-            pass
+    # Check preflight availability on target
+    requires_media = any(step.media_path for step in steps)
+    is_available, error_msg = await check_chat_availability(probe_client, target_chat_id, requires_media)
+    if not is_available:
+        logger.error(f"Preflight failed: {error_msg}")
+        log = TaskLog(scenario_id=scenario_id, status="error", error_message=f"Preflight: {error_msg}")
+        session.add(log)
+        await session.commit()
+        await probe_client.stop()
+        return
 
+    await probe_client.stop()
+
+    # SMART BOT SELECTION: Prioritize and filter bots that are ALREADY in the group
+    from app.services.join_service import get_known_chat_members, record_chat_member
+    known_member_ids = get_known_chat_members(str(target_chat_id)) | get_known_chat_members(str(chat_id))
+    
+    in_group_accounts = [acc for acc in commenting_pool if acc.id in known_member_ids]
+    
+    # If no bots in cache, check membership for active bots
+    if not in_group_accounts:
+        for acc in commenting_pool[:10]: # Check top candidate accounts
+            c_test = get_hydrogram_client(acc, acc.proxy)
+            try:
+                await c_test.start()
+                member = await c_test.get_chat_member(target_chat_id, "me")
+                if member and getattr(member, 'status', None):
+                    st = str(member.status).lower()
+                    if st not in ['left', 'kicked', 'banned']:
+                        record_chat_member(str(target_chat_id), acc.id)
+                        in_group_accounts.append(acc)
+            except Exception:
+                pass
+            finally:
+                try:
+                    await c_test.stop()
+                except Exception:
+                    pass
+
+    # If we found bots already in the group, use ONLY them!
+    if in_group_accounts:
+        logger.info(f"🎯 Group {target_chat_id}: found {len(in_group_accounts)} existing member bots in pool. Restricting scenario execution strictly to them.")
+        chosen_pool = in_group_accounts
+    else:
+        logger.info(f"ℹ️ Group {target_chat_id}: no member bots found yet. Using general commenting pool with lazy join.")
+        chosen_pool = list(commenting_pool)
+        random.shuffle(chosen_pool)
+
+    role_account_map: Dict[int, Account] = {}
+    for idx, role_id in enumerate(roles_needed):
+        role_account_map[role_id] = chosen_pool[idx % len(chosen_pool)]
+
+    clients: Dict[int, Any] = {}
+    unique_accounts = {acc.id: acc for acc in role_account_map.values()}
+    account_client_map: Dict[int, Any] = {}
+
+    for acc_id, account in unique_accounts.items():
+        client = get_hydrogram_client(account, account.proxy)
+        try:
+            await client.start()
+            account_client_map[acc_id] = client
+        except Exception as e:
+            logger.error(f"Не удалось запустить клиент для аккаунта {account.id}: {e}")
+            for c in account_client_map.values():
+                await c.stop()
+            log = TaskLog(account_id=account.id, scenario_id=scenario_id, status="error", error_message=f"Init client failed: {e}")
+            session.add(log)
+            await session.commit()
+            return
+
+    for role_id, account in role_account_map.items():
+        clients[role_id] = account_client_map[account.id]
+
+    # Track joined roles to avoid duplicate joins and prevent simultaneous mass-joining
+    joined_roles = set()
     step_msg_map: Dict[int, int] = {}
     
-    for step in steps:
+    for idx, step in enumerate(steps):
         role_id = step.role_id
         client = clients[role_id]
         
+        # Lazy join chat right before this bot speaks (prevents all bots joining at the exact same second)
+        if role_id not in joined_roles:
+            try:
+                await client.join_chat(target_chat_id)
+                joined_roles.add(role_id)
+            except Exception:
+                pass
+
         delay_min = step.delay_before_min if step.delay_before_min is not None else scenario.min_delay
         delay_max = step.delay_before_max if step.delay_before_max is not None else scenario.max_delay
         
@@ -204,11 +241,9 @@ async def execute_scenario(
             reply_to = step_msg_map[step.reply_to_step_id]
 
         try:
-            delay = random.uniform(delay_min, delay_max)
-            await asyncio.sleep(delay)
-
+            is_dynamic_step = getattr(step, 'is_ai_dynamic', False) or getattr(scenario, 'mode', 'manual') == 'ai_dynamic'
             text_to_send = (step.text or "").strip()
-            if getattr(step, 'is_ai_dynamic', False) or getattr(scenario, 'mode', 'manual') == 'ai_dynamic':
+            if is_dynamic_step:
                 try:
                     thread_history = []
                     for p_step in steps:
@@ -219,9 +254,10 @@ async def execute_scenario(
                                 sender_label = p_acc.first_name or p_acc.username or sender_label
                             thread_history.append({"sender": sender_label, "text": getattr(p_step, '_gen_text', p_step.text or '')})
 
+                    post_ctx = getattr(scenario, 'title', None) or str(target_chat_id)
                     gen_text = await generate_dynamic_step_text(
                         session=session,
-                        post_text=str(chat_id),
+                        post_text=post_ctx,
                         step_prompt=step.ai_prompt or step.text or "Напиши естественный комментарий по теме поста",
                         persona_instruction=getattr(scenario, 'system_instruction', None),
                         thread_history=thread_history,
@@ -321,6 +357,13 @@ async def execute_scenario(
                         finally:
                             await r_client.stop()
 
+            # Pause AFTER message and reactions, throttling the next step's AI query and Telegram request
+            if idx < len(steps) - 1:
+                step_delay = random.uniform(delay_min, delay_max)
+                if step_delay > 0:
+                    logger.info(f"Пауза {step_delay:.1f}с после шага #{step.id} перед следующим сообщением...")
+                    await asyncio.sleep(step_delay)
+
         except Exception as e:
             diag = classify_telegram_error(e)
             logger.error(f"Ошибка на шаге {step.id} ({diag['badge']}): {e}")
@@ -345,7 +388,7 @@ async def execute_scenario(
             await session.commit()
             break
 
-    for c in clients.values():
+    for c in set(clients.values()):
         try:
             await c.stop()
         except Exception:
