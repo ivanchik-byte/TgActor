@@ -102,7 +102,8 @@ async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
                 accounts_count=req.accounts_count or 3,
                 reactions_enabled=req.reactions_enabled if req.reactions_enabled is not None else True,
                 override_provider=req.provider,
-                override_model=req.model
+                override_model=req.model,
+                override_system_prompt=req.system_prompt
             )
             return {"status": "ok", "scenario": generated}
         except Exception as e:
