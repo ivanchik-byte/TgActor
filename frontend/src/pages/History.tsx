@@ -30,6 +30,8 @@ import {
   User,
   Tag,
   ShieldCheck,
+  ShieldAlert,
+  Radio,
   Calendar
 } from 'lucide-react';
 import { useToast } from '../components/ToastContext';
@@ -254,6 +256,16 @@ export const HistoryPage: React.FC = () => {
       case 'comment_send':
       case 'comment':
         return { label: 'Комментирование', icon: MessageSquare, color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' };
+      case 'channel_monitor':
+        return { label: '🎯 Радар постов', icon: Radio, color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+      case 'bot_banned':
+        return { label: '🚫 Бан бота', icon: ShieldAlert, color: '#f87171', bg: 'rgba(248, 113, 113, 0.15)' };
+      case 'all_bots_banned':
+        return { label: '🚨 Все боты забанены', icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.25)' };
+      case 'scenario_complete':
+        return { label: '✅ Сценарий завершен', icon: CheckCircle, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
+      case 'ai_dynamic_gen':
+        return { label: '⚡ Генерация ИИ', icon: Sparkles, color: '#c084fc', bg: 'rgba(192, 132, 252, 0.15)' };
       case 'reaction_add':
       case 'react':
         return { label: 'Реакция Emoji', icon: Heart, color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)' };
