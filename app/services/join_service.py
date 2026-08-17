@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # In-memory progress state for fleet joining
 _current_join_task: Optional[asyncio.Task] = None
 _known_chat_members: Dict[str, set] = {}
+_banned_chat_members: Dict[str, set] = {}
 
 _join_state: Dict[str, Any] = {
     "status": "idle", # "idle" | "running" | "paused" | "done" | "cancelled" | "error"
@@ -28,15 +29,34 @@ _join_state: Dict[str, Any] = {
 }
 
 def record_chat_member(chat_target: str, account_id: int):
-    global _known_chat_members
+    global _known_chat_members, _banned_chat_members
     key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
     if key not in _known_chat_members:
         _known_chat_members[key] = set()
     _known_chat_members[key].add(account_id)
+    if key in _banned_chat_members:
+        _banned_chat_members[key].discard(account_id)
+
+def record_banned_chat_member(chat_target: str, account_id: int):
+    global _banned_chat_members, _known_chat_members
+    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
+    if key not in _banned_chat_members:
+        _banned_chat_members[key] = set()
+    _banned_chat_members[key].add(account_id)
+    if key in _known_chat_members:
+        _known_chat_members[key].discard(account_id)
 
 def get_known_chat_members(chat_target: str) -> set:
     key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
     return _known_chat_members.get(key, set())
+
+def get_banned_chat_members(chat_target: str) -> set:
+    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
+    return _banned_chat_members.get(key, set())
+
+def is_banned_in_chat(chat_target: str, account_id: int) -> bool:
+    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
+    return account_id in _banned_chat_members.get(key, set())
 
 def get_join_status() -> Dict[str, Any]:
     return _join_state

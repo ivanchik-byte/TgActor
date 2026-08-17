@@ -26,6 +26,27 @@ def classify_telegram_error(ex: Any) -> Dict[str, str]:
     """
     err_str = str(ex).lower()
 
+    if any(k in err_str for k in ["все боты забанены", "все боты в чате забанены", "all_bots_banned", "all bots banned"]):
+        return {
+            "category": "all_bots_banned",
+            "badge": "Все боты забанены",
+            "summary": "Все доступные аккаунты из пула заблокированы или исключены из этого чата/канала"
+        }
+
+    if any(k in err_str for k in ["не хватает незабаненных", "недостаточно незабаненных", "not_enough_unbanned_bots"]):
+        return {
+            "category": "not_enough_unbanned_bots",
+            "badge": "Не хватает ботов",
+            "summary": "Недостаточно незабаненных аккаунтов в пуле для выполнения всех ролей сценария"
+        }
+
+    if any(k in err_str for k in ["usernameinvalid", "username_not_occupied", "username_invalid", "peeridinvalid", "peer_id_invalid", "chatinvalid", "chat_invalid", "invitehashinvalid", "чат не найден", "канал не найден", "chat not found"]):
+        return {
+            "category": "chat_not_found",
+            "badge": "Чат не найден",
+            "summary": "Канал или группа не найдены в Telegram (неверный юзернейм или чат удален)"
+        }
+
     if any(k in err_str for k in ["channelforbidden", "channel_forbidden", "userbannedinchannel", "user_banned_in_channel", "userdeactivatedban", "user_deactivated_ban"]):
         return {
             "category": "account_banned",
