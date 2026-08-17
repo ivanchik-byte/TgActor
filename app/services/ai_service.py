@@ -207,9 +207,9 @@ async def call_ai_completion(
     json_mode: bool = False,
     base_url: Optional[str] = None,
     max_tokens: Optional[int] = None,
-    temperature: float = 0.8
+    temperature: float = 0.92
 ) -> str:
-    """Execute chat completion against target AI provider with fallback and strict validation."""
+    """Execute chat completion against target AI provider with high timeout and strict validation."""
     if not api_key:
         raise ValueError("AI API Key is missing. Please set it in AI Settings.")
 
@@ -239,13 +239,13 @@ async def call_ai_completion(
     if max_tokens:
         body["max_tokens"] = max_tokens
 
-    if json_mode and provider in ["openai", "deepseek", "openrouter"]:
+    if json_mode and provider in ["openai", "deepseek", "openrouter", "custom", "nvidia"]:
         body["response_format"] = {"type": "json_object"}
 
     logger.info(f"AI request -> {endpoint} model={model} (temp={temperature}, max_tokens={max_tokens or 'auto'})")
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=20.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
             response = await client.post(endpoint, headers=headers, json=body)
             
             if response.status_code != 200:
@@ -274,7 +274,7 @@ async def call_ai_completion(
 
             return raw_content
     except httpx.TimeoutException:
-        raise ValueError(f"Таймаут соединения с ИИ: модель '{model}' генерировала ответ дольше 120 сек. Попробуйте более быструю модель или повторите запрос.")
+        raise ValueError(f"Таймаут соединения с ИИ: модель '{model}' генерировала ответ дольше 300 сек. Попробуйте более быструю модель или повторите запрос.")
 
 async def generate_scenario_from_prompt(
     session: AsyncSession,
@@ -416,7 +416,9 @@ async def generate_scenario_from_prompt(
         system_prompt=system_prompt,
         user_prompt=user_instructions,
         json_mode=True,
-        base_url=settings.get("base_url")
+        base_url=settings.get("base_url"),
+        max_tokens=3500,
+        temperature=0.94
     )
 
     # Robustly parse JSON from raw response
@@ -790,7 +792,9 @@ async def generate_studio_prompt(
         system_prompt=system_prompt,
         user_prompt=user_instructions,
         json_mode=True,
-        base_url=settings.get("base_url")
+        base_url=settings.get("base_url"),
+        max_tokens=3500,
+        temperature=0.94
     )
 
     data = robust_json_loads(raw_response)
