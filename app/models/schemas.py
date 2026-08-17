@@ -217,6 +217,7 @@ class StudioGenerateRequest(BaseModel):
     drama_type: str = "skepticism_proof" # 'skepticism_proof', 'warmup_interest', 'expert_qa', 'friendly_dispute'
     tone: str = "telegram_slang" # 'telegram_slang', 'tech_slang', 'concise_casual'
     roles_count: int = 3
+    steps_count: Optional[int] = None
     provider: Optional[str] = None
     model: Optional[str] = None
     system_prompt: Optional[str] = None
