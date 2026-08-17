@@ -1888,25 +1888,26 @@ export default function Scenarios() {
                                 Инструкция (промпт) для ИИ на этом шаге:
                               </label>
                               <textarea
-                                value={replica.aiPrompt || replica.text}
-                                onChange={e => {
-                                  handleUpdateReplica(replica.id, 'aiPrompt', e.target.value);
-                                  handleUpdateReplica(replica.id, 'text', e.target.value);
-                                }}
-                                placeholder="Пример: Ответь на предыдущее сообщение с восторгом, задай уточняющий вопрос..."
+                                value={replica.aiPrompt || ''}
+                                onChange={e => handleUpdateReplica(replica.id, 'aiPrompt', e.target.value)}
+                                placeholder="Опишите роль и задачу: что бот должен спросить, посоветовать или оспорить в комментарии..."
                                 style={{ ...textareaStyle, borderColor: 'var(--accent)' }}
                               />
-                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', display: 'block' }}>
-                                ⚡ ИИ сгенерирует 100% уникальный текст реплики при выходе поста в Telegram.
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <Sparkles className="w-3 h-3 text-accent" />
+                                <span>Текст будет сгенерирован нейросетью на лету в момент публикации поста.</span>
                               </span>
                             </div>
                           ) : (
-                            <textarea
-                              value={replica.text}
-                              onChange={e => handleUpdateReplica(replica.id, 'text', e.target.value)}
-                              placeholder="Напишите реплику сообщения..."
-                              style={textareaStyle}
-                            />
+                            <div>
+                              <label style={labelStyle}>Текст сообщения:</label>
+                              <textarea
+                                value={replica.text || ''}
+                                onChange={e => handleUpdateReplica(replica.id, 'text', e.target.value)}
+                                placeholder="Напишите точный текст сообщения..."
+                                style={textareaStyle}
+                              />
+                            </div>
                           )}
 
                           {/* Attachment upload */}
@@ -1975,15 +1976,15 @@ export default function Scenarios() {
                               onChange={e => handleUpdateReplica(replica.id, 'role', e.target.value)}
                               style={inputStyle}
                             >
-                              <optgroup label="🎲 Случайные боты (без повторов на время исполнения)">
+                              <optgroup label="Роли участников">
                                 {Array.from({ length: Math.max(5, commentingAccounts.length || 5) }).map((_, idx) => (
                                   <option key={idx + 1} value={String(idx + 1)}>
-                                    🎲 Случайный бот {idx + 1} (Уникальный участник #{idx + 1})
+                                    Бот #{idx + 1} (Роль {idx + 1})
                                   </option>
                                 ))}
                               </optgroup>
                               {commentingAccounts.length > 0 && (
-                                <optgroup label="👤 Конкретные аккаунты из пула">
+                                <optgroup label="Конкретные аккаунты из пула">
                                   {commentingAccounts.map((a: any) => (
                                     <option key={a.id} value={String(a.id)}>
                                       {a.custom_name ? a.custom_name : (a.username ? `@${a.username}` : (a.first_name || `Аккаунт #${a.id}`))} ({a.phone})
@@ -2082,9 +2083,9 @@ export default function Scenarios() {
                             <label style={labelStyle}>Режим реакций</label>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
                               {[
-                                { id: 'manual', label: '🖐️ Вручную' },
-                                { id: 'ai_smart', label: '🧠 Умный ИИ' },
-                                { id: 'pool', label: '🎯 Из пула' },
+                                { id: 'manual', label: 'Вручную' },
+                                { id: 'ai_smart', label: 'Умный ИИ' },
+                                { id: 'pool', label: 'Из пула' },
                               ].map(mode => (
                                 <button
                                   key={mode.id}
@@ -2185,82 +2186,6 @@ export default function Scenarios() {
                               </>
                             )}
                           </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
-                            <div>
-                              <label style={labelStyle}>Кто реагирует</label>
-                              <select
-                                value={replica.reactionSource || 'pool'}
-                                onChange={e => handleUpdateReplica(replica.id, 'reactionSource', e.target.value)}
-                                style={inputStyle}
-                              >
-                                <option value="pool">Пул реакций (рандом)</option>
-                                <option value="roles">Персонажи сценария</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label style={labelStyle}>
-                                {replica.reactionSource === 'roles' ? 'Количество' : 'Лимит'}
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                value={replica.reactionCount}
-                                onChange={e => handleUpdateReplica(replica.id, 'reactionCount', Number(e.target.value))}
-                                style={inputStyle}
-                              />
-                            </div>
-                          </div>
-
-                          {replica.reactionSource === 'roles' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                              <label style={labelStyle}>Выберите персонажей для реакции</label>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {commentingAccounts.length === 0 ? (
-                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                    Нет аккаунтов в пуле комментирования
-                                  </span>
-                                ) : (
-                                  commentingAccounts.map((acc: any) => {
-                                    const roleId = String(acc.id);
-                                    const name = acc.username ? `@${acc.username}` : (acc.first_name || `Аккаунт ${roleId}`);
-                                    const currentRoles = (replica.reactionRoles || '').split(/\s+/).filter(Boolean);
-                                    const isSelected = currentRoles.includes(roleId);
-                                    
-                                    return (
-                                      <button
-                                        key={roleId}
-                                        type="button"
-                                        onClick={() => {
-                                          let newList;
-                                          if (isSelected) {
-                                            newList = currentRoles.filter(r => r !== roleId);
-                                          } else {
-                                            newList = [...currentRoles, roleId];
-                                          }
-                                          handleUpdateReplica(replica.id, 'reactionRoles', newList.join(' '));
-                                          handleUpdateReplica(replica.id, 'reactionCount', newList.length);
-                                        }}
-                                        style={{
-                                          fontSize: '11px',
-                                          fontWeight: 600,
-                                          padding: '5px 8px',
-                                          borderRadius: '6px',
-                                          border: `1px solid ${isSelected ? getRoleColor(roleId) : 'var(--border-color)'}`,
-                                          backgroundColor: isSelected ? 'rgba(255,255,255,0.03)' : 'var(--bg-main)',
-                                          color: isSelected ? getRoleColor(roleId) : 'var(--text-muted)',
-                                          cursor: 'pointer',
-                                          transition: 'all 0.15s',
-                                        }}
-                                      >
-                                        {name}
-                                      </button>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -2284,131 +2209,127 @@ export default function Scenarios() {
           )}
         </div>
 
-        {/* COLUMN 3: Scenario config + Live Preview (Scrollable container to prevent overlay/clipping) */}
+        {/* COLUMN 3: Scenario config + Live Preview */}
         {activeScenarioId && (
           <div style={rightColumnStyle}>
-            {/* Config Widget */}
+            {/* Scenario Global Settings */}
             <div style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-color)',
               borderRadius: '16px',
               padding: '20px',
             }}>
-              <h3 style={{
-                fontSize: '14px',
-                fontWeight: 800,
-                color: 'var(--text-main)',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                borderBottom: '1px solid var(--border-color)',
-                paddingBottom: '10px'
-              }}>
-                <Settings className="w-4 h-4 text-accent" />
-                Параметры запуска
-              </h3>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>Название сценария</label>
-                  <input
-                    type="text"
-                    value={scenarioName}
-                    onChange={e => setScenarioName(e.target.value)}
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div>
-                  <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-участие в ротации ролей" />
-                </div>
-
-
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <label style={labelStyle}>Приоритет в ротации (Вес): {scenarioWeight}</label>
-                    <span style={{
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      backgroundColor: scenarioWeight >= 8 ? 'rgba(239,68,68,0.15)' : scenarioWeight >= 4 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)',
-                      color: scenarioWeight >= 8 ? '#ef4444' : scenarioWeight >= 4 ? '#f59e0b' : '#10b981'
-                    }}>
-                      {scenarioWeight >= 8 ? 'Высокий' : scenarioWeight >= 4 ? 'Средний' : 'Низкий'}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={10}
-                    value={scenarioWeight}
-                    onChange={e => setScenarioWeight(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: 'var(--accent)' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    <span>1 (редкий выбор)</span>
-                    <span>10 (частый выбор)</span>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  backgroundColor: 'var(--bg-main)',
-                  border: '1px solid var(--border-color)',
-                  fontSize: '11px',
-                  color: 'var(--text-muted)',
+                <h3 style={{
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  color: 'var(--text-main)',
+                  marginBottom: '16px',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px'
+                  alignItems: 'center',
+                  gap: '6px',
                 }}>
-                  <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>Статус сценария</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Шагов диалога:</span>
-                    <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{replicas.length}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Аккаунтов в пуле:</span>
-                    <span style={{ fontWeight: 700, color: commentingAccounts.length > 0 ? '#10b981' : '#ef4444' }}>
-                      {commentingAccounts.length} активных
-                    </span>
-                  </div>
-                </div>
+                  <Settings className="w-4 h-4 text-accent" />
+                  Параметры сценария
+                </h3>
 
-                <button
-                  onClick={() => updateScenarioMutation.mutate()}
-                  disabled={updateScenarioMutation.isPending}
-                  style={{
-                    backgroundColor: 'var(--accent)',
-                    color: '#fff',
-                    border: 'none',
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div>
+                    <label style={labelStyle}>Название сценария</label>
+                    <input
+                      type="text"
+                      value={scenarioName}
+                      onChange={e => setScenarioName(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <CustomCheckbox checked={isActive} onChange={setIsActive} label="Авто-участие в ротации ролей" />
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={labelStyle}>Приоритет в ротации (Вес): {scenarioWeight}</label>
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: scenarioWeight >= 8 ? 'rgba(239,68,68,0.15)' : scenarioWeight >= 4 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)',
+                        color: scenarioWeight >= 8 ? '#ef4444' : scenarioWeight >= 4 ? '#f59e0b' : '#10b981'
+                      }}>
+                        {scenarioWeight >= 8 ? 'Высокий' : scenarioWeight >= 4 ? 'Средний' : 'Низкий'}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={scenarioWeight}
+                      onChange={e => setScenarioWeight(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: 'var(--accent)' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      <span>1 (редкий выбор)</span>
+                      <span>10 (частый выбор)</span>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    padding: '10px 12px',
                     borderRadius: '10px',
-                    padding: '10px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    opacity: updateScenarioMutation.isPending ? 0.5 : 1
-                  }}
-                >
-                  {updateScenarioMutation.isPending ? 'Сохранение...' : 'Сохранить настройки'}
-                </button>
-              </div>
-            </div>
+                    backgroundColor: 'var(--bg-main)',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '11px',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px'
+                  }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>Статус сценария</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Шагов диалога:</span>
+                      <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>{replicas.length}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Аккаунтов в пуле:</span>
+                      <span style={{ fontWeight: 700, color: commentingAccounts.length > 0 ? '#10b981' : '#ef4444' }}>
+                        {commentingAccounts.length} активных
+                      </span>
+                    </div>
+                  </div>
 
-            {/* Telegram Live Preview */}
-            <div style={{
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '16px',
-              padding: '20px',
-            }}>
-              <h3 style={{
-                fontSize: '14px',
-                fontWeight: 800,
+                  <button
+                    onClick={() => updateScenarioMutation.mutate()}
+                    disabled={updateScenarioMutation.isPending}
+                    style={{
+                      backgroundColor: 'var(--accent)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      opacity: updateScenarioMutation.isPending ? 0.5 : 1
+                    }}
+                  >
+                    {updateScenarioMutation.isPending ? 'Сохранение...' : 'Сохранить настройки'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Telegram Live Preview */}
+              <div style={{
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '20px',
+              }}>
+                <h3 style={{
+                  fontSize: '14px',
+                  fontWeight: 800,
                 color: 'var(--text-main)',
                 marginBottom: '12px',
                 display: 'flex',
