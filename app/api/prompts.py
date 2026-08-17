@@ -342,16 +342,31 @@ async def create_scenario_from_studio(req: CreateScenarioFromStudioRequest):
         await session.flush()
 
         # Add steps
+        created_steps = []
         for idx, step_data in enumerate(req.steps):
             role_id = active_ids[idx % len(active_ids)]
+            is_dynamic = bool(step_data.get("is_ai_dynamic") or req.mode == "dynamic")
+            
+            # For dynamic mode: ai_prompt is the prompt instruction, text is sample preview
+            # For static mode: text is the exact message text, ai_prompt is None
+            if is_dynamic:
+                ai_prompt_val = step_data.get("ai_prompt") or step_data.get("text") or ""
+                text_val = step_data.get("sample_text") or step_data.get("text") or ai_prompt_val
+            else:
+                ai_prompt_val = None
+                text_val = step_data.get("text") or f"Шаг {idx+1}"
+
+            reply_target = step_data.get("reply_to_step")
+            is_reply = reply_target is not None and idx > 0
+
             step = ScenarioStep(
                 scenario_id=scenario.id,
                 role_id=role_id,
                 step_order=idx + 1,
-                message_type="normal",
-                text=step_data.get("text") or f"Шаг {idx+1}",
-                ai_prompt=step_data.get("ai_prompt"),
-                is_ai_dynamic=bool(step_data.get("is_ai_dynamic") or req.mode == "dynamic"),
+                message_type="reply" if is_reply else "normal",
+                text=text_val,
+                ai_prompt=ai_prompt_val,
+                is_ai_dynamic=is_dynamic,
                 delay_before_min=float(step_data.get("delay_before_min") or 4.0),
                 delay_before_max=float(step_data.get("delay_before_max") or 9.0),
                 reactions=step_data.get("reactions"),
@@ -359,6 +374,19 @@ async def create_scenario_from_studio(req: CreateScenarioFromStudioRequest):
                 reaction_source="pool"
             )
             session.add(step)
+            created_steps.append((step, reply_target))
+
+        await session.flush()
+
+        # Link reply_to_step_id
+        for idx, (step_obj, reply_target) in enumerate(created_steps):
+            if reply_target is not None and isinstance(reply_target, int) and 1 <= reply_target <= len(created_steps):
+                target_step = created_steps[reply_target - 1][0]
+                if target_step and target_step.id != step_obj.id:
+                    step_obj.reply_to_step_id = target_step.id
+            elif idx > 0 and step_obj.message_type == "reply":
+                # Default reply to preceding step
+                step_obj.reply_to_step_id = created_steps[idx - 1][0].id
 
         await session.commit()
         return {"status": "ok", "scenario_id": scenario.id, "title": scenario.title}
