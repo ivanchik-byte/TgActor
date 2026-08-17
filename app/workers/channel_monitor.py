@@ -47,10 +47,25 @@ async def run_channel_monitor():
                 accounts = list((await session.execute(accounts_stmt)).scalars().all())
 
                 if channels and accounts:
-                    sample_account = accounts[0]
-                    client = get_hydrogram_client(sample_account, getattr(sample_account, 'proxy', None))
+                    client = None
+                    sample_account = None
+                    for candidate_acc in accounts:
+                        c = get_hydrogram_client(candidate_acc, getattr(candidate_acc, 'proxy', None))
+                        try:
+                            await c.start()
+                            client = c
+                            sample_account = candidate_acc
+                            break
+                        except Exception as e:
+                            logger.warning(f"Аккаунт #{candidate_acc.id} (@{candidate_acc.username or candidate_acc.phone}) недоступен для мониторинга: {e}")
+                            continue
+
+                    if not client:
+                        logger.warning("Мониторинг каналов: нет рабочих аккаунтов (все аккаунты заблокированы или сессии недействительны)")
+                        await asyncio.sleep(15)
+                        continue
+
                     try:
-                        await client.start()
                         for channel in channels:
                             ch_user = channel.channel_username
                             try:

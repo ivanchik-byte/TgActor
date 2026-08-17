@@ -13,18 +13,41 @@ logger = logging.getLogger("tgactor.actions")
 def classify_telegram_error(ex: Any) -> Dict[str, str]:
     """
     Classifies error into high-priority human readable diagnostics:
+    - 'account_banned': Аккаунт заблокирован или исключен из канала (ChannelForbidden / UserBanned)
+    - 'session_expired': Сессия аккаунта слетела / заблокирован
+    - 'no_accounts': Нет активных аккаунтов в пуле
     - 'chat_closed': Чат закрыт / комментарии отключены
-    - 'realtime_drift': Реальное время слетело / таймаут триггера
     - 'flood_wait': Лимит Telegram (FloodWait)
     - 'peer_flood': Спам-блок или ограничение (PeerFlood)
     - 'slowmode': Медленный режим чата (Slowmode)
-    - 'session_expired': Сессия аккаунта слетела / заблокирован
     - 'no_posts': В канале нет постов для комментариев
+    - 'realtime_drift': Реальное время слетело / таймаут триггера
     - 'error': Общая ошибка
     """
     err_str = str(ex).lower()
 
-    if any(k in err_str for k in ["chatwriteforbidden", "chat_write_forbidden", "chatadminrequired", "channelprivate", "msg_id_invalid", "msgidinvalid", "discussion", "отключены комментарии", "нет группы"]):
+    if any(k in err_str for k in ["channelforbidden", "channel_forbidden", "userbannedinchannel", "user_banned_in_channel", "userdeactivatedban", "user_deactivated_ban"]):
+        return {
+            "category": "account_banned",
+            "badge": "Бан/Блок в канале",
+            "summary": "Аккаунт заблокирован Telegram или исключен/забанен в этом канале (ChannelForbidden)"
+        }
+
+    if any(k in err_str for k in ["sessionrevoked", "authkeyunregistered", "userdeactivated", "session_revoked", "auth_key_unregistered", "user_deactivated", "unauthorized", "session_password_needed"]):
+        return {
+            "category": "session_expired",
+            "badge": "Сессия слетела",
+            "summary": "Сессия аккаунта недействительна или аккаунт был сброшен/заблокирован"
+        }
+
+    if any(k in err_str for k in ["not_enough_accounts_in_pool", "нет активных аккаунтов", "нет аккаунтов", "no_accounts"]):
+        return {
+            "category": "no_accounts",
+            "badge": "Нет аккаунтов",
+            "summary": "В базе данных нет активных аккаунтов в пуле для выполнения задачи"
+        }
+
+    if any(k in err_str for k in ["chatwriteforbidden", "chat_write_forbidden", "chatadminrequired", "channelprivate", "msg_id_invalid", "msgidinvalid", "отключены комментарии", "нет группы"]):
         return {
             "category": "chat_closed",
             "badge": "Чат закрыт",
@@ -52,13 +75,6 @@ def classify_telegram_error(ex: Any) -> Dict[str, str]:
             "category": "slowmode",
             "badge": "Slowmode ожидание",
             "summary": "В группе включен медленный режим (Slowmode), нужно выждать паузу"
-        }
-
-    if any(k in err_str for k in ["sessionrevoked", "authkeyunregistered", "userdeactivated", "session_revoked", "auth_key_unregistered", "user_deactivated", "unauthorized"]):
-        return {
-            "category": "session_expired",
-            "badge": "Сессия слетела",
-            "summary": "Сессия аккаунта недействительна или аккаунт был сброшен/заблокирован"
         }
 
     if any(k in err_str for k in ["нет опубликованных постов", "no posts", "no message"]):
