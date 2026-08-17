@@ -273,6 +273,24 @@ async def execute_scenario(
                     if diag["category"] in ["account_banned", "chat_closed", "peer_flood"]:
                         record_banned_chat_member(str(target_chat_id), cand_acc.id)
                         record_banned_chat_member(str(chat_id), cand_acc.id)
+                        bot_label = cand_acc.custom_name or (f"@{cand_acc.username}" if cand_acc.username else (cand_acc.first_name or f"Бот #{cand_acc.id}"))
+                        await log_action(
+                            session,
+                            action_type="bot_banned",
+                            status="warning",
+                            account_id=cand_acc.id,
+                            target=str(target_chat_id or chat_id),
+                            target_id=f"Бан бота • {bot_label}",
+                            details={
+                                "summary": f"Бот {bot_label} заблокирован/не имеет доступа к чату ({diag['summary']}). Система переключилась на следующего бота.",
+                                "category": diag["category"],
+                                "badge": "🚫 Бан бота",
+                                "bot_name": bot_label,
+                                "channel": str(chat_id),
+                                "error": str(join_err)
+                            },
+                            scenario_id=scenario_id
+                        )
                         await c.stop()
                         continue
             
@@ -286,6 +304,24 @@ async def execute_scenario(
             diag = classify_telegram_error(start_err)
             if diag["category"] in ["account_banned", "peer_flood"]:
                 record_banned_chat_member(str(target_chat_id), cand_acc.id)
+                bot_label = cand_acc.custom_name or (f"@{cand_acc.username}" if cand_acc.username else (cand_acc.first_name or f"Бот #{cand_acc.id}"))
+                await log_action(
+                    session,
+                    action_type="bot_banned",
+                    status="warning",
+                    account_id=cand_acc.id,
+                    target=str(target_chat_id or chat_id),
+                    target_id=f"Бан бота • {bot_label}",
+                    details={
+                        "summary": f"Бот {bot_label} не смог подключиться ({diag['summary']}). Замена на другого бота.",
+                        "category": diag["category"],
+                        "badge": "🚫 Бан бота",
+                        "bot_name": bot_label,
+                        "channel": str(chat_id),
+                        "error": str(start_err)
+                    },
+                    scenario_id=scenario_id
+                )
             try:
                 await c.stop()
             except Exception:
@@ -300,14 +336,14 @@ async def execute_scenario(
         session.add(log)
         await log_action(
             session,
-            action_type="comment_send",
+            action_type="all_bots_banned",
             status="error",
             target=str(chat_id),
             target_id=f"{diag['badge']} • {chat_id}",
             details={
-                "summary": diag["summary"],
+                "summary": f"Все {len(commenting_pool)} ботов из пула заблокированы или исключены из чата {chat_id}",
                 "category": diag["category"],
-                "badge": diag["badge"],
+                "badge": "🚨 Все боты забанены",
                 "error": error_msg,
                 "channel": str(chat_id)
             },
@@ -498,6 +534,25 @@ async def execute_scenario(
             )
             await session.commit()
             break
+    else:
+        # All steps completed successfully
+        await log_action(
+            session,
+            action_type="scenario_complete",
+            status="ok",
+            target=str(chat_id),
+            target_id=f"Сценарий '{scenario.title}'",
+            details={
+                "summary": f"Сценарий '{scenario.title}' успешно завершен: опубликовано {len(steps)} реплик",
+                "category": "success",
+                "badge": "✅ Сценарий завершен",
+                "steps_count": len(steps),
+                "channel": str(chat_id),
+                "post_id": discussion_message_id
+            },
+            scenario_id=scenario_id
+        )
+        await session.commit()
 
     for c in set(clients.values()):
         try:

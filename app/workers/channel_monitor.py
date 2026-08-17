@@ -71,9 +71,11 @@ async def run_channel_monitor():
                             try:
                                 # Fetch latest post to avoid re-triggering on unchanged channels
                                 latest_msg_id = None
+                                latest_post_text = ""
                                 try:
                                     async for msg in client.get_chat_history(ch_user, limit=1):
                                         latest_msg_id = msg.id
+                                        latest_post_text = msg.text or msg.caption or ""
                                         break
                                 except Exception:
                                     latest_msg_id = None
@@ -103,7 +105,14 @@ async def run_channel_monitor():
                                         status="ok",
                                         target=ch_user,
                                         target_id=f"msg #{latest_msg_id or 'new'} -> sc #{scenario.id}",
-                                        details={"scenario_title": scenario.title, "delay_seconds": delay, "msg_id": latest_msg_id},
+                                        details={
+                                            "summary": f"Замечен новый пост #{latest_msg_id} в {ch_user}. Боты готовятся к сценарию '{scenario.title}' (задержка {delay}с)",
+                                            "scenario_title": scenario.title,
+                                            "delay_seconds": delay,
+                                            "msg_id": latest_msg_id,
+                                            "post_preview": latest_post_text[:250],
+                                            "badge": "🎯 Новый пост"
+                                        },
                                         scenario_id=scenario.id
                                     )
                                     await asyncio.sleep(delay)
