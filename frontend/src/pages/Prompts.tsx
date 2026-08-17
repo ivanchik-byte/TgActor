@@ -260,6 +260,115 @@ export default function Prompts() {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [studioCopied, setStudioCopied] = useState(false);
 
+  // Quick Launch from Template Modal state
+  const [quickLaunchTemplate, setQuickLaunchTemplate] = useState<PromptTemplateItem | null>(null);
+  const [quickLaunchStepsCount, setQuickLaunchStepsCount] = useState<number>(4);
+  const [quickLaunchTitle, setQuickLaunchTitle] = useState<string>('');
+  const [quickLaunchMode, setQuickLaunchMode] = useState<'dynamic' | 'static'>('dynamic');
+
+  // Build steps with exact count and natural replies for any template
+  const buildStepsForTemplate = (template: PromptTemplateItem, count: number, mode: 'dynamic' | 'static') => {
+    let existingSteps: any[] = [];
+    let roles: any[] = [];
+    try {
+      if (template.steps_payload) {
+        existingSteps = JSON.parse(template.steps_payload);
+      }
+    } catch {}
+    try {
+      if (template.roles_breakdown) {
+        roles = JSON.parse(template.roles_breakdown);
+      }
+    } catch {}
+
+    if (roles.length === 0) {
+      roles = [
+        { role_order: 1, role_name: 'Зачинщик', goal: 'Начать тред', instruction: template.prompt_text, sample_text: 'Начало обсуждения' },
+        { role_order: 2, role_name: 'Эксперт', goal: 'Дать совет', instruction: `${template.prompt_text} (совет)`, sample_text: 'Рекомендую проверенное решение' },
+        { role_order: 3, role_name: 'Скептик', goal: 'Задать вопрос', instruction: `${template.prompt_text} (вопрос)`, sample_text: 'А как насчет рисков' }
+      ];
+    }
+
+    const result: any[] = [];
+    for (let i = 0; i < count; i++) {
+      const roleIdx = i % roles.length;
+      const roleObj = roles[roleIdx];
+      const roleOrder = roleObj.role_order || (roleIdx + 1);
+      const roleName = roleObj.role_name || `Бот #${roleOrder}`;
+
+      if (i < existingSteps.length && existingSteps[i]) {
+        const ex = existingSteps[i];
+        result.push({
+          step_order: i + 1,
+          role_id: roleOrder,
+          role_name: roleName,
+          text: ex.text || ex.sample_text || roleObj.sample_text || `Шаг ${i + 1}`,
+          sample_text: ex.sample_text || ex.text || roleObj.sample_text || `Шаг ${i + 1}`,
+          ai_prompt: mode === 'dynamic' ? (ex.ai_prompt || roleObj.instruction || template.prompt_text) : null,
+          is_ai_dynamic: mode === 'dynamic',
+          reply_to_step: i > 0 ? (ex.reply_to_step || i) : null,
+          delay_before_min: ex.delay_before_min || 4.0,
+          delay_before_max: ex.delay_before_max || 9.0,
+          reactions: i === count - 1 ? '👍' : null,
+          reaction_count: i === count - 1 ? 1 : 0
+        });
+      } else {
+        const replyTarget = i > 0 ? i : null;
+        let promptInstr = '';
+        let sampleText = '';
+        if (i === 0) {
+          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Начни живое обсуждение под постом от первого лица по теме: "${template.title}". Задай открытый вопрос участникам, пиши на 'ты', 1-2 предложения, без эмодзи и без точки в конце.`;
+          sampleText = roleObj.sample_text || 'Кто в курсе, как сейчас лучше решить этот вопрос';
+        } else if (i === 1) {
+          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Ответь на сообщение из Шага #1. Посоветуй проверенное решение или поделись опытом. Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце.`;
+          sampleText = roleObj.sample_text || 'Тут главное не спешить и делать всё по проверенной схеме';
+        } else if (i === 2) {
+          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Вклинись в тред (Шаг #2). Вырази легкое сомнение по затратам или сложности. Пиши лаконично на 'ты', без эмодзи и без точки в конце.`;
+          sampleText = 'А по затратам как выходит, окупается вообще';
+        } else if (i === count - 1) {
+          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Подведи позитивный итог дискуссии (Шаг #${i}), поблагодари за полезный совет. Пиши лаконично, без эмодзи и без точки в конце.`;
+          sampleText = 'Понял, спасибо за наводку, попробую на днях';
+        } else {
+          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Ответь на реплику из Шага #${i}. Добавь важный практический нюанс или лайфхак. Пиши живо на 'ты', без эмодзи и без точки в конце.`;
+          sampleText = 'Да, там еще важно учитывать текущие комиссии';
+        }
+
+        result.push({
+          step_order: i + 1,
+          role_id: roleOrder,
+          role_name: roleName,
+          text: sampleText,
+          sample_text: sampleText,
+          ai_prompt: mode === 'dynamic' ? promptInstr : null,
+          is_ai_dynamic: mode === 'dynamic',
+          reply_to_step: replyTarget,
+          delay_before_min: 4.0,
+          delay_before_max: 9.0,
+          reactions: i === count - 1 ? '👍' : null,
+          reaction_count: i === count - 1 ? 1 : 0
+        });
+      }
+    }
+    return result;
+  };
+
+  const handleOpenQuickLaunch = (template: PromptTemplateItem) => {
+    let stepsCount = 4;
+    try {
+      if (template.steps_payload) {
+        const parsed = JSON.parse(template.steps_payload);
+        if (Array.isArray(parsed) && parsed.length > 0) stepsCount = parsed.length;
+      } else if (template.roles_breakdown) {
+        const parsed = JSON.parse(template.roles_breakdown);
+        if (Array.isArray(parsed) && parsed.length > 0) stepsCount = parsed.length;
+      }
+    } catch {}
+    setQuickLaunchTemplate(template);
+    setQuickLaunchTitle(template.title);
+    setQuickLaunchStepsCount(stepsCount);
+    setQuickLaunchMode(template.mode);
+  };
+
   // Update studioResult fields
   const handleUpdateStudioField = (field: string, value: any) => {
     if (!studioResult) return;
@@ -1035,20 +1144,16 @@ export default function Prompts() {
                     <span>{copiedId === template.id ? 'Скопировано' : 'Копировать'}</span>
                   </button>
 
-                  <button
-                    onClick={() =>
-                      handleCreateScenario({
-                        title: template.title,
-                        mode: template.mode,
-                        prompt_text: template.prompt_text,
-                        steps: effectiveSteps
-                      })
-                    }
-                    className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-soft)] hover:bg-[var(--accent)] hover:text-white border border-[var(--accent)] text-[var(--accent-text)] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Создать сценарий ({effectiveSteps.length} смс)</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenQuickLaunch(template)}
+                      className="px-3.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98] shadow-sm"
+                      title="Выбрать количество сообщений (КОЛ смс) и создать сценарий"
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                      <span>Создать сценарий ({effectiveSteps.length} смс)</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -1981,6 +2086,182 @@ export default function Prompts() {
                 className="px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold cursor-pointer"
               >
                 Готово
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. QUICK SCENARIO CREATOR FROM TEMPLATE MODAL */}
+      {quickLaunchTemplate && (
+        <div
+          onClick={() => setQuickLaunchTemplate(null)}
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[var(--radius-container)] shadow-2xl p-6 space-y-5 my-8 max-h-[90vh] overflow-y-auto"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">
+              <div className="flex items-center gap-3">
+                <span className="p-2 rounded-xl bg-[var(--accent-soft)] border border-[var(--accent)] text-[var(--accent-text)]">
+                  <Rocket className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-[var(--text-main)]">
+                    Создание сценария из шаблона
+                  </h2>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Выберите количество сообщений (КОЛ смс) — цепочка ответов и роли настроятся автоматически.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setQuickLaunchTemplate(null)}
+                className="p-1.5 rounded-lg border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <div className="space-y-4">
+              {/* Title */}
+              <div>
+                <label className="text-xs font-bold text-[var(--text-main)] block mb-1">
+                  Название нового сценария:
+                </label>
+                <input
+                  type="text"
+                  value={quickLaunchTitle}
+                  onChange={(e) => setQuickLaunchTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] text-xs text-[var(--text-main)] focus:outline-none focus:border-[var(--accent)]"
+                  placeholder="Название..."
+                />
+              </div>
+
+              {/* Steps Count (КОЛ смс) Bento Selector */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-[var(--text-main)]">
+                    Количество сообщений в диалоге (КОЛ смс):
+                  </label>
+                  <span className="text-xs font-bold text-[var(--accent-text)] font-mono">
+                    {quickLaunchStepsCount} {quickLaunchStepsCount >= 2 && quickLaunchStepsCount <= 4 ? 'сообщения' : 'сообщений'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                  {[2, 3, 4, 5, 6, 8, 10].map((count) => {
+                    const isSel = quickLaunchStepsCount === count;
+                    return (
+                      <button
+                        type="button"
+                        key={count}
+                        onClick={() => setQuickLaunchStepsCount(count)}
+                        className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)] font-bold shadow-sm'
+                            : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--border-subtle)]'
+                        }`}
+                      >
+                        <span className="text-xs">{count} смс</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mode Toggle */}
+              <div>
+                <label className="text-xs font-bold text-[var(--text-muted)] block mb-1.5">
+                  Режим генерации:
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setQuickLaunchMode('dynamic')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-all ${
+                      quickLaunchMode === 'dynamic'
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-bold'
+                        : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span className="text-xs">⚡ Динамический ИИ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickLaunchMode('static')}
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-all ${
+                      quickLaunchMode === 'static'
+                        ? 'bg-sky-500/15 border-sky-500 text-sky-400 font-bold'
+                        : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)]'
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span className="text-xs">📝 Фиксированные реплики</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-time Preview of Step Sequence */}
+              <div>
+                <label className="text-[11px] font-bold text-[var(--text-dim)] uppercase tracking-wider block mb-1.5">
+                  Цепочка ответов ({quickLaunchStepsCount} сообщений):
+                </label>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 bg-[var(--bg-main)] p-2.5 rounded-xl border border-[var(--border-color)]">
+                  {buildStepsForTemplate(quickLaunchTemplate, quickLaunchStepsCount, quickLaunchMode).map((step, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-xs flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-[var(--accent-text)] font-bold">#{idx + 1}</span>
+                        <span className="font-semibold text-[var(--text-main)]">{step.role_name}</span>
+                        {step.reply_to_step && (
+                          <span className="text-[10px] text-[var(--text-dim)]">
+                            ↳ ответ на #{step.reply_to_step}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-[var(--text-dim)] flex-shrink-0">
+                        ⏱️ {step.delay_before_min}-{step.delay_before_max}с
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-[var(--border-color)] flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setQuickLaunchTemplate(null)}
+                className="px-4 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+              >
+                Отмена
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const builtSteps = buildStepsForTemplate(quickLaunchTemplate, quickLaunchStepsCount, quickLaunchMode);
+                  handleCreateScenario({
+                    title: quickLaunchTitle.trim() || quickLaunchTemplate.title,
+                    mode: quickLaunchMode,
+                    prompt_text: quickLaunchTemplate.prompt_text,
+                    steps: builtSteps
+                  });
+                  setQuickLaunchTemplate(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md active:scale-[0.98]"
+              >
+                <Rocket className="w-4 h-4" />
+                <span>🚀 Создать сценарий ({quickLaunchStepsCount} смс)</span>
               </button>
             </div>
           </div>

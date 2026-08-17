@@ -579,6 +579,67 @@ export default function Scenarios() {
     setReplicas(adjusted);
   };
 
+  // Quick adjust number of messages (КОЛ смс)
+  const handleAdjustScenarioStepsCount = (targetCount: number) => {
+    if (targetCount === replicas.length) return;
+    const accountIds = commentingAccounts.map((a: any) => String(a.id));
+    const activeScen = scenarios.find((s: any) => s.id === activeScenarioId);
+    const isDynamic = activeScen ? activeScen.mode === 'ai_dynamic' : false;
+
+    if (targetCount < replicas.length) {
+      // Trim to targetCount
+      const trimmed = replicas.slice(0, targetCount);
+      const validIds = new Set(trimmed.map(r => r.id));
+      trimmed.forEach((r, i) => {
+        if (r.replyToId && !validIds.has(r.replyToId)) {
+          r.replyToId = i > 0 ? trimmed[i - 1].id : '';
+        }
+      });
+      setReplicas(trimmed);
+      showToast(`Диалог сокращен до ${targetCount} сообщений`, 'success');
+      return;
+    }
+
+    // Expand to targetCount
+    const newReplicas = [...replicas];
+    for (let i = replicas.length; i < targetCount; i++) {
+      const roleId = accountIds[i % Math.max(1, accountIds.length)] || (accountIds[0] || '1');
+      const prevReplica = newReplicas[i - 1];
+      const newId = Math.random().toString(36).substring(2, 9);
+      
+      let stepPrompt = '';
+      if (i === 1) {
+        stepPrompt = `Ответь на сообщение из Шага #1. Посоветуй проверенное решение или аргументируй свою позицию. Пиши просто на 'ты', без эмодзи и без точки в конце.`;
+      } else if (i === 2) {
+        stepPrompt = `Вклинись в разговор (Шаг #2). Задай уточняющий вопрос или выскажи легкий скепсис. Пиши лаконично, без эмодзи и без точки в конце.`;
+      } else if (i === targetCount - 1) {
+        stepPrompt = `Подведи позитивный итог дискуссии (Шаг #${i}), поблагодари за совет. Пиши лаконично, без эмодзи и без точки в конце.`;
+      } else {
+        stepPrompt = `Ответь на мысль из Шага #${i}. Добавь важный нюанс или аргумент из практики. Пиши живо на 'ты', без эмодзи и без точки в конце.`;
+      }
+
+      newReplicas.push({
+        id: newId,
+        role: roleId,
+        type: 'reply',
+        replyToId: prevReplica ? prevReplica.id : '',
+        text: `Шаг ${i + 1}`,
+        minDelay: '4',
+        maxDelay: '9',
+        reactions: i === targetCount - 1 ? '👍' : '',
+        reactionCount: i === targetCount - 1 ? 1 : 0,
+        reactionSource: 'pool',
+        fileName: '',
+        noAttachmentIfForbidden: false,
+        isAiDynamic: isDynamic,
+        aiPrompt: stepPrompt
+      });
+    }
+
+    setReplicas(newReplicas);
+    showToast(`Диалог расширен до ${targetCount} сообщений`, 'success');
+  };
+
   // Apply prompt template from library
   const handleApplyLibraryTemplate = (template: any) => {
     if (!template) return;
@@ -1538,6 +1599,35 @@ export default function Scenarios() {
                       ))}
                     </select>
                   )}
+
+                  {/* Quick Step Count Selector (КОЛ смс) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, padding: '0 4px' }}>
+                      КОЛ смс:
+                    </span>
+                    {[2, 3, 4, 5, 6, 8, 10].map(cnt => {
+                      const isCur = replicas.length === cnt;
+                      return (
+                        <button
+                          key={cnt}
+                          type="button"
+                          onClick={() => handleAdjustScenarioStepsCount(cnt)}
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: isCur ? 700 : 500,
+                            padding: '3px 6px',
+                            borderRadius: '6px',
+                            border: isCur ? '1px solid var(--accent)' : '1px solid transparent',
+                            backgroundColor: isCur ? 'var(--accent-soft)' : 'transparent',
+                            color: isCur ? 'var(--accent-text)' : 'var(--text-muted)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {cnt}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px' }}>
