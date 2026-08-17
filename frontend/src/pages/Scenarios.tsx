@@ -1591,10 +1591,10 @@ export default function Scenarios() {
                         outline: 'none'
                       }}
                     >
-                      <option value="" disabled>📥 Применить шаблон из Библиотеки...</option>
+                      <option value="" disabled>Применить шаблон из Библиотеки...</option>
                       {libraryTemplates.map((t: any) => (
                         <option key={t.id} value={t.id}>
-                          {t.mode === 'dynamic' ? '⚡' : '📝'} {t.title}
+                          {t.title} [{t.mode === 'dynamic' ? 'ИИ' : 'Текст'}]
                         </option>
                       ))}
                     </select>
