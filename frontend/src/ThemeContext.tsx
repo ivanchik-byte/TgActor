@@ -13,18 +13,18 @@ export interface ThemeOption {
 
 export const AVAILABLE_THEMES: ThemeOption[] = [
   {
-    id: 'deep-indigo',
-    label: 'Deep Indigo',
-    accentColor: '#8b5cf6',
-    bgColor: '#0f0d1a',
-    description: 'Глубокий индиго — фирменная темная тема по умолчанию',
-  },
-  {
     id: 'dark-crimson',
     label: 'Dark Crimson',
     accentColor: '#b91c3d',
     bgColor: '#110a0c',
-    description: 'Темно-бордовый акцент для выразительного контраста',
+    description: 'Темно-красная тема — фирменный стиль по умолчанию',
+  },
+  {
+    id: 'deep-indigo',
+    label: 'Deep Indigo',
+    accentColor: '#8b5cf6',
+    bgColor: '#0f0d1a',
+    description: 'Глубокий индиго — фиолетовая темная тема',
   },
   {
     id: 'dark-charcoal',
@@ -80,12 +80,12 @@ const THEME_META_COLORS: Record<Theme, string> = {
 };
 
 function normalizeTheme(raw: string | null): Theme {
-  if (!raw) return 'deep-indigo';
+  if (!raw) return 'dark-crimson';
   if (raw === 'deep-indigo' || raw === 'theme-indigo') return 'deep-indigo';
   if (raw === 'dark-crimson' || raw === 'theme-crimson') return 'dark-crimson';
   if (raw === 'dark-charcoal' || raw === 'theme-charcoal') return 'dark-charcoal';
   if (raw === 'light' || raw === 'theme-light') return 'light';
-  return 'deep-indigo';
+  return 'dark-crimson';
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -94,7 +94,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY);
       return normalizeTheme(saved);
     } catch {
-      return 'deep-indigo';
+      return 'dark-crimson';
     }
   });
 
