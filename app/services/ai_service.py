@@ -618,3 +618,161 @@ async def generate_prompt_idea(
     if cleaned.startswith("```"):
         cleaned = cleaned.strip("`").strip()
     return cleaned
+
+async def generate_studio_prompt(
+    session: AsyncSession,
+    topic: str,
+    mode: str = "dynamic",
+    drama_type: str = "skepticism_proof",
+    tone: str = "telegram_slang",
+    roles_count: int = 3,
+    override_provider: Optional[str] = None,
+    override_model: Optional[str] = None,
+    override_system_prompt: Optional[str] = None
+) -> Dict[str, Any]:
+    """Generate high-converting structured scenario prompt, role breakdown, and steps payload in Prompt Studio."""
+    settings = await get_ai_settings(session)
+    provider = override_provider or settings.get("provider") or "deepseek"
+    api_key = settings.get("api_key")
+    model = override_model or settings.get("default_model") or "deepseek-chat"
+
+    if not api_key:
+        raise ValueError("Не настроен API Key ИИ. Пожалуйста, откройте 'ИИ НАСТРОЙКИ' и введите ваш ключ.")
+
+    drama_descriptions = {
+        "skepticism_proof": "Скепсис -> Пруф -> Нативная рекомендация (первый сомневается в надежности/банах, второй советует решение, третий подтверждает личным опытом).",
+        "warmup_interest": "Прогрев интереса & Кейс (первый интересуется функционалом/кейсом, второй объясняет детали, третий уточняет технический нюанс).",
+        "expert_qa": "Вопрос эксперту (первый задает сложный практический вопрос, второй дает экспертный совет, третий благодарит за полезность).",
+        "friendly_dispute": "Живой спор мнений (два участника аргументированно отстаивают разные подходы без негатива, третий подводит баланс).",
+        "native_mention": "Нативная интеграция софта @ivanchik_byte (обсуждение автоматизации комментирования без спамблока, сухое упоминание проверенного решения).",
+        "problem_solving": "Решение конкретной проблемы (жалоба на сброс сессий/прокси -> разбор ошибки -> пошаговый фикс).",
+        "crypto_insight": "Крипто-инсайд / Трейдинг (быстрый обмен мнениями по TON/USDT/комиссиям без рекламы)."
+    }
+    drama_desc = drama_descriptions.get(drama_type, drama_descriptions["skepticism_proof"])
+
+    tone_descriptions = {
+        "telegram_slang": "Живой разговорный сленг Telegram (хз, норм, по факту, рил, годнота, бро, шарит), короткие отрывистые фразы, без заумных слов.",
+        "tech_slang": "Технический IT-стиль (прокси, сессии, лимиты, парсинг, задержки, воркеры, API), по делу и без маркетинговой воды.",
+        "concise_casual": "Максимально лаконичный бытовой стиль (1-2 простых предложения, простые слова, минимум знаков).",
+        "crypto_trader": "Сленг трейдеров и криптанов (газ, ликвидность, сеть TON, комиссия, кошелек, холд, свап).",
+        "cautious_skeptic": "Сдержанно-скептичный тон (осторожные вопросы, проверка фактов, недоверие к легким кнопкам).",
+        "friendly_helper": "Дружелюбный советчик (помощь новичку без занудства и без лести)."
+    }
+    tone_desc = tone_descriptions.get(tone, tone_descriptions["telegram_slang"])
+
+    system_prompt = f"""Ты — главный архитектор промптов и сценариев для комментирования в Telegram (Prompt Studio Engine v3.2).
+Твоя задача — превратить краткую задумку пользователя в идеальный, точечно проработанный сценарий диалога.
+
+ПРАВИЛА И СТИЛЬ:
+1. КАТЕГОРИЧЕСКИ БЕЗ ЭМОДЗИ И СМАЙЛИКОВ в текстах сообщений.
+2. НИКАКИХ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ.
+3. НИКАКИХ ДЛИННЫХ ТИРЕ (—).
+4. Участники — незнакомые люди в интернете, общаются на «ты», без рекламной лести.
+5. Режим: {'ДИНАМИЧЕСКИЙ (боты генерируют фразы на лету по точечным промптам)' if mode == 'dynamic' else 'СТАТИЧЕСКИЙ (готовые реплики)'}.
+
+Формат ответа: СТРОГО валидный JSON-объект."""
+
+    user_instructions = f"""
+Задание пользователя:
+"{topic}"
+
+ПАРАМЕТРЫ СЦЕНЫ:
+- Драматургия: {drama_desc}
+- Тональность: {tone_desc}
+- Количество участников: {roles_count}
+- Режим: {'Динамический (is_ai_dynamic=true)' if mode == 'dynamic' else 'Статический (is_ai_dynamic=false)'}
+
+Сгенерируй JSON следующей структуры:
+{{
+  "title": "Ёмкое название сценария",
+  "category": "software", // software | crypto | warmup | skepticism | services | general
+  "mode": "{mode}",
+  "prompt_text": "Развернутый, структурированный промпт сценария для ИИ, описывающий общую канву, распределение ролей и суть обсуждения без дословных кавычек",
+  "roles": [
+    {{
+      "role_order": 1,
+      "role_name": "Скептик / Зачинщик",
+      "goal": "Задать боль/вопрос",
+      "instruction": "Точечная инструкция для бота 1: о чем спросить и как начать тред",
+      "sample_text": "Пример фразы без точки на конце и без эмодзи"
+    }},
+    {{
+      "role_order": 2,
+      "role_name": "Эксперт / Рекомендация",
+      "goal": "Дать проверенный совет",
+      "instruction": "Точечная инструкция для бота 2: как ответить первому и упомянуть нужное решение",
+      "sample_text": "Пример ответа без точки на конце и без эмодзи"
+    }},
+    {{
+      "role_order": 3,
+      "role_name": "Практик / Пруф",
+      "goal": "Подтвердить опыт",
+      "instruction": "Точечная инструкция для бота 3: как подтвердить рекомендацию",
+      "sample_text": "Пример подтверждения без точки на конце и без эмодзи"
+    }}
+  ],
+  "steps_payload": [
+    {{
+      "step_order": 1,
+      "role_id": 1,
+      "text": "краткая суть первого сообщения",
+      "ai_prompt": "Точечный промпт для шага 1",
+      "is_ai_dynamic": {str(mode == 'dynamic').lower()},
+      "reply_to_step": null,
+      "delay_before_min": 4.0,
+      "delay_before_max": 8.0,
+      "reactions": null,
+      "reaction_count": 0
+    }},
+    {{
+      "step_order": 2,
+      "role_id": 2,
+      "text": "краткая суть ответа второго бота",
+      "ai_prompt": "Точечный промпт для шага 2",
+      "is_ai_dynamic": {str(mode == 'dynamic').lower()},
+      "reply_to_step": 1,
+      "delay_before_min": 5.0,
+      "delay_before_max": 10.0,
+      "reactions": null,
+      "reaction_count": 0
+    }},
+    {{
+      "step_order": 3,
+      "role_id": 3,
+      "text": "краткая суть подтверждения",
+      "ai_prompt": "Точечный промпт для шага 3",
+      "is_ai_dynamic": {str(mode == 'dynamic').lower()},
+      "reply_to_step": 2,
+      "delay_before_min": 4.0,
+      "delay_before_max": 9.0,
+      "reactions": "👍",
+      "reaction_count": 1
+    }}
+  ]
+}}"""
+
+    raw_response = await call_ai_completion(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_instructions,
+        json_mode=True,
+        base_url=settings.get("base_url")
+    )
+
+    data = robust_json_loads(raw_response)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid structure received from AI Prompt Studio")
+
+    # Sanitize strings
+    for role in data.get("roles", []):
+        if isinstance(role, dict) and "sample_text" in role:
+            role["sample_text"] = sanitize_telegram_comment(role["sample_text"])
+
+    for step in data.get("steps_payload", []):
+        if isinstance(step, dict) and "text" in step:
+            step["text"] = sanitize_telegram_comment(step["text"])
+
+    return data
+
