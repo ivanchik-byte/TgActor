@@ -619,6 +619,53 @@ async def generate_prompt_idea(
         cleaned = cleaned.strip("`").strip()
     return cleaned
 
+async def enhance_prompt_description(
+    session: AsyncSession,
+    text: Optional[str] = None,
+    override_provider: Optional[str] = None,
+    override_model: Optional[str] = None
+) -> str:
+    """Enhance, expand, or generate a rich natural scene description with AI for Prompt Studio."""
+    settings = await get_ai_settings(session)
+    provider = override_provider or settings.get("provider") or "deepseek"
+    api_key = settings.get("api_key")
+    model = override_model or settings.get("default_model") or "deepseek-chat"
+
+    if not api_key:
+        raise ValueError("Не настроен API Key ИИ. Пожалуйста, откройте 'ИИ НАСТРОЙКИ' и введите ваш ключ.")
+
+    system_prompt = """Ты — ведущий промпт-инженер для сценариев комментирования в Telegram.
+Твоя задача — взять краткий черновой набросок или тему от пользователя и превратить его в глубокое, чёткое, живое описание сцены (2-3 предложения на русском языке).
+Описание должно содержать:
+1. Конкретную тему и проблему/интригу обсуждения.
+2. Мотивацию и распределение позиций участников (кто задает вопрос, кто советует или спорит, кто подтверждает опыт).
+3. Требование писать без эмодзи, без финальных точек и на естественном разговорном языке.
+Ответ должен быть строго текстом улучшенного описания (без вводных слов 'Вот улучшенный промпт:' и без кавычек)."""
+
+    if text and text.strip():
+        user_prompt = f"""Улучши и сделай детальнее следующее описание сцены для диалога в Telegram:
+"{text.strip()}"
+
+Сохрани исходную идею пользователя, но добавь конкретики, естественной драматургии и четких ролевых ориентиров.
+Верни ТОЛЬКО готовое улучшенное описание."""
+    else:
+        user_prompt = """Сгенерируй креативное, интересное и разностороннее описание сцены для диалога 3 незнакомых людей в комментариях Telegram (любая актуальная сфера: софт, крипта, бизнес, услуги, лайфхаки или дискуссия).
+Верни ТОЛЬКО готовое описание сцены."""
+
+    raw_text = await call_ai_completion(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        json_mode=False,
+        base_url=settings.get("base_url")
+    )
+    cleaned = raw_text.strip().strip('"').strip("'")
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+    return cleaned
+
 async def generate_studio_prompt(
     session: AsyncSession,
     topic: str,

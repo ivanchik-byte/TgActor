@@ -19,10 +19,16 @@ from app.models.schemas import (
     StudioGenerateResponse,
     CreateScenarioFromStudioRequest
 )
-from app.services.ai_service import generate_studio_prompt
+from app.services.ai_service import generate_studio_prompt, enhance_prompt_description
+from pydantic import BaseModel
 
 logger = logging.getLogger("tgactor.prompts")
 router = APIRouter()
+
+class EnhancePromptRequest(BaseModel):
+    text: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 DEFAULT_CATEGORIES = [
     {"id": "software", "label": "Софт / IT", "color": "#38bdf8", "is_builtin": True},
@@ -355,3 +361,20 @@ async def create_scenario_from_studio(req: CreateScenarioFromStudioRequest):
 
         await session.commit()
         return {"status": "ok", "scenario_id": scenario.id, "title": scenario.title}
+
+@router.post("/api/prompts/enhance-prompt")
+async def enhance_prompt_endpoint(req: EnhancePromptRequest):
+    """Refine, detail, and enhance user prompt idea using AI."""
+    async with async_session() as session:
+        try:
+            enhanced = await enhance_prompt_description(
+                session=session,
+                text=req.text,
+                override_provider=req.provider,
+                override_model=req.model
+            )
+            return {"status": "ok", "enhanced_prompt": enhanced}
+        except Exception as e:
+            logger.error(f"AI Prompt Enhancement failed: {e}", exc_info=True)
+            raise HTTPException(400, detail=str(e))
+
