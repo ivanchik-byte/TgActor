@@ -254,9 +254,63 @@ export default function Prompts() {
   const [studioRolesCount, setStudioRolesCount] = useState<number>(3);
   const [studioStepsCount, setStudioStepsCount] = useState<number>(4);
   const [studioResult, setStudioResult] = useState<StudioGenerateData | null>(null);
+  const [studioActiveTab, setStudioActiveTab] = useState<'steps' | 'roles' | 'overview'>('steps');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [studioCopied, setStudioCopied] = useState(false);
+
+  // Update studioResult fields
+  const handleUpdateStudioField = (field: string, value: any) => {
+    if (!studioResult) return;
+    setStudioResult({ ...studioResult, [field]: value });
+  };
+
+  const handleUpdateStudioRole = (idx: number, field: string, value: any) => {
+    if (!studioResult) return;
+    const newRoles = [...studioResult.roles];
+    newRoles[idx] = { ...newRoles[idx], [field]: value };
+    setStudioResult({ ...studioResult, roles: newRoles });
+  };
+
+  const handleUpdateStudioStep = (idx: number, field: string, value: any) => {
+    if (!studioResult) return;
+    const newSteps = [...studioResult.steps_payload];
+    newSteps[idx] = { ...newSteps[idx], [field]: value };
+    setStudioResult({ ...studioResult, steps_payload: newSteps });
+  };
+
+  const handleDeleteStudioStep = (idx: number) => {
+    if (!studioResult || studioResult.steps_payload.length <= 1) return;
+    const newSteps = studioResult.steps_payload.filter((_, i) => i !== idx).map((s, i) => ({
+      ...s,
+      step_order: i + 1,
+      reply_to_step: s.reply_to_step && s.reply_to_step > idx ? s.reply_to_step - 1 : (s.reply_to_step === idx + 1 ? (i > 0 ? i : null) : s.reply_to_step)
+    }));
+    setStudioResult({ ...studioResult, steps_payload: newSteps });
+  };
+
+  const handleAddStudioStep = () => {
+    if (!studioResult) return;
+    const count = studioResult.steps_payload.length;
+    const roleId = ((count) % Math.max(1, studioResult.roles.length)) + 1;
+    const roleObj = studioResult.roles.find(r => r.role_order === roleId) || studioResult.roles[0];
+    const isDynamic = studioResult.mode === 'dynamic';
+    const newStep = {
+      step_order: count + 1,
+      role_id: roleId,
+      role_name: roleObj?.role_name || `Бот ${roleId}`,
+      text: roleObj?.sample_text || `Шаг ${count + 1}`,
+      sample_text: roleObj?.sample_text || `Шаг ${count + 1}`,
+      ai_prompt: roleObj?.instruction ? `Ты — ${roleObj.role_name}. ${roleObj.instruction}. Ответь естественно на 'ты', без эмодзи и без точки в конце.` : `Инструкция для шага ${count + 1}`,
+      is_ai_dynamic: isDynamic,
+      reply_to_step: count > 0 ? count : null,
+      delay_before_min: 4.0,
+      delay_before_max: 9.0,
+      reactions: null,
+      reaction_count: 0
+    };
+    setStudioResult({ ...studioResult, steps_payload: [...studioResult.steps_payload, newStep] });
+  };
 
   // Enhance / Detail prompt with AI
   const handleEnhancePrompt = async () => {
@@ -1230,68 +1284,307 @@ export default function Prompts() {
               </button>
             </div>
 
-            {/* Studio Generation Results Card */}
+            {/* Studio Generation Results Card (Flexible Interactive Bento) */}
             {studioResult && (
               <div className="p-5 rounded-2xl bg-[var(--bg-main)] border border-[var(--accent)]/50 space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
+                {/* Header & Tabs */}
+                <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-[var(--border-color)]">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-[240px]">
                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)]">
                       Результат
                     </span>
-                    <h3 className="text-sm font-bold text-[var(--text-main)]">
-                      {studioResult.title}
-                    </h3>
+                    <input
+                      type="text"
+                      value={studioResult.title}
+                      onChange={(e) => handleUpdateStudioField('title', e.target.value)}
+                      className="text-sm font-bold text-[var(--text-main)] bg-transparent border-b border-transparent hover:border-[var(--border-color)] focus:border-[var(--accent)] focus:outline-none px-1 py-0.5 w-full"
+                      placeholder="Название сценария..."
+                    />
                   </div>
 
+                  {/* Mode & Step Count Badge */}
                   <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)]">
-                    <span>{studioResult.mode === 'dynamic' ? '⚡ Динамический' : '📝 Статический'}</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
+                      {studioResult.mode === 'dynamic' ? '⚡ Динамический' : '📝 Статический'}
+                    </span>
                     <span>•</span>
-                    <span className="text-[var(--accent-text)] font-semibold">{studioResult.steps_payload?.length || studioStepsCount} смс</span>
+                    <span className="text-[var(--accent-text)] font-semibold">{studioResult.steps_payload.length} смс</span>
                   </div>
                 </div>
 
-                {/* Prompt preview */}
-                <div className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)]">
-                  <span className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider block mb-1">
-                    Сгенерированный промпт сценария:
-                  </span>
-                  <p className="text-xs text-[var(--text-main)] font-mono leading-relaxed">
-                    {studioResult.prompt_text}
-                  </p>
+                {/* Sub-tabs Navigation */}
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] max-w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setStudioActiveTab('steps')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      studioActiveTab === 'steps'
+                        ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Пошаговая цепочка ({studioResult.steps_payload.length} смс)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudioActiveTab('roles')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      studioActiveTab === 'roles'
+                        ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Роли и инструкции ({studioResult.roles.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudioActiveTab('overview')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      studioActiveTab === 'overview'
+                        ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span>Общий промпт</span>
+                  </button>
                 </div>
 
-                {/* Step-by-step role cards */}
-                <div>
-                  <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">
-                    Точечные инструкции по ролям ({studioResult.roles.length} ботов):
-                  </span>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                    {studioResult.roles.map((role) => (
+                {/* TAB 1: STEPS TIMELINE (Messages) */}
+                {studioActiveTab === 'steps' && (
+                  <div className="space-y-3">
+                    <div className="space-y-2.5">
+                      {studioResult.steps_payload.map((step, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2.5 transition-all hover:border-[var(--accent)]/40"
+                        >
+                          {/* Step Header */}
+                          <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold px-2 py-0.5 rounded-md bg-[var(--bg-main)] text-[var(--accent-text)] border border-[var(--border-color)] font-mono">
+                                #{idx + 1}
+                              </span>
+
+                              {/* Role Selector */}
+                              <select
+                                value={step.role_id}
+                                onChange={(e) => {
+                                  const rId = Number(e.target.value);
+                                  const rObj = studioResult.roles.find(r => r.role_order === rId);
+                                  handleUpdateStudioStep(idx, 'role_id', rId);
+                                  if (rObj) handleUpdateStudioStep(idx, 'role_name', rObj.role_name);
+                                }}
+                                className="bg-[var(--bg-main)] text-[var(--text-main)] font-semibold border border-[var(--border-color)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-[var(--accent)]"
+                              >
+                                {studioResult.roles.map((r) => (
+                                  <option key={r.role_order} value={r.role_order}>
+                                    Роль #{r.role_order}: {r.role_name}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {/* Reply-to Selector */}
+                              <select
+                                value={step.reply_to_step || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value ? Number(e.target.value) : null;
+                                  handleUpdateStudioStep(idx, 'reply_to_step', val);
+                                }}
+                                className="bg-[var(--bg-main)] text-[var(--text-muted)] border border-[var(--border-color)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-[var(--accent)]"
+                              >
+                                <option value="">💬 Новое сообщение (в корень)</option>
+                                {studioResult.steps_payload.slice(0, idx).map((_, pIdx) => (
+                                  <option key={pIdx + 1} value={pIdx + 1}>
+                                    ↳ Ответ на шаг #{pIdx + 1}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Delay & Delete Step Button */}
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 text-[11px] font-mono text-[var(--text-dim)] bg-[var(--bg-main)] px-2 py-0.5 rounded-md border border-[var(--border-color)]">
+                                <span>⏱️</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="60"
+                                  value={step.delay_before_min}
+                                  onChange={(e) => handleUpdateStudioStep(idx, 'delay_before_min', Number(e.target.value))}
+                                  className="w-7 text-center bg-transparent text-[var(--text-main)] focus:outline-none"
+                                />
+                                <span>-</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="120"
+                                  value={step.delay_before_max}
+                                  onChange={(e) => handleUpdateStudioStep(idx, 'delay_before_max', Number(e.target.value))}
+                                  className="w-7 text-center bg-transparent text-[var(--text-main)] focus:outline-none"
+                                />
+                                <span>сек</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteStudioStep(idx)}
+                                disabled={studioResult.steps_payload.length <= 1}
+                                className="p-1 rounded text-[var(--text-dim)] hover:text-red-400 disabled:opacity-30 cursor-pointer"
+                                title="Удалить этот шаг"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Step Content: Dynamic Prompt vs Static Text */}
+                          {studioResult.mode === 'dynamic' ? (
+                            <div className="space-y-1.5">
+                              <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-text)] block mb-1">
+                                  Инструкция (промпт) для ИИ на этом шаге:
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  value={step.ai_prompt || ''}
+                                  onChange={(e) => handleUpdateStudioStep(idx, 'ai_prompt', e.target.value)}
+                                  placeholder="Например: Задай вопрос по теме с легким любопытством на 'ты'..."
+                                  className="w-full p-2.5 rounded-lg bg-[var(--bg-main)] text-xs text-[var(--text-main)] border border-[var(--accent)]/40 focus:border-[var(--accent)] focus:outline-none font-mono resize-y"
+                                />
+                              </div>
+
+                              <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] bg-[var(--bg-main)]/60 px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]">
+                                <span className="font-semibold text-[var(--text-dim)] flex-shrink-0">Пример фразы:</span>
+                                <input
+                                  type="text"
+                                  value={step.text || step.sample_text || ''}
+                                  onChange={(e) => {
+                                    handleUpdateStudioStep(idx, 'text', e.target.value);
+                                    handleUpdateStudioStep(idx, 'sample_text', e.target.value);
+                                  }}
+                                  placeholder="Пример сообщения без точки..."
+                                  className="w-full bg-transparent text-xs text-[var(--text-muted)] focus:text-[var(--text-main)] focus:outline-none font-mono"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block mb-1">
+                                Текст сообщения:
+                              </label>
+                              <textarea
+                                rows={2}
+                                value={step.text || ''}
+                                onChange={(e) => handleUpdateStudioStep(idx, 'text', e.target.value)}
+                                placeholder="Текст реплики сообщения..."
+                                className="w-full p-2.5 rounded-lg bg-[var(--bg-main)] text-xs text-[var(--text-main)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:outline-none font-mono resize-y"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddStudioStep}
+                      className="w-full py-2.5 rounded-xl border border-dashed border-[var(--border-color)] hover:border-[var(--accent)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Добавить сообщение в диалог</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* TAB 2: ROLES & INSTRUCTIONS */}
+                {studioActiveTab === 'roles' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {studioResult.roles.map((role, rIdx) => (
                       <div
                         key={role.role_order}
-                        className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-1.5"
+                        className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2"
                       >
-                        <div className="flex items-center justify-between text-xs font-bold text-[var(--text-main)]">
-                          <span>Роль #{role.role_order}: {role.role_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-[var(--bg-main)] text-[var(--accent-text)] border border-[var(--border-color)]">
+                            #{role.role_order}
+                          </span>
+                          <input
+                            type="text"
+                            value={role.role_name}
+                            onChange={(e) => handleUpdateStudioRole(rIdx, 'role_name', e.target.value)}
+                            className="text-xs font-bold text-[var(--text-main)] bg-transparent border-b border-transparent hover:border-[var(--border-color)] focus:border-[var(--accent)] focus:outline-none w-full"
+                            placeholder="Имя роли..."
+                          />
                         </div>
-                        <div className="text-[11px] text-[var(--accent-text)] font-semibold">
-                          Цель: {role.goal}
+
+                        <div>
+                          <label className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider block mb-0.5">
+                            Цель персонажа:
+                          </label>
+                          <input
+                            type="text"
+                            value={role.goal}
+                            onChange={(e) => handleUpdateStudioRole(rIdx, 'goal', e.target.value)}
+                            className="text-[11px] text-[var(--accent-text)] font-semibold bg-[var(--bg-main)] border border-[var(--border-color)] rounded-lg px-2 py-1 w-full focus:outline-none focus:border-[var(--accent)]"
+                            placeholder="Цель бота..."
+                          />
                         </div>
-                        <div className="text-[11px] text-[var(--text-muted)] leading-normal">
-                          {role.instruction}
+
+                        <div>
+                          <label className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider block mb-0.5">
+                            Инструкция:
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={role.instruction}
+                            onChange={(e) => handleUpdateStudioRole(rIdx, 'instruction', e.target.value)}
+                            className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-main)] border border-[var(--border-color)] rounded-lg p-2 w-full focus:outline-none focus:border-[var(--accent)] leading-relaxed resize-y"
+                            placeholder="Инструкция для бота..."
+                          />
                         </div>
-                        <div className="p-2 rounded-lg bg-[var(--bg-main)] text-[10px] text-[var(--text-main)] font-mono border border-[var(--border-color)]">
-                          «{role.sample_text}»
+
+                        <div>
+                          <label className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider block mb-0.5">
+                            Пример реплики:
+                          </label>
+                          <input
+                            type="text"
+                            value={role.sample_text}
+                            onChange={(e) => handleUpdateStudioRole(rIdx, 'sample_text', e.target.value)}
+                            className="text-[10px] text-[var(--text-main)] font-mono bg-[var(--bg-main)] border border-[var(--border-color)] rounded-lg px-2 py-1 w-full focus:outline-none focus:border-[var(--accent)]"
+                            placeholder="Пример фразы..."
+                          />
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
+
+                {/* TAB 3: OVERVIEW & GENERAL PROMPT */}
+                {studioActiveTab === 'overview' && (
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2">
+                      <label className="text-[10px] font-bold text-[var(--text-dim)] uppercase tracking-wider block">
+                        Сгенерированный общий промпт сценария:
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={studioResult.prompt_text}
+                        onChange={(e) => handleUpdateStudioField('prompt_text', e.target.value)}
+                        className="w-full text-xs text-[var(--text-main)] font-mono bg-[var(--bg-main)] border border-[var(--border-color)] rounded-lg p-2.5 focus:outline-none focus:border-[var(--accent)] resize-y leading-relaxed"
+                        placeholder="Общий промпт..."
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Action Buttons with clear distinction between Template and Scenario */}
                 <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-[var(--border-color)]">
                   <div className="text-[11px] text-[var(--text-muted)]">
-                    Готово: <strong className="text-[var(--text-main)]">{studioResult.roles.length} ролей</strong>, <strong className="text-[var(--text-main)]">{studioResult.steps_payload?.length || studioStepsCount} сообщений</strong>
+                    Готово: <strong className="text-[var(--text-main)]">{studioResult.roles.length} ролей</strong>, <strong className="text-[var(--text-main)]">{studioResult.steps_payload.length} сообщений</strong>
                   </div>
 
                   <div className="flex items-center gap-2.5 flex-wrap">
@@ -1325,7 +1618,7 @@ export default function Prompts() {
                       title="Развернуть полноценный живой сценарий со всеми репликами в разделе «Сценарии»"
                     >
                       <Zap className="w-4 h-4" />
-                      <span>🚀 Создать сценарий ({studioResult.steps_payload?.length || studioStepsCount} смс)</span>
+                      <span>🚀 Создать сценарий ({studioResult.steps_payload.length} смс)</span>
                     </button>
                   </div>
                 </div>
