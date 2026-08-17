@@ -30,7 +30,8 @@ import {
   Rocket,
   Wrench,
   Users,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Wand2
 } from 'lucide-react';
 import { useToast } from '../components/ToastContext';
 
@@ -253,7 +254,26 @@ export default function Prompts() {
   const [studioRolesCount, setStudioRolesCount] = useState<number>(3);
   const [studioResult, setStudioResult] = useState<StudioGenerateData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const [studioCopied, setStudioCopied] = useState(false);
+
+  // Enhance / Detail prompt with AI
+  const handleEnhancePrompt = async () => {
+    setIsEnhancing(true);
+    try {
+      const res = await axios.post('/api/prompts/enhance-prompt', {
+        text: studioTopic.trim() || undefined
+      });
+      if (res.data.status === 'ok') {
+        setStudioTopic(res.data.enhanced_prompt);
+        showToast('Промпт улучшен и детализирован с помощью ИИ', 'success');
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Ошибка улучшения промпта с ИИ', 'error');
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
 
   // Manual Template Form state (Multi-Category support)
   const [formTitle, setFormTitle] = useState('');
@@ -936,18 +956,35 @@ export default function Prompts() {
             {/* Input Form */}
             <div className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
                   <label className="text-xs font-bold text-[var(--text-main)]">
                     Краткая тема или задумка сцены:
                   </label>
-                  <button
-                    type="button"
-                    onClick={handleRandomTopic}
-                    className="text-[11px] text-[var(--accent-text)] hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Dices className="w-3.5 h-3.5" />
-                    <span>Случайная идея</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={isEnhancing}
+                      onClick={handleEnhancePrompt}
+                      className="text-[11px] text-[var(--accent-text)] hover:underline flex items-center gap-1.5 cursor-pointer disabled:opacity-50 font-semibold"
+                      title="Улучшить, дополнить и детализировать набросок с помощью ИИ"
+                    >
+                      {isEnhancing ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isEnhancing ? 'Улучшение...' : '✨ Улучшить с помощью ИИ'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleRandomTopic}
+                      className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Dices className="w-3.5 h-3.5" />
+                      <span>🎲 Случайная идея</span>
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   rows={3}
