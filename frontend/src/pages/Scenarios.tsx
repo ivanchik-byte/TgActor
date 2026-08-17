@@ -583,17 +583,61 @@ export default function Scenarios() {
   const handleApplyLibraryTemplate = (template: any) => {
     if (!template) return;
     const isDynamic = template.mode === 'dynamic';
-    let roles: any[] = [];
+    let stepsList: any[] = [];
+    let rolesList: any[] = [];
+
+    try {
+      if (template.steps_payload) {
+        stepsList = typeof template.steps_payload === 'string' ? JSON.parse(template.steps_payload) : template.steps_payload;
+      }
+    } catch {}
+
     try {
       if (template.roles_breakdown) {
-        roles = JSON.parse(template.roles_breakdown);
+        rolesList = typeof template.roles_breakdown === 'string' ? JSON.parse(template.roles_breakdown) : template.roles_breakdown;
       }
     } catch {}
 
     const accountIds = commentingAccounts.map((a: any) => String(a.id));
-    if (roles.length > 0) {
-      const newSteps: Replica[] = roles.map((r: any, idx: number) => {
-        const roleId = accountIds[idx % accountIds.length] || (accountIds[0] || '1');
+
+    if (Array.isArray(stepsList) && stepsList.length > 0) {
+      const stepIdMap: Record<number, string> = {};
+      const newSteps: Replica[] = stepsList.map((s: any, idx: number) => {
+        const stepId = Math.random().toString(36).substring(2, 9);
+        stepIdMap[idx + 1] = stepId;
+        const roleId = accountIds[((s.role_id || (idx + 1)) - 1) % Math.max(1, accountIds.length)] || (accountIds[0] || '1');
+        return {
+          id: stepId,
+          role: roleId,
+          type: s.reply_to_step ? 'reply' : (idx === 0 ? 'normal' : 'reply'),
+          replyToId: '',
+          text: s.text || s.sample_text || `Шаг ${idx + 1}`,
+          minDelay: String(s.delay_before_min || 4),
+          maxDelay: String(s.delay_before_max || 9),
+          reactions: s.reactions || '',
+          reactionCount: s.reaction_count || (s.reactions ? 1 : 0),
+          reactionSource: 'pool',
+          fileName: '',
+          noAttachmentIfForbidden: false,
+          isAiDynamic: s.is_ai_dynamic !== undefined ? s.is_ai_dynamic : isDynamic,
+          aiPrompt: s.ai_prompt || template.prompt_text
+        };
+      });
+
+      // Link replyToId properly
+      stepsList.forEach((s: any, idx: number) => {
+        if (s.reply_to_step && stepIdMap[s.reply_to_step]) {
+          newSteps[idx].replyToId = stepIdMap[s.reply_to_step];
+        } else if (idx > 0 && newSteps[idx].type === 'reply') {
+          newSteps[idx].replyToId = newSteps[idx - 1].id;
+        }
+      });
+
+      setReplicas(newSteps);
+      showToast(`Применен шаблон "${template.title}" (${newSteps.length} сообщений)`, 'success');
+    } else if (Array.isArray(rolesList) && rolesList.length > 0) {
+      const newSteps: Replica[] = rolesList.map((r: any, idx: number) => {
+        const roleId = accountIds[idx % Math.max(1, accountIds.length)] || (accountIds[0] || '1');
         return {
           id: Math.random().toString(36).substring(2, 9),
           role: roleId,
@@ -602,8 +646,8 @@ export default function Scenarios() {
           text: r.sample_text || `Шаг ${idx + 1}: ${r.role_name}`,
           minDelay: '4',
           maxDelay: '9',
-          reactions: idx === roles.length - 1 ? '👍' : '',
-          reactionCount: idx === roles.length - 1 ? 1 : 0,
+          reactions: idx === rolesList.length - 1 ? '👍' : '',
+          reactionCount: idx === rolesList.length - 1 ? 1 : 0,
           reactionSource: 'pool',
           fileName: '',
           noAttachmentIfForbidden: false,
@@ -611,7 +655,12 @@ export default function Scenarios() {
           aiPrompt: r.instruction || template.prompt_text
         };
       });
+      // Link sequential replies
+      for (let i = 1; i < newSteps.length; i++) {
+        newSteps[i].replyToId = newSteps[i - 1].id;
+      }
       setReplicas(newSteps);
+      showToast(`Применен шаблон "${template.title}" (${newSteps.length} сообщений)`, 'success');
     } else {
       setReplicas([
         {
@@ -632,7 +681,7 @@ export default function Scenarios() {
         },
         {
           id: Math.random().toString(36).substring(2, 9),
-          role: accountIds[1 % accountIds.length] || accountIds[0] || '1',
+          role: accountIds[1 % Math.max(1, accountIds.length)] || accountIds[0] || '1',
           type: 'reply',
           replyToId: '',
           text: 'Ответчик: рекомендует решение',
@@ -647,8 +696,8 @@ export default function Scenarios() {
           aiPrompt: `${template.prompt_text} (Роль: ответ и рекомендация)`
         }
       ]);
+      showToast(`Применен шаблон "${template.title}"`, 'success');
     }
-    showToast(`Шаблон «${template.title}» успешно применен к сценарию`, 'success');
   };
 
 

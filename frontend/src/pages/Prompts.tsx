@@ -71,6 +71,7 @@ interface PromptTemplateItem {
   prompt_text: string;
   system_instruction: string | null;
   roles_breakdown: string | null;
+  steps_payload: string | null;
   tags: string | null;
   is_builtin: boolean;
   created_at: string | null;
@@ -484,9 +485,10 @@ export default function Prompts() {
         prompt_text: studioResult.prompt_text,
         system_instruction: studioResult.system_instruction || null,
         roles_breakdown: JSON.stringify(studioResult.roles),
+        steps_payload: JSON.stringify(studioResult.steps_payload),
         tags: 'ai_studio,точечные_инструкции'
       });
-      showToast('Промпт сохранен в библиотеку', 'success');
+      showToast('Промпт с цепочкой сообщений сохранен в библиотеку', 'success');
       queryClient.invalidateQueries({ queryKey: ['promptTemplates'] });
     } catch (err: any) {
       showToast(err.response?.data?.detail || 'Ошибка сохранения шаблона', 'error');
@@ -801,6 +803,45 @@ export default function Prompts() {
                 })()
               : [];
 
+            const stepsList: any[] = template.steps_payload
+              ? (() => {
+                  try {
+                    return JSON.parse(template.steps_payload);
+                  } catch {
+                    return [];
+                  }
+                })()
+              : [];
+
+            const effectiveSteps = stepsList.length > 0
+              ? stepsList
+              : (rolesList.length > 0
+                  ? rolesList.map((r, idx) => ({
+                      step_order: idx + 1,
+                      role_id: idx + 1,
+                      role_name: r.role_name,
+                      text: r.sample_text || `Шаг ${idx + 1}`,
+                      sample_text: r.sample_text || `Шаг ${idx + 1}`,
+                      ai_prompt: r.instruction,
+                      is_ai_dynamic: template.mode === 'dynamic',
+                      reply_to_step: idx > 0 ? idx : null,
+                      delay_before_min: 4.0,
+                      delay_before_max: 9.0
+                    }))
+                  : [
+                      {
+                        step_order: 1,
+                        role_id: 1,
+                        role_name: 'Зачинщик',
+                        text: 'Начало обсуждения',
+                        ai_prompt: template.prompt_text,
+                        is_ai_dynamic: template.mode === 'dynamic',
+                        reply_to_step: null,
+                        delay_before_min: 4.0,
+                        delay_before_max: 8.0
+                      }
+                    ]);
+
             const tCategories = template.categories && template.categories.length > 0
               ? template.categories
               : [template.category || 'general'];
@@ -843,6 +884,11 @@ export default function Prompts() {
                       >
                         {template.mode === 'dynamic' ? <Zap className="w-2.5 h-2.5" /> : <MessageSquare className="w-2.5 h-2.5" />}
                         <span>{template.mode === 'dynamic' ? 'Динамика' : 'Статика'}</span>
+                      </span>
+
+                      {/* SMS Messages Count Badge */}
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)] font-mono">
+                        💬 {effectiveSteps.length} смс
                       </span>
 
                       {template.is_builtin && (
@@ -889,9 +935,9 @@ export default function Prompts() {
                       <span>Инструкция сценария:</span>
                       <button
                         onClick={() => setExpandedTemplateId(isExpanded ? null : template.id)}
-                        className="text-[var(--accent-text)] hover:underline cursor-pointer"
+                        className="text-[var(--accent-text)] hover:underline cursor-pointer font-bold"
                       >
-                        {isExpanded ? 'Свернуть' : 'Развернуть'}
+                        {isExpanded ? 'Свернуть детали ▲' : 'Развернуть цепочку ▼'}
                       </button>
                     </div>
                     <p className={`text-xs text-[var(--text-main)] font-mono leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
@@ -899,8 +945,51 @@ export default function Prompts() {
                     </p>
                   </div>
 
-                  {/* Roles Breakdown Chips */}
-                  {rolesList.length > 0 && (
+                  {/* Expanded Step-by-Step SMS Sequence */}
+                  {isExpanded && stepsList.length > 0 && (
+                    <div className="space-y-2 mb-3 animate-in fade-in duration-200">
+                      <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block">
+                        Пошаговая цепочка сообщений ({stepsList.length} смс):
+                      </span>
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {stepsList.map((step: any, sIdx: number) => (
+                          <div
+                            key={sIdx}
+                            className="p-2.5 rounded-lg bg-[var(--bg-main)] border border-[var(--border-color)] space-y-1 text-xs"
+                          >
+                            <div className="flex items-center justify-between flex-wrap gap-1 text-[11px]">
+                              <div className="flex items-center gap-1.5 font-semibold text-[var(--text-main)]">
+                                <span className="text-[var(--accent-text)] font-mono">#{sIdx + 1}</span>
+                                <span>{step.role_name || `Роль #${step.role_id || (sIdx + 1)}`}</span>
+                                {step.reply_to_step && (
+                                  <span className="text-[10px] text-[var(--text-dim)] font-normal">
+                                    ↳ ответ на #{step.reply_to_step}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-mono text-[var(--text-dim)]">
+                                ⏱️ {step.delay_before_min || 4}-{step.delay_before_max || 9}с
+                              </div>
+                            </div>
+                            {step.ai_prompt && (
+                              <div className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                                <strong className="text-[var(--text-dim)] font-normal">Инструкция: </strong>
+                                {step.ai_prompt}
+                              </div>
+                            )}
+                            {(step.text || step.sample_text) && (
+                              <div className="text-[10px] font-mono text-[var(--text-main)] bg-[var(--bg-card)] px-2 py-1 rounded border border-[var(--border-color)]">
+                                «{step.text || step.sample_text}»
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Roles Breakdown Chips (when not expanded or if no stepsList) */}
+                  {(!isExpanded || stepsList.length === 0) && rolesList.length > 0 && (
                     <div className="space-y-1.5 mb-3">
                       <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
                         Драматургия ролей:
@@ -952,21 +1041,13 @@ export default function Prompts() {
                         title: template.title,
                         mode: template.mode,
                         prompt_text: template.prompt_text,
-                        steps: rolesList.map((r, idx) => ({
-                          step_order: idx + 1,
-                          role_id: idx + 1,
-                          text: r.sample_text || `Шаг ${idx + 1}`,
-                          ai_prompt: r.instruction,
-                          is_ai_dynamic: template.mode === 'dynamic',
-                          delay_before_min: 4.0,
-                          delay_before_max: 9.0
-                        }))
+                        steps: effectiveSteps
                       })
                     }
                     className="px-3.5 py-1.5 rounded-lg bg-[var(--accent-soft)] hover:bg-[var(--accent)] hover:text-white border border-[var(--accent)] text-[var(--accent-text)] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Создать сценарий</span>
+                    <span>Создать сценарий ({effectiveSteps.length} смс)</span>
                   </button>
                 </div>
               </div>

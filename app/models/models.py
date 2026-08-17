@@ -184,7 +184,9 @@ class PromptTemplate(Base):
     prompt_text = Column(Text, nullable=False)
     system_instruction = Column(Text, nullable=True)
     roles_breakdown = Column(Text, nullable=True)
+    steps_payload = Column(Text, nullable=True)
     tags = Column(String, nullable=True)
     is_builtin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
