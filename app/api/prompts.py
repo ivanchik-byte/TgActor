@@ -184,6 +184,7 @@ async def list_prompt_templates(
                 "prompt_text": t.prompt_text,
                 "system_instruction": t.system_instruction,
                 "roles_breakdown": t.roles_breakdown,
+                "steps_payload": t.steps_payload,
                 "tags": t.tags,
                 "is_builtin": t.is_builtin,
                 "created_at": t.created_at.isoformat() if t.created_at else None
@@ -193,7 +194,7 @@ async def list_prompt_templates(
 
 @router.post("/api/prompts")
 async def create_prompt_template(req: PromptTemplateCreate):
-    """Create a new custom prompt template in the library with multiple categories support."""
+    """Create a new custom prompt template in the library with multiple categories and steps support."""
     if not req.title or not req.title.strip():
         raise HTTPException(400, "Название шаблона не может быть пустым.")
     if not req.prompt_text or not req.prompt_text.strip():
@@ -216,6 +217,7 @@ async def create_prompt_template(req: PromptTemplateCreate):
             prompt_text=req.prompt_text.strip(),
             system_instruction=req.system_instruction if req.system_instruction else None,
             roles_breakdown=req.roles_breakdown if req.roles_breakdown else None,
+            steps_payload=req.steps_payload if req.steps_payload else None,
             tags=req.tags.strip() if req.tags else None,
             is_builtin=False
         )
@@ -245,6 +247,7 @@ async def get_prompt_template(template_id: int):
             "prompt_text": template.prompt_text,
             "system_instruction": template.system_instruction,
             "roles_breakdown": template.roles_breakdown,
+            "steps_payload": template.steps_payload,
             "tags": template.tags,
             "is_builtin": template.is_builtin,
             "created_at": template.created_at.isoformat() if template.created_at else None
@@ -252,7 +255,7 @@ async def get_prompt_template(template_id: int):
 
 @router.put("/api/prompts/{template_id}")
 async def update_prompt_template(template_id: int, req: PromptTemplateUpdate):
-    """Update prompt template with multiple categories."""
+    """Update prompt template with multiple categories and steps."""
     async with async_session() as session:
         template = await session.get(PromptTemplate, template_id)
         if not template:
@@ -276,6 +279,8 @@ async def update_prompt_template(template_id: int, req: PromptTemplateUpdate):
             template.system_instruction = req.system_instruction
         if req.roles_breakdown is not None:
             template.roles_breakdown = req.roles_breakdown
+        if req.steps_payload is not None:
+            template.steps_payload = req.steps_payload
         if req.tags is not None:
             template.tags = req.tags.strip() if req.tags else None
 
