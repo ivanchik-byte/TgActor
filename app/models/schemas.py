@@ -166,3 +166,83 @@ class MonitoredChannelResponse(MonitoredChannelBase):
 
     class Config:
         from_attributes = True
+
+class CategoryItem(BaseModel):
+    id: str
+    label: str
+    color: Optional[str] = "#38bdf8"
+    is_builtin: Optional[bool] = False
+
+class CategoryCreate(BaseModel):
+    label: str
+    color: Optional[str] = "#38bdf8"
+
+class PromptTemplateBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = "software"
+    categories: Optional[List[str]] = None
+    mode: str = "dynamic" # 'static' or 'dynamic'
+    prompt_text: str
+    system_instruction: Optional[str] = None
+    roles_breakdown: Optional[str] = None
+    tags: Optional[str] = None
+    is_builtin: Optional[bool] = False
+
+class PromptTemplateCreate(PromptTemplateBase):
+    pass
+
+class PromptTemplateUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    categories: Optional[List[str]] = None
+    mode: Optional[str] = None
+    prompt_text: Optional[str] = None
+    system_instruction: Optional[str] = None
+    roles_breakdown: Optional[str] = None
+    tags: Optional[str] = None
+    is_builtin: Optional[bool] = None
+
+class PromptTemplateResponse(PromptTemplateBase):
+    id: int
+    categories: List[str] = []
+    created_at: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class StudioGenerateRequest(BaseModel):
+    topic: str
+    mode: str = "dynamic" # 'static' or 'dynamic'
+    drama_type: str = "skepticism_proof" # 'skepticism_proof', 'warmup_interest', 'expert_qa', 'friendly_dispute'
+    tone: str = "telegram_slang" # 'telegram_slang', 'tech_slang', 'concise_casual'
+    roles_count: int = 3
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    system_prompt: Optional[str] = None
+
+class StudioRoleInstruction(BaseModel):
+    role_order: int
+    role_name: str
+    goal: str
+    instruction: str
+    sample_text: str
+
+class StudioGenerateResponse(BaseModel):
+    title: str
+    category: str
+    mode: str
+    prompt_text: str
+    system_instruction: Optional[str] = None
+    roles: List[StudioRoleInstruction]
+    steps_payload: List[dict]
+
+class CreateScenarioFromStudioRequest(BaseModel):
+    title: str
+    mode: str = "dynamic"
+    prompt_text: str
+    min_delay: float = 5.0
+    max_delay: float = 12.0
+    weight: int = 1
+    steps: List[dict]
+
