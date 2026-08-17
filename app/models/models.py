@@ -172,3 +172,19 @@ class AiPreset(Base):
     base_url = Column(String, nullable=True)
     system_prompt = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class PromptTemplate(Base):
+    __tablename__ = "prompt_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String, default="software", nullable=False)
+    mode = Column(String, default="dynamic", nullable=False)
+    prompt_text = Column(Text, nullable=False)
+    system_instruction = Column(Text, nullable=True)
+    roles_breakdown = Column(Text, nullable=True)
+    tags = Column(String, nullable=True)
+    is_builtin = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

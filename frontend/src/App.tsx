@@ -17,6 +17,7 @@ import {
   Send,
   Menu,
   X,
+  Sparkles,
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -24,6 +25,7 @@ import axios from 'axios';
 import Dashboard from './pages/Dashboard';
 import Pools from './pages/Pools';
 import Scenarios from './pages/Scenarios';
+import Prompts from './pages/Prompts';
 import Channels from './pages/Channels';
 import Inbox from './pages/Inbox';
 import { HistoryPage } from './pages/History';
@@ -84,6 +86,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     { path: '/', label: 'Аккаунты', icon: LayoutDashboard },
     { path: '/pools', label: 'Пулы', icon: Server },
     { path: '/scenarios', label: 'Сценарии', icon: RouteIcon },
+    { path: '/prompts', label: 'Промпты', icon: Sparkles },
     { path: '/channels', label: 'Каналы', icon: Radio },
     { path: '/inbox', label: 'Входящие', icon: InboxIcon },
     { path: '/history', label: 'История', icon: Clock },
@@ -637,6 +640,7 @@ export default function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/pools" element={<Pools />} />
                   <Route path="/scenarios" element={<Scenarios />} />
+                  <Route path="/prompts" element={<Prompts />} />
                   <Route path="/channels" element={<Channels />} />
                   <Route path="/inbox" element={<Inbox />} />
                   <Route path="/history" element={<HistoryPage />} />
