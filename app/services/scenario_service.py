@@ -48,114 +48,172 @@ async def execute_scenario(
         logger.error(error_msg)
         log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
         session.add(log)
-        await session.commit()
-        return
-
-    # Probe client to inspect chat and resolve discussion target
-    probe_account = commenting_pool[0]
-    probe_client = get_hydrogram_client(probe_account, probe_account.proxy)
-    try:
-        await probe_client.start()
-    except Exception as e:
-        logger.error(f"Не удалось запустить зонд-клиент для аккаунта {probe_account.id}: {e}")
-        log = TaskLog(account_id=probe_account.id, scenario_id=scenario_id, status="error", error_message=f"Probe client init failed: {e}")
-        session.add(log)
+        await log_action(
+            session,
+            action_type="comment_send",
+            status="error",
+            target=str(chat_id),
+            target_id=f"Нет аккаунтов • {chat_id}",
+            details={
+                "summary": "В базе данных нет активных аккаунтов в пуле комментирования",
+                "category": "no_accounts",
+                "badge": "Нет аккаунтов",
+                "error": error_msg,
+                "channel": str(chat_id)
+            },
+            scenario_id=scenario_id
+        )
         await session.commit()
         return
 
     target_chat_id = chat_id
     default_reply_to = discussion_message_id
+    probe_success = False
+    last_diag = None
+    last_ex = None
 
-    # Check if target is a channel and resolve its discussion group
-    is_channel = False
-    try:
-        chat_info = await probe_client.get_chat(chat_id)
-        is_channel = getattr(chat_info, 'type', None) and (
-            str(chat_info.type).lower().endswith('channel') or getattr(chat_info.type, 'value', '') == 'channel'
-        )
-    except Exception as e:
-        logger.warning(f"Notice inspecting chat type for {chat_id}: {e}")
+    # Probe client to inspect chat and resolve discussion target across candidate accounts
+    for probe_account in commenting_pool:
+        probe_client = get_hydrogram_client(probe_account, probe_account.proxy)
+        try:
+            await probe_client.start()
+        except Exception as e:
+            last_diag = classify_telegram_error(e)
+            last_ex = e
+            logger.warning(f"Зонд-клиент аккаунта #{probe_account.id} (@{probe_account.username or probe_account.phone}) не запустился: {e}")
+            continue
 
-    if is_channel or discussion_message_id:
-        post_id = discussion_message_id
-        if not post_id and is_channel:
+        try:
+            # Check if target is a channel and resolve its discussion group
+            is_channel = False
             try:
-                async for p in probe_client.get_chat_history(chat_id, limit=1):
-                    post_id = p.id
-                    break
-            except Exception:
-                post_id = None
-
-        if post_id:
-            try:
-                disc_msg = await probe_client.get_discussion_message(chat_id, post_id)
-                if disc_msg and getattr(disc_msg, 'chat', None):
-                    target_chat_id = disc_msg.chat.id
-                    default_reply_to = disc_msg.id
-                    logger.info(f"Resolved discussion for channel {chat_id} post {post_id}: group={target_chat_id}, header_id={default_reply_to}")
-                else:
-                    raise ValueError("Discussion message has no valid chat")
-            except Exception as ex:
-                diag = classify_telegram_error(ex)
-                error_msg = f"{diag['badge']}: У канала {chat_id} отключены комментарии или нет группы для обсуждений (post #{post_id})"
-                logger.error(error_msg)
-                log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
-                session.add(log)
-                await log_action(
-                    session,
-                    action_type="comment_send",
-                    status="error",
-                    target=str(chat_id),
-                    target_id=f"{diag['badge']} • post #{post_id}",
-                    details={
-                        "summary": diag["summary"],
-                        "category": diag["category"],
-                        "badge": diag["badge"],
-                        "error": str(ex),
-                        "channel": str(chat_id),
-                        "post_id": post_id
-                    },
-                    scenario_id=scenario_id
+                chat_info = await probe_client.get_chat(chat_id)
+                is_channel = getattr(chat_info, 'type', None) and (
+                    str(chat_info.type).lower().endswith('channel') or getattr(chat_info.type, 'value', '') == 'channel'
                 )
+            except Exception as e:
+                logger.warning(f"Notice inspecting chat type for {chat_id} (acc #{probe_account.id}): {e}")
+
+            if is_channel or discussion_message_id:
+                post_id = discussion_message_id
+                if not post_id and is_channel:
+                    try:
+                        async for p in probe_client.get_chat_history(chat_id, limit=1):
+                            post_id = p.id
+                            break
+                    except Exception:
+                        post_id = None
+
+                if post_id:
+                    try:
+                        disc_msg = await probe_client.get_discussion_message(chat_id, post_id)
+                        if disc_msg and getattr(disc_msg, 'chat', None):
+                            target_chat_id = disc_msg.chat.id
+                            default_reply_to = disc_msg.id
+                            logger.info(f"Resolved discussion for channel {chat_id} post {post_id}: group={target_chat_id}, header_id={default_reply_to}")
+                        else:
+                            raise ValueError("Discussion message has no valid chat")
+                    except Exception as ex:
+                        diag = classify_telegram_error(ex)
+                        last_diag = diag
+                        last_ex = ex
+                        # If account is banned / has ChannelForbidden / session expired, try next account in pool
+                        if diag["category"] in ["account_banned", "session_expired", "peer_flood"]:
+                            logger.warning(f"Аккаунт #{probe_account.id} (@{probe_account.username or probe_account.phone}) не имеет доступа к каналу {chat_id} ({diag['badge']}): {ex}. Пробуем следующий аккаунт...")
+                            await probe_client.stop()
+                            continue
+                        else:
+                            # Genuine channel issue (comments disabled, closed chat)
+                            error_msg = f"{diag['badge']}: У канала {chat_id} отключены комментарии или нет группы для обсуждений (post #{post_id})"
+                            logger.error(error_msg)
+                            log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+                            session.add(log)
+                            await log_action(
+                                session,
+                                action_type="comment_send",
+                                status="error",
+                                target=str(chat_id),
+                                target_id=f"{diag['badge']} • post #{post_id}",
+                                details={
+                                    "summary": diag["summary"],
+                                    "category": diag["category"],
+                                    "badge": diag["badge"],
+                                    "error": str(ex),
+                                    "channel": str(chat_id),
+                                    "post_id": post_id
+                                },
+                                scenario_id=scenario_id
+                            )
+                            await session.commit()
+                            await probe_client.stop()
+                            return
+                elif is_channel:
+                    diag = classify_telegram_error("нет опубликованных постов")
+                    error_msg = f"{diag['badge']}: В канале {chat_id} нет опубликованных постов для комментирования"
+                    logger.error(error_msg)
+                    log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+                    session.add(log)
+                    await log_action(
+                        session,
+                        action_type="comment_send",
+                        status="error",
+                        target=str(chat_id),
+                        target_id=f"{diag['badge']} • {chat_id}",
+                        details={
+                            "summary": diag["summary"],
+                            "category": diag["category"],
+                            "badge": diag["badge"],
+                            "channel": str(chat_id)
+                        },
+                        scenario_id=scenario_id
+                    )
+                    await session.commit()
+                    await probe_client.stop()
+                    return
+
+            # Check preflight availability on target
+            requires_media = any(step.media_path for step in steps)
+            is_available, error_msg = await check_chat_availability(probe_client, target_chat_id, requires_media)
+            if not is_available:
+                logger.error(f"Preflight failed: {error_msg}")
+                log = TaskLog(scenario_id=scenario_id, status="error", error_message=f"Preflight: {error_msg}")
+                session.add(log)
                 await session.commit()
                 await probe_client.stop()
                 return
-        elif is_channel:
-            diag = classify_telegram_error("нет опубликованных постов")
-            error_msg = f"{diag['badge']}: В канале {chat_id} нет опубликованных постов для комментирования"
-            logger.error(error_msg)
-            log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
-            session.add(log)
-            await log_action(
-                session,
-                action_type="comment_send",
-                status="error",
-                target=str(chat_id),
-                target_id=f"{diag['badge']} • {chat_id}",
-                details={
-                    "summary": diag["summary"],
-                    "category": diag["category"],
-                    "badge": diag["badge"],
-                    "channel": str(chat_id)
-                },
-                scenario_id=scenario_id
-            )
-            await session.commit()
+
+            probe_success = True
             await probe_client.stop()
-            return
+            break
+        except Exception as ex:
+            last_diag = classify_telegram_error(ex)
+            last_ex = ex
+            await probe_client.stop()
+            continue
 
-    # Check preflight availability on target
-    requires_media = any(step.media_path for step in steps)
-    is_available, error_msg = await check_chat_availability(probe_client, target_chat_id, requires_media)
-    if not is_available:
-        logger.error(f"Preflight failed: {error_msg}")
-        log = TaskLog(scenario_id=scenario_id, status="error", error_message=f"Preflight: {error_msg}")
+    if not probe_success:
+        diag = last_diag or classify_telegram_error("no_accounts")
+        error_msg = f"{diag['badge']}: Не удалось проверить канал {chat_id} (аккаунты заблокированы или недоступны: {diag['summary']})"
+        logger.error(error_msg)
+        log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
         session.add(log)
+        await log_action(
+            session,
+            action_type="comment_send",
+            status="error",
+            target=str(chat_id),
+            target_id=f"{diag['badge']} • {chat_id}",
+            details={
+                "summary": diag["summary"],
+                "category": diag["category"],
+                "badge": diag["badge"],
+                "error": str(last_ex) if last_ex else error_msg,
+                "channel": str(chat_id)
+            },
+            scenario_id=scenario_id
+        )
         await session.commit()
-        await probe_client.stop()
         return
-
-    await probe_client.stop()
 
     # SMART BOT SELECTION: Prioritize and filter bots that are ALREADY in the group
     from app.services.join_service import get_known_chat_members, record_chat_member
@@ -229,11 +287,32 @@ async def execute_scenario(
             await client.start()
             account_client_map[acc_id] = client
         except Exception as e:
-            logger.error(f"Не удалось запустить клиент для аккаунта {account.id}: {e}")
+            diag = classify_telegram_error(e)
+            logger.error(f"Не удалось запустить клиент для аккаунта {account.id} (@{account.username or account.phone}): {e}")
             for c in account_client_map.values():
-                await c.stop()
-            log = TaskLog(account_id=account.id, scenario_id=scenario_id, status="error", error_message=f"Init client failed: {e}")
+                try:
+                    await c.stop()
+                except Exception:
+                    pass
+            log = TaskLog(account_id=account.id, scenario_id=scenario_id, status="error", error_message=f"Init client failed ({diag['badge']}): {e}")
             session.add(log)
+            await log_action(
+                session,
+                action_type="comment_send",
+                status="error",
+                account_id=account.id,
+                target=str(chat_id),
+                target_id=f"{diag['badge']} • {account.username or account.phone or account.id}",
+                details={
+                    "summary": f"Не удалось инициализировать аккаунт: {diag['summary']}",
+                    "category": diag["category"],
+                    "badge": diag["badge"],
+                    "error": str(e),
+                    "account_id": account.id,
+                    "channel": str(chat_id)
+                },
+                scenario_id=scenario_id
+            )
             await session.commit()
             return
 
