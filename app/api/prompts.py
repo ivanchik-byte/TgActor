@@ -309,6 +309,7 @@ async def generate_studio_prompt_endpoint(req: StudioGenerateRequest):
                 drama_type=req.drama_type,
                 tone=req.tone,
                 roles_count=req.roles_count,
+                steps_count=req.steps_count,
                 override_provider=req.provider,
                 override_model=req.model,
                 override_system_prompt=req.system_prompt

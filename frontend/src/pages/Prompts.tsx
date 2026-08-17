@@ -252,6 +252,7 @@ export default function Prompts() {
   const [studioDrama, setStudioDrama] = useState<string>('skepticism_proof');
   const [studioTone, setStudioTone] = useState<string>('telegram_slang');
   const [studioRolesCount, setStudioRolesCount] = useState<number>(3);
+  const [studioStepsCount, setStudioStepsCount] = useState<number>(4);
   const [studioResult, setStudioResult] = useState<StudioGenerateData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -395,7 +396,8 @@ export default function Prompts() {
         mode: studioMode,
         drama_type: studioDrama,
         tone: studioTone,
-        roles_count: studioRolesCount
+        roles_count: studioRolesCount,
+        steps_count: studioStepsCount
       });
       if (res.data.status === 'ok') {
         setStudioResult(res.data.data);
@@ -1141,7 +1143,7 @@ export default function Prompts() {
               {/* 4. Roles Count & Stepper */}
               <div>
                 <label className="text-xs font-bold text-[var(--text-muted)] block mb-1.5">
-                  Количество ботов и ролевая рассадка:
+                  Количество ботов (участников):
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {ROLES_PRESETS.map((r) => {
@@ -1173,6 +1175,40 @@ export default function Prompts() {
                 </div>
               </div>
 
+              {/* 5. Messages / Steps Count (КОЛ смс) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-[var(--text-muted)]">
+                    Количество сообщений в диалоге (КОЛ смс):
+                  </label>
+                  <span className="text-[11px] font-mono text-[var(--accent-text)] font-semibold">
+                    {studioStepsCount} {studioStepsCount === 2 || studioStepsCount === 3 || studioStepsCount === 4 ? 'сообщения' : 'сообщений'} ({studioRolesCount} {studioRolesCount === 2 || studioRolesCount === 3 || studioRolesCount === 4 ? 'бота' : 'ботов'})
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                  {[2, 3, 4, 5, 6, 8, 10].map((count) => {
+                    const isSel = studioStepsCount === count;
+                    return (
+                      <button
+                        type="button"
+                        key={count}
+                        onClick={() => setStudioStepsCount(count)}
+                        className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)] font-bold shadow-sm'
+                            : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--border-subtle)]'
+                        }`}
+                      >
+                        <span className="text-xs">{count} смс</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-[var(--text-dim)] mt-1">
+                  ИИ распределит {studioStepsCount} {studioStepsCount === 2 || studioStepsCount === 3 || studioStepsCount === 4 ? 'реплики' : 'реплик'} между {studioRolesCount} ботами с естественными паузами и ответами.
+                </p>
+              </div>
+
               {/* Generate Button */}
               <button
                 type="button"
@@ -1183,12 +1219,12 @@ export default function Prompts() {
                 {isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Формулирование точечных инструкций ИИ...</span>
+                    <span>Формулирование точечных инструкций и сценария...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Сгенерировать точечные инструкции</span>
+                    <span>Сгенерировать диалог ({studioStepsCount} смс / {studioRolesCount} бота)</span>
                   </>
                 )}
               </button>
@@ -1197,7 +1233,7 @@ export default function Prompts() {
             {/* Studio Generation Results Card */}
             {studioResult && (
               <div className="p-5 rounded-2xl bg-[var(--bg-main)] border border-[var(--accent)]/50 space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)]">
                       Результат
@@ -1207,9 +1243,11 @@ export default function Prompts() {
                     </h3>
                   </div>
 
-                  <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                    Режим: {studioResult.mode === 'dynamic' ? '⚡ Динамический' : '📝 Статический'}
-                  </span>
+                  <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)]">
+                    <span>{studioResult.mode === 'dynamic' ? '⚡ Динамический' : '📝 Статический'}</span>
+                    <span>•</span>
+                    <span className="text-[var(--accent-text)] font-semibold">{studioResult.steps_payload?.length || studioStepsCount} смс</span>
+                  </div>
                 </div>
 
                 {/* Prompt preview */}
@@ -1225,7 +1263,7 @@ export default function Prompts() {
                 {/* Step-by-step role cards */}
                 <div>
                   <span className="text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-2">
-                    Точечные инструкции по ролям:
+                    Точечные инструкции по ролям ({studioResult.roles.length} ботов):
                   </span>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                     {studioResult.roles.map((role) => (
@@ -1250,38 +1288,46 @@ export default function Prompts() {
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button
-                    onClick={() => handleCopyText(studioResult.prompt_text)}
-                    className="px-3.5 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {studioCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{studioCopied ? 'Скопировано' : 'Скопировать промпт'}</span>
-                  </button>
+                {/* Action Buttons with clear distinction between Template and Scenario */}
+                <div className="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-[var(--border-color)]">
+                  <div className="text-[11px] text-[var(--text-muted)]">
+                    Готово: <strong className="text-[var(--text-main)]">{studioResult.roles.length} ролей</strong>, <strong className="text-[var(--text-main)]">{studioResult.steps_payload?.length || studioStepsCount} сообщений</strong>
+                  </div>
 
-                  <button
-                    onClick={handleSaveStudioToLibrary}
-                    className="px-3.5 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-                    <span>В библиотеку</span>
-                  </button>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <button
+                      onClick={() => handleCopyText(studioResult.prompt_text)}
+                      className="px-3 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {studioCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{studioCopied ? 'Скопировано' : 'Скопировать'}</span>
+                    </button>
 
-                  <button
-                    onClick={() =>
-                      handleCreateScenario({
-                        title: studioResult.title,
-                        mode: studioResult.mode,
-                        prompt_text: studioResult.prompt_text,
-                        steps: studioResult.steps_payload
-                      })
-                    }
-                    className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md active:scale-[0.98]"
-                  >
-                    <Zap className="w-4 h-4" />
-                    <span>🚀 Создать готовый сценарий в 1 клик</span>
-                  </button>
+                    <button
+                      onClick={handleSaveStudioToLibrary}
+                      className="px-3.5 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer"
+                      title="Сохранить как шаблон в библиотеку промптов для повторного использования"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-[var(--accent-text)]" />
+                      <span>📥 В библиотеку шаблонов</span>
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        handleCreateScenario({
+                          title: studioResult.title,
+                          mode: studioResult.mode,
+                          prompt_text: studioResult.prompt_text,
+                          steps: studioResult.steps_payload
+                        })
+                      }
+                      className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md active:scale-[0.98]"
+                      title="Развернуть полноценный живой сценарий со всеми репликами в разделе «Сценарии»"
+                    >
+                      <Zap className="w-4 h-4" />
+                      <span>🚀 Создать сценарий ({studioResult.steps_payload?.length || studioStepsCount} смс)</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
