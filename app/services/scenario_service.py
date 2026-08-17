@@ -9,6 +9,13 @@ from app.models.models import Scenario, ScenarioStep, TaskLog, Account
 from app.services.pool_service import get_commenting_pool, get_reaction_pool
 from app.services.log_service import log_action, classify_telegram_error
 from app.services.ai_service import generate_dynamic_step_text
+from app.services.join_service import (
+    get_known_chat_members, 
+    record_chat_member, 
+    record_banned_chat_member, 
+    get_banned_chat_members, 
+    is_banned_in_chat
+)
 from app.telegram.client import get_hydrogram_client
 from app.telegram.preflight import check_chat_availability
 
@@ -72,9 +79,15 @@ async def execute_scenario(
     probe_success = False
     last_diag = None
     last_ex = None
+    not_found_count = 0
+    bot_banned_count = 0
 
     # Probe client to inspect chat and resolve discussion target across candidate accounts
     for probe_account in commenting_pool:
+        if is_banned_in_chat(str(chat_id), probe_account.id):
+            bot_banned_count += 1
+            continue
+
         probe_client = get_hydrogram_client(probe_account, probe_account.proxy)
         try:
             await probe_client.start()
@@ -93,7 +106,15 @@ async def execute_scenario(
                     str(chat_info.type).lower().endswith('channel') or getattr(chat_info.type, 'value', '') == 'channel'
                 )
             except Exception as e:
+                diag = classify_telegram_error(e)
+                if diag["category"] == "chat_not_found":
+                    not_found_count += 1
+                elif diag["category"] in ["account_banned", "chat_closed", "peer_flood"]:
+                    bot_banned_count += 1
+                    record_banned_chat_member(str(chat_id), probe_account.id)
                 logger.warning(f"Notice inspecting chat type for {chat_id} (acc #{probe_account.id}): {e}")
+                await probe_client.stop()
+                continue
 
             if is_channel or discussion_message_id:
                 post_id = discussion_message_id
@@ -102,7 +123,13 @@ async def execute_scenario(
                         async for p in probe_client.get_chat_history(chat_id, limit=1):
                             post_id = p.id
                             break
-                    except Exception:
+                    except Exception as hist_err:
+                        diag = classify_telegram_error(hist_err)
+                        if diag["category"] in ["account_banned", "chat_closed", "peer_flood"]:
+                            bot_banned_count += 1
+                            record_banned_chat_member(str(chat_id), probe_account.id)
+                            await probe_client.stop()
+                            continue
                         post_id = None
 
                 if post_id:
@@ -119,36 +146,12 @@ async def execute_scenario(
                         diag = classify_telegram_error(ex)
                         last_diag = diag
                         last_ex = ex
-                        # If account is banned / has ChannelForbidden / session expired, try next account in pool
-                        if diag["category"] in ["account_banned", "session_expired", "peer_flood"]:
-                            logger.warning(f"Аккаунт #{probe_account.id} (@{probe_account.username or probe_account.phone}) не имеет доступа к каналу {chat_id} ({diag['badge']}): {ex}. Пробуем следующий аккаунт...")
-                            await probe_client.stop()
-                            continue
-                        else:
-                            # Genuine channel issue (comments disabled, closed chat)
-                            error_msg = f"{diag['badge']}: У канала {chat_id} отключены комментарии или нет группы для обсуждений (post #{post_id})"
-                            logger.error(error_msg)
-                            log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
-                            session.add(log)
-                            await log_action(
-                                session,
-                                action_type="comment_send",
-                                status="error",
-                                target=str(chat_id),
-                                target_id=f"{diag['badge']} • post #{post_id}",
-                                details={
-                                    "summary": diag["summary"],
-                                    "category": diag["category"],
-                                    "badge": diag["badge"],
-                                    "error": str(ex),
-                                    "channel": str(chat_id),
-                                    "post_id": post_id
-                                },
-                                scenario_id=scenario_id
-                            )
-                            await session.commit()
-                            await probe_client.stop()
-                            return
+                        # If account is banned in channel/group or channel private for this bot, record ban and try next bot!
+                        bot_banned_count += 1
+                        record_banned_chat_member(str(chat_id), probe_account.id)
+                        logger.warning(f"Аккаунт #{probe_account.id} (@{probe_account.username or probe_account.phone}) не имеет доступа к обсуждению канала {chat_id} ({diag['badge']}): {ex}. Пробуем следующий аккаунт...")
+                        await probe_client.stop()
+                        continue
                 elif is_channel:
                     diag = classify_telegram_error("нет опубликованных постов")
                     error_msg = f"{diag['badge']}: В канале {chat_id} нет опубликованных постов для комментирования"
@@ -173,17 +176,6 @@ async def execute_scenario(
                     await probe_client.stop()
                     return
 
-            # Check preflight availability on target
-            requires_media = any(step.media_path for step in steps)
-            is_available, error_msg = await check_chat_availability(probe_client, target_chat_id, requires_media)
-            if not is_available:
-                logger.error(f"Preflight failed: {error_msg}")
-                log = TaskLog(scenario_id=scenario_id, status="error", error_message=f"Preflight: {error_msg}")
-                session.add(log)
-                await session.commit()
-                await probe_client.stop()
-                return
-
             probe_success = True
             await probe_client.stop()
             break
@@ -194,8 +186,16 @@ async def execute_scenario(
             continue
 
     if not probe_success:
-        diag = last_diag or classify_telegram_error("no_accounts")
-        error_msg = f"{diag['badge']}: Не удалось проверить канал {chat_id} (аккаунты заблокированы или недоступны: {diag['summary']})"
+        if not_found_count >= len(commenting_pool) or (last_diag and last_diag.get("category") == "chat_not_found"):
+            diag = {"category": "chat_not_found", "badge": "Чат не найден", "summary": f"Канал или чат '{chat_id}' не существует в Telegram"}
+            error_msg = f"Чат не найден: канал или группа '{chat_id}' не существует"
+        elif bot_banned_count >= len(commenting_pool) or (bot_banned_count > 0 and not probe_success):
+            diag = {"category": "all_bots_banned", "badge": "Все боты забанены", "summary": f"Все доступные боты из пула ({len(commenting_pool)} шт.) заблокированы или исключены из канала/чата {chat_id}"}
+            error_msg = f"Все боты в чате {chat_id} забанены: ни один аккаунт из пула не имеет доступа"
+        else:
+            diag = last_diag or classify_telegram_error("no_accounts")
+            error_msg = f"{diag['badge']}: Не удалось проверить канал {chat_id} (аккаунты заблокированы или недоступны: {diag['summary']})"
+
         logger.error(error_msg)
         log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
         session.add(log)
@@ -217,112 +217,116 @@ async def execute_scenario(
         await session.commit()
         return
 
-    # SMART BOT SELECTION: Prioritize and filter bots that are ALREADY in the group
-    from app.services.join_service import get_known_chat_members, record_chat_member
+    # Filter available accounts that are NOT banned in this target chat
+    unbanned_pool = [
+        acc for acc in commenting_pool 
+        if not is_banned_in_chat(str(target_chat_id), acc.id) and not is_banned_in_chat(str(chat_id), acc.id)
+    ]
+
+    if not unbanned_pool:
+        diag = {"category": "all_bots_banned", "badge": "Все боты забанены", "summary": f"Все доступные боты ({len(commenting_pool)} шт.) забанены в целевом чате {target_chat_id}"}
+        error_msg = f"Все боты в чате забанены: ни один бот из пула не может писать в {target_chat_id}"
+        logger.error(error_msg)
+        log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+        session.add(log)
+        await log_action(
+            session,
+            action_type="comment_send",
+            status="error",
+            target=str(chat_id),
+            target_id=f"{diag['badge']} • {chat_id}",
+            details={
+                "summary": diag["summary"],
+                "category": diag["category"],
+                "badge": diag["badge"],
+                "error": error_msg,
+                "channel": str(chat_id)
+            },
+            scenario_id=scenario_id
+        )
+        await session.commit()
+        return
+
+    # Prioritize accounts already known to be in group
     known_member_ids = get_known_chat_members(str(target_chat_id)) | get_known_chat_members(str(chat_id))
-    
-    in_group_accounts = [acc for acc in commenting_pool if acc.id in known_member_ids]
-    
-    # If no bots in cache, check membership for active bots
-    if not in_group_accounts:
-        for acc in commenting_pool[:10]: # Check top candidate accounts
-            c_test = get_hydrogram_client(acc, acc.proxy)
+    in_group_accounts = [acc for acc in unbanned_pool if acc.id in known_member_ids]
+    other_accounts = [acc for acc in unbanned_pool if acc.id not in known_member_ids]
+    candidate_order = in_group_accounts + other_accounts
+
+    # Verify and join candidate bots to target chat
+    verified_bots: List[Account] = []
+    verified_clients: Dict[int, Any] = {}
+
+    for cand_acc in candidate_order:
+        if is_banned_in_chat(str(target_chat_id), cand_acc.id):
+            continue
+        c = get_hydrogram_client(cand_acc, cand_acc.proxy)
+        try:
+            await c.start()
+            # If not yet member, try to join
+            if cand_acc.id not in known_member_ids:
+                try:
+                    await c.join_chat(target_chat_id)
+                    record_chat_member(str(target_chat_id), cand_acc.id)
+                except Exception as join_err:
+                    diag = classify_telegram_error(join_err)
+                    if diag["category"] in ["account_banned", "chat_closed", "peer_flood"]:
+                        record_banned_chat_member(str(target_chat_id), cand_acc.id)
+                        record_banned_chat_member(str(chat_id), cand_acc.id)
+                        await c.stop()
+                        continue
+            
+            record_chat_member(str(target_chat_id), cand_acc.id)
+            verified_bots.append(cand_acc)
+            verified_clients[cand_acc.id] = c
+
+            if len(verified_bots) >= len(roles_needed):
+                break
+        except Exception as start_err:
+            diag = classify_telegram_error(start_err)
+            if diag["category"] in ["account_banned", "peer_flood"]:
+                record_banned_chat_member(str(target_chat_id), cand_acc.id)
             try:
-                await c_test.start()
-                member = await c_test.get_chat_member(target_chat_id, "me")
-                if member and getattr(member, 'status', None):
-                    st = str(member.status).lower()
-                    if st not in ['left', 'kicked', 'banned']:
-                        record_chat_member(str(target_chat_id), acc.id)
-                        in_group_accounts.append(acc)
+                await c.stop()
             except Exception:
                 pass
-            finally:
-                try:
-                    await c_test.stop()
-                except Exception:
-                    pass
+            continue
 
-    # SMART BOT SELECTION: Prioritize member bots, but ensure DISTINCT bots for distinct roles!
-    from app.services.join_service import get_known_chat_members, record_chat_member
-    known_member_ids = get_known_chat_members(str(target_chat_id)) | get_known_chat_members(str(chat_id))
-    
-    in_group_accounts = [acc for acc in commenting_pool if acc.id in known_member_ids]
-    
-    # Priority ordered pool: in-group bots first, then remaining active commenting bots
-    candidate_pool = list(in_group_accounts)
-    for acc in commenting_pool:
-        if acc not in candidate_pool:
-            candidate_pool.append(acc)
+    if not verified_bots:
+        diag = {"category": "all_bots_banned", "badge": "Все боты забанены", "summary": f"Все боты из пула ({len(commenting_pool)} шт.) заблокированы или не смогли присоединиться к чату {chat_id}"}
+        error_msg = f"Все боты в чате забанены: ни один бот не смог получить доступ к {chat_id}"
+        logger.error(error_msg)
+        log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+        session.add(log)
+        await log_action(
+            session,
+            action_type="comment_send",
+            status="error",
+            target=str(chat_id),
+            target_id=f"{diag['badge']} • {chat_id}",
+            details={
+                "summary": diag["summary"],
+                "category": diag["category"],
+                "badge": diag["badge"],
+                "error": error_msg,
+                "channel": str(chat_id)
+            },
+            scenario_id=scenario_id
+        )
+        await session.commit()
+        return
 
+    # Map roles to verified bots
     role_account_map: Dict[int, Account] = {}
-    used_account_ids = set()
+    clients: Dict[int, Any] = {}
 
-    # Step 1: Check if role_id directly matches an account in pool
-    for role_id in roles_needed:
-        exact_match = next((a for a in candidate_pool if a.id == role_id and a.id not in used_account_ids), None)
-        if exact_match:
-            role_account_map[role_id] = exact_match
-            used_account_ids.add(exact_match.id)
-
-    # Step 2: Assign distinct accounts to remaining roles
-    for role_id in roles_needed:
-        if role_id not in role_account_map:
-            available = [a for a in candidate_pool if a.id not in used_account_ids]
-            if available:
-                chosen = available[0]
-                role_account_map[role_id] = chosen
-                used_account_ids.add(chosen.id)
-            else:
-                # If there are genuinely fewer accounts in pool than roles, cycle from candidate_pool
-                role_account_map[role_id] = candidate_pool[len(role_account_map) % len(candidate_pool)]
+    for idx, role_id in enumerate(roles_needed):
+        assigned_bot = verified_bots[idx % len(verified_bots)]
+        role_account_map[role_id] = assigned_bot
+        clients[role_id] = verified_clients[assigned_bot.id]
 
     logger.info(f"🎭 Scenario {scenario_id} assigned roles: {[(r_id, acc.custom_name or acc.username or acc.first_name or acc.id) for r_id, acc in role_account_map.items()]}")
 
-    clients: Dict[int, Any] = {}
-    unique_accounts = {acc.id: acc for acc in role_account_map.values()}
-    account_client_map: Dict[int, Any] = {}
-
-    for acc_id, account in unique_accounts.items():
-        client = get_hydrogram_client(account, account.proxy)
-        try:
-            await client.start()
-            account_client_map[acc_id] = client
-        except Exception as e:
-            diag = classify_telegram_error(e)
-            logger.error(f"Не удалось запустить клиент для аккаунта {account.id} (@{account.username or account.phone}): {e}")
-            for c in account_client_map.values():
-                try:
-                    await c.stop()
-                except Exception:
-                    pass
-            log = TaskLog(account_id=account.id, scenario_id=scenario_id, status="error", error_message=f"Init client failed ({diag['badge']}): {e}")
-            session.add(log)
-            await log_action(
-                session,
-                action_type="comment_send",
-                status="error",
-                account_id=account.id,
-                target=str(chat_id),
-                target_id=f"{diag['badge']} • {account.username or account.phone or account.id}",
-                details={
-                    "summary": f"Не удалось инициализировать аккаунт: {diag['summary']}",
-                    "category": diag["category"],
-                    "badge": diag["badge"],
-                    "error": str(e),
-                    "account_id": account.id,
-                    "channel": str(chat_id)
-                },
-                scenario_id=scenario_id
-            )
-            await session.commit()
-            return
-
-    for role_id, account in role_account_map.items():
-        clients[role_id] = account_client_map[account.id]
-
-    # Track joined roles to avoid duplicate joins and prevent simultaneous mass-joining
-    joined_roles = set()
     step_msg_map: Dict[int, int] = {}
     
     for idx, step in enumerate(steps):
@@ -470,6 +474,9 @@ async def execute_scenario(
 
         except Exception as e:
             diag = classify_telegram_error(e)
+            if diag["category"] in ["account_banned", "chat_closed", "peer_flood"]:
+                record_banned_chat_member(str(target_chat_id), role_account_map[role_id].id)
+                record_banned_chat_member(str(chat_id), role_account_map[role_id].id)
             logger.error(f"Ошибка на шаге {step.id} ({diag['badge']}): {e}")
             log = TaskLog(account_id=role_account_map[role_id].id, scenario_id=scenario_id, status="error", error_message=f"{diag['badge']}: {str(e)}")
             session.add(log)
