@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, Wand2, CheckCircle2, X } from 'lucide-react';
+import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, CheckCircle2, X } from 'lucide-react';
 import { useToast } from '../components/ToastContext';
 
 interface Replica {
@@ -72,143 +73,19 @@ const DEFAULT_SYSTEM_PROMPT = `# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНА�
 
 const EMPTY_ARRAY: any[] = [];
 
-const DEFAULT_DYNAMIC_TEMPLATES = [
-  {
-    id: 'dt1',
-    title: '🔥 Нативная реклама софта @ivanchik_byte (Роли 1-2-3)',
-    prompt: `Динамический сценарий нативной ненавязчивой рекламы канала @ivanchik_byte между 3 абсолютно незнакомыми людьми в комментариях Telegram на "ты".
-
-ПОШАГОВАЯ ДРАМАТУРГИЯ И ИНСТРУКЦИИ ДЛЯ БОТОВ:
-1. РОЛЬ 1 (Инициатор): Начинает диалог по теме поста. С легким скепсисом или вопросом поднимает реальную проблему (где взять рабочий софт для Telegram, скрипты без инфоцыганских курсов и лишней воды).
-2. РОЛЬ 2 (Советчик / Практик): Отвечает Роли 1 по делу. Без слащавой рекламы советует заглянуть в канал @ivanchik_byte. Отмечает, что автор сам пишет качественный софт, выкладывает реальные кейсы, Docker-шаблоны и скрипты.
-3. РОЛЬ 3 (Единомышленник): Вклинивается в ветку с живым удивлением («ого, не ожидал тут увидеть тех кто в теме», «тоже сижу у иванчика»). Подтверждает личным опытом (настроил комбайн / ботов, всё летает). Задает уточняющий вопрос по фишкам (например, про ротацию прокси или задержки).
-4. РОЛЬ 2: Раскрывает детали Роли 3 и Роли 1 (как работают задержки, веб-панель и безопасность).
-5. РОЛЬ 1: Задает короткий финальный вопрос о настройке.
-6. РОЛЬ 3: Дополняет ответ своим практическим советом.
-7. РОЛЬ 1: Благодарит собеседников и подводит логический итог (говорит, что пошел чекать канал и тестировать).
-
-СТРОГИЕ ПРАВИЛА: Без эмодзи в тексте сообщений, без точек в конце, разговорный сленг незнакомцев, адресные ответы по смыслу.`
-  },
-  {
-    id: 'dt2',
-    title: '🤖 Автоматизация комментирования и прогрев фермы ботов',
-    prompt: `Динамический сценарий технической дискуссии об автоматизации комментирования в Telegram и безопасном прогреве сетки аккаунтов.
-
-ПОШАГОВАЯ ДРАМАТУРГИЯ И ИНСТРУКЦИИ ДЛЯ БОТОВ:
-1. РОЛЬ 1 (Новичок-практик): Задает вопрос в комментариях под постом о том, как сейчас автоматизировать комментирование каналов и не ловить бан аккаунтов.
-2. РОЛЬ 2 (Опытный разработчик/арбитражник): Поясняет за архитектуру: рандомизация задержек (3-15 сек), использование мобильных прокси с ротацией и разделение аккаунтов на пулы (комментирование и реакции).
-3. РОЛЬ 3 (Участник с опытом): Подключается к обсуждению, отмечает важность динамических ИИ-ответов на лету, чтобы каждое сообщение было уникальным под контекст поста.
-4. РОЛЬ 1: Уточняет, сложно ли развернуть такую систему в Docker на VPS сервере.
-5. РОЛЬ 2: Объясняет, что в Docker всё поднимается одной командой за пару минут через docker-compose.
-6. РОЛЬ 3: Дополняет рекомендацией по контролю лимитов сообщений в сутки.
-7. РОЛЬ 1: Благодарит за практическую инфу и резюмирует ветку.
-
-СТРОГИЕ ПРАВИЛА: Без эмодзи в тексте сообщений, без точек в конце, живой язык на "ты", адресные ответы.`
-  },
-  {
-    id: 'dt3',
-    title: '🌐 Мобильные SOCKS5 прокси, прогрев и защита от спамблока',
-    prompt: `Динамический сценарий профессионального обсуждения безопасности аккаунтов Telegram и настройки мобильных прокси.
-
-ПОШАГОВАЯ ДРАМАТУРГИЯ И ИНСТРУКЦИИ ДЛЯ БОТОВ:
-1. РОЛЬ 1: Поднимает тему частых блокировок или FloodWait при работе с несколькими Telegram аккаунтами.
-2. РОЛЬ 2: Делится проверенным решением: приватные мобильные SOCKS5 прокси с автосменой IP по ссылке, разнесение сессий по независимым IP и отлежка новых аккаунтов.
-3. РОЛЬ 3: Вклинивается с подтверждением, рассказывает про свой опыт разделения пулов (отдельные прокси для чтения и для реакций).
-4. РОЛЬ 1: Спрашивает про оптимальное количество аккаунтов на один мобильный порт прокси.
-5. РОЛЬ 2: Отвечает конкретными цифрами (не более 3-5 аккаунтов на канал с ротацией IP).
-6. РОЛЬ 3: Добавляет совет по установке умных задержек перед отправкой реакций (3-6 секунд).
-7. РОЛЬ 1: Подводит итог ветки и благодарит за понятный гайд.
-
-СТРОГИЕ ПРАВИЛА: Без эмодзи в тексте, без точек на конце, естественный сленг (норм, спс, щас, чекнуть, хз), ветвление ответов по смыслу.`
-  }
-];
-
-const DEFAULT_STATIC_TEMPLATES = [
-  {
-    id: 'st1',
-    title: '💬 Обсуждение надежности криптокошельков',
-    prompt: 'Реалистичный диалог 3 незнакомцев про некастодиальные криптокошельки. Первый спрашивает какой кошелек безопаснее для холодного хранения. Второй советует Tangem и Trust, поясняя про приватные ключи. Третий делится опытом восстановления сид-фразы и подтверждает надежность.'
-  },
-  {
-    id: 'st2',
-    title: '⚡ Парсинг аудитории и мониторинг новых постов',
-    prompt: 'Диалог 3 участников на "ты" про скорость реакции на новые публикации. Первый спрашивает как успевать комментировать первым. Второй рассказывает про мониторинг по вебхукам. Третий делится своим опытом фильтрации каналов.'
-  },
-  {
-    id: 'st3',
-    title: '📊 Спор про облачные VPS и деплой скриптов',
-    prompt: 'Конструктивный диалог 3 человек про выбор VPS под Telegram ботов. Первый спрашивает где дешевле и стабильнее брать сервер. Второй советует конфигурации с 2GB RAM под Docker. Третий подтверждает что на чистом Linux в докере ничего не падает.'
-  }
-];
-
 export default function Scenarios() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { showToast } = useToast();
   
-  // Dynamic templates state
-  const [dynamicTemplates, setDynamicTemplates] = useState(() => {
-    try {
-      const saved = localStorage.getItem('tgactor_ai_dyn_templates_v1');
-      return saved ? JSON.parse(saved) : DEFAULT_DYNAMIC_TEMPLATES;
-    } catch {
-      return DEFAULT_DYNAMIC_TEMPLATES;
+  // Fetch Prompt Library templates for fast applying in scenarios
+  const { data: libraryTemplates = [] } = useQuery<any[]>({
+    queryKey: ['promptTemplatesForScenarios'],
+    queryFn: async () => {
+      const res = await axios.get('/api/prompts');
+      return res.data;
     }
   });
-
-  // Static templates state
-  const [staticTemplates, setStaticTemplates] = useState(() => {
-    try {
-      const saved = localStorage.getItem('tgactor_ai_stat_templates_v1');
-      return saved ? JSON.parse(saved) : DEFAULT_STATIC_TEMPLATES;
-    } catch {
-      return DEFAULT_STATIC_TEMPLATES;
-    }
-  });
-
-  const [showAddTemplateModal, setShowAddTemplateModal] = useState(false);
-  const [addTemplateTarget, setAddTemplateTarget] = useState<'dynamic' | 'static'>('dynamic');
-  const [newTemplateTitle, setNewTemplateTitle] = useState('');
-  const [newTemplatePrompt, setNewTemplatePrompt] = useState('');
-
-  const handleAddCustomTemplate = () => {
-    if (!newTemplateTitle.trim() || !newTemplatePrompt.trim()) return;
-    const newT = {
-      id: Math.random().toString(36).substring(2, 9),
-      title: newTemplateTitle.trim(),
-      prompt: newTemplatePrompt.trim()
-    };
-
-    if (addTemplateTarget === 'dynamic') {
-      const updated = [...dynamicTemplates, newT];
-      setDynamicTemplates(updated);
-      try { localStorage.setItem('tgactor_ai_dyn_templates_v1', JSON.stringify(updated)); } catch {}
-    } else {
-      const updated = [...staticTemplates, newT];
-      setStaticTemplates(updated);
-      try { localStorage.setItem('tgactor_ai_stat_templates_v1', JSON.stringify(updated)); } catch {}
-    }
-
-    setNewTemplateTitle('');
-    setNewTemplatePrompt('');
-    setShowAddTemplateModal(false);
-    showToast('Новый шаблон сохранен!', 'success');
-  };
-
-  const handleDeleteDynamicTemplate = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = dynamicTemplates.filter((t: any) => t.id !== id);
-    setDynamicTemplates(updated);
-    try { localStorage.setItem('tgactor_ai_dyn_templates_v1', JSON.stringify(updated)); } catch {}
-    showToast('Динамический шаблон удален', 'info');
-  };
-
-  const handleDeleteStaticTemplate = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = staticTemplates.filter((t: any) => t.id !== id);
-    setStaticTemplates(updated);
-    try { localStorage.setItem('tgactor_ai_stat_templates_v1', JSON.stringify(updated)); } catch {}
-    showToast('Статический шаблон удален', 'info');
-  };
   
   // Active Scenario state
   const [activeScenarioId, setActiveScenarioId] = useState<number | null>(null);
@@ -255,13 +132,6 @@ export default function Scenarios() {
   const [aiProvider, setAiProvider] = useState('');
   const [aiModel, setAiModel] = useState('');
   const [systemInstruction, setSystemInstruction] = useState('');
-
-  // AI One-time Generation Modal & Generator state
-  const [aiGenPrompt, setAiGenPrompt] = useState('');
-  const [aiGenAccountsCount, setAiGenAccountsCount] = useState(3);
-  const [aiGenStepsCount, setAiGenStepsCount] = useState(6);
-  const [aiGenReactionsEnabled, setAiGenReactionsEnabled] = useState(true);
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
   // Global AI Settings Modal state
   const [showAISettingsModal, setShowAISettingsModal] = useState(false);
@@ -530,86 +400,6 @@ export default function Scenarios() {
     event.target.value = '';
   };
 
-  const handleGenerateScenarioAI = async (isDynamic: boolean = false) => {
-    if (!aiGenPrompt.trim()) {
-      showToast('Введите описание диалога для ИИ!', 'error');
-      return;
-    }
-    setIsGeneratingAI(true);
-    try {
-      const res = await axios.post('/api/scenarios/generate-ai', {
-        prompt: aiGenPrompt.trim(),
-        accounts_count: aiGenAccountsCount,
-        steps_count: aiGenStepsCount,
-        reactions_enabled: aiGenReactionsEnabled,
-        is_dynamic: isDynamic,
-        system_prompt: aiConfigSystemPrompt
-      });
-
-      const gen = res.data.scenario;
-      if (gen) {
-        if (gen.title && !scenarioName) setScenarioName(gen.title);
-        if (gen.min_delay) setDefaultMinDelay(gen.min_delay);
-        if (gen.max_delay) setDefaultMaxDelay(gen.max_delay);
-
-        if (gen.steps && Array.isArray(gen.steps)) {
-          const generatedReplicas: Replica[] = gen.steps.map((s: any, idx: number) => {
-            let replyId = '';
-            let msgType: 'normal' | 'reply' = 'normal';
-
-            // Determine correct target reply replica index
-            let targetIdx: number | null = null;
-            if (s.reply_to_step !== null && s.reply_to_step !== undefined && s.reply_to_step >= 1) {
-              targetIdx = s.reply_to_step - 1;
-            } else if (s.reply_to_index !== null && s.reply_to_index !== undefined && s.reply_to_index >= 0) {
-              targetIdx = s.reply_to_index;
-            }
-
-            if (idx > 0 && targetIdx !== null && targetIdx >= 0 && targetIdx < idx) {
-              replyId = `step_ai_${targetIdx}`;
-              msgType = 'reply';
-            } else if (idx > 0) {
-              replyId = `step_ai_${idx - 1}`;
-              msgType = 'reply';
-            }
-
-            const stepIsDyn = Boolean(s.is_ai_dynamic || isDynamic);
-            const promptVal = s.ai_prompt || (stepIsDyn ? (s.text || '') : '');
-
-            return {
-              id: `step_ai_${idx}`,
-              role: String(s.role_id || (commentingAccounts[0] ? commentingAccounts[0].id : 1)),
-              type: msgType,
-              replyToId: replyId,
-              text: s.text || promptVal,
-              minDelay: String(s.delay_before_min || 5.0),
-              maxDelay: String(s.delay_before_max || 10.0),
-              reactions: s.reactions || '',
-              reactionCount: s.reaction_count || 0,
-              reactionSource: 'pool',
-              fileName: '',
-              noAttachmentIfForbidden: false,
-              isAiDynamic: stepIsDyn,
-              aiPrompt: promptVal
-            };
-          });
-          setReplicas(generatedReplicas);
-        }
-        setScenarioMode('manual');
-        showToast(
-          isDynamic
-            ? '🎉 Динамический ИИ-сценарий сгенерирован! Шаги содержат промпты для генерации текста на лету.'
-            : '🎉 Сценарий сгенерирован ИИ! Режим переключен в Ручной для просмотра и сохранения.',
-          'success'
-        );
-      }
-    } catch (err: any) {
-      showToast(err?.response?.data?.detail || 'Ошибка генерации сценария ИИ', 'error');
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  };
-
   const handleSaveAISettings = async () => {
     setIsSavingAISettings(true);
     try {
@@ -787,6 +577,78 @@ export default function Scenarios() {
       return r;
     });
     setReplicas(adjusted);
+  };
+
+  // Apply prompt template from library
+  const handleApplyLibraryTemplate = (template: any) => {
+    if (!template) return;
+    const isDynamic = template.mode === 'dynamic';
+    let roles: any[] = [];
+    try {
+      if (template.roles_breakdown) {
+        roles = JSON.parse(template.roles_breakdown);
+      }
+    } catch {}
+
+    const accountIds = commentingAccounts.map((a: any) => String(a.id));
+    if (roles.length > 0) {
+      const newSteps: Replica[] = roles.map((r: any, idx: number) => {
+        const roleId = accountIds[idx % accountIds.length] || (accountIds[0] || '1');
+        return {
+          id: Math.random().toString(36).substring(2, 9),
+          role: roleId,
+          type: idx === 0 ? 'normal' : 'reply',
+          replyToId: '',
+          text: r.sample_text || `Шаг ${idx + 1}: ${r.role_name}`,
+          minDelay: '4',
+          maxDelay: '9',
+          reactions: idx === roles.length - 1 ? '👍' : '',
+          reactionCount: idx === roles.length - 1 ? 1 : 0,
+          reactionSource: 'pool',
+          fileName: '',
+          noAttachmentIfForbidden: false,
+          isAiDynamic: isDynamic,
+          aiPrompt: r.instruction || template.prompt_text
+        };
+      });
+      setReplicas(newSteps);
+    } else {
+      setReplicas([
+        {
+          id: Math.random().toString(36).substring(2, 9),
+          role: accountIds[0] || '1',
+          type: 'normal',
+          replyToId: '',
+          text: 'Зачинщик: начинает тему',
+          minDelay: '4',
+          maxDelay: '8',
+          reactions: '',
+          reactionCount: 0,
+          reactionSource: 'pool',
+          fileName: '',
+          noAttachmentIfForbidden: false,
+          isAiDynamic: isDynamic,
+          aiPrompt: template.prompt_text
+        },
+        {
+          id: Math.random().toString(36).substring(2, 9),
+          role: accountIds[1 % accountIds.length] || accountIds[0] || '1',
+          type: 'reply',
+          replyToId: '',
+          text: 'Ответчик: рекомендует решение',
+          minDelay: '5',
+          maxDelay: '10',
+          reactions: '👍',
+          reactionCount: 1,
+          reactionSource: 'pool',
+          fileName: '',
+          noAttachmentIfForbidden: false,
+          isAiDynamic: isDynamic,
+          aiPrompt: `${template.prompt_text} (Роль: ответ и рекомендация)`
+        }
+      ]);
+    }
+    showToast(`Шаблон «${template.title}» успешно применен к сценарию`, 'success');
   };
 
 
@@ -1463,8 +1325,13 @@ export default function Scenarios() {
                 <button
                   onClick={() => setShowAddScenario(false)}
                   style={{
-                    backgroundColor: 'transparent', border: '1px solid var(--border-color)',
-                    color: 'var(--text-muted)', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer'
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-muted)',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
                   }}
                 >
                   Отмена
@@ -1557,7 +1424,7 @@ export default function Scenarios() {
         <div style={stepsColumnStyle}>
           {activeScenarioId ? (
             <>
-              {/* Scenario Type / AI Mode Selector */}
+              {/* Header Bar: Prompt Studio & Library & Add/Save Steps */}
               <div style={{
                 backgroundColor: 'var(--bg-card)',
                 padding: '12px 16px',
@@ -1570,33 +1437,58 @@ export default function Scenarios() {
                 flexWrap: 'wrap',
                 gap: '10px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: '4px' }}>Режим:</span>
-                  {[
-                    { id: 'manual', label: '📝 Статический', desc: 'Ручной конструктор шагов сценария' },
-                    { id: 'ai_generated', label: '🚀 Сгенерировать ИИ', desc: 'Разовая генерация готовых текстовых сообщений' },
-                    { id: 'ai_dynamic', label: '✨ Динамический ИИ', desc: 'Генерация шагов с динамическими ИИ-промптами вместо текста' },
-                  ].map(m => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setScenarioMode(m.id as any)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/prompts')}
+                    style={{
+                      backgroundColor: 'var(--accent-soft)',
+                      color: 'var(--accent-text)',
+                      border: '1px solid var(--accent)',
+                      borderRadius: '8px',
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s'
+                    }}
+                    title="Перейти в AI Студию Промптов для генерации сценариев"
+                  >
+                    <Sparkles className="w-4 h-4 text-accent" />
+                    <span>AI Студия Промптов</span>
+                  </button>
+
+                  {libraryTemplates.length > 0 && (
+                    <select
+                      onChange={(e) => {
+                        const t = libraryTemplates.find((x: any) => String(x.id) === e.target.value);
+                        if (t) handleApplyLibraryTemplate(t);
+                        e.target.value = '';
+                      }}
+                      defaultValue=""
                       style={{
-                        padding: '6px 12px',
+                        backgroundColor: 'var(--bg-main)',
+                        color: 'var(--text-main)',
+                        border: '1px solid var(--border-color)',
                         borderRadius: '8px',
+                        padding: '6px 10px',
                         fontSize: '12px',
                         fontWeight: 600,
-                        border: scenarioMode === m.id ? '1px solid var(--accent)' : '1px solid var(--border-color)',
-                        backgroundColor: scenarioMode === m.id ? 'var(--accent-soft)' : 'var(--bg-main)',
-                        color: scenarioMode === m.id ? 'var(--accent-text)' : 'var(--text-muted)',
                         cursor: 'pointer',
-                        transition: 'all 0.15s'
+                        outline: 'none'
                       }}
-                      title={m.desc}
                     >
-                      {m.label}
-                    </button>
-                  ))}
+                      <option value="" disabled>📥 Применить шаблон из Библиотеки...</option>
+                      {libraryTemplates.map((t: any) => (
+                        <option key={t.id} value={t.id}>
+                          {t.mode === 'dynamic' ? '⚡' : '📝'} {t.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -1641,482 +1533,6 @@ export default function Scenarios() {
                 </div>
               </div>
 
-              {/* Option 2: Full-screen AI Dynamic Studio (Dynamic Prompts instead of static SMS) */}
-              {scenarioMode === 'ai_dynamic' ? (
-                <div style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid rgba(139, 92, 246, 0.5)',
-                  borderRadius: '20px',
-                  padding: '24px',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      backgroundColor: 'rgba(139, 92, 246, 0.15)',
-                      padding: '10px',
-                      borderRadius: '12px',
-                      color: '#a78bfa'
-                    }}>
-                      <Zap className="w-6 h-6 text-accent" />
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
-                          Мастер Динамических ИИ-Сценариев (Промпты вместо СМС)
-                        </h3>
-                        <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '12px', backgroundColor: 'rgba(139, 92, 246, 0.2)', color: '#c4b5fd', fontWeight: 700 }}>
-                          УНИКАЛЬНЫЙ ТЕКСТ НА ЛЕТУ
-                        </span>
-                      </div>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Вместо фиксированных текстов боты получают гибкие промпты. При каждом запуске под любым постом в Telegram боты сами формулируют уникальные сообщения от первого лица в реальном времени.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div style={{
-                    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-                    border: '1px solid rgba(139, 92, 246, 0.25)',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
-                    fontSize: '12px',
-                    color: '#c4b5fd',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    <Zap className="w-4 h-4 text-accent" style={{ flexShrink: 0 }} />
-                    <span>
-                      <strong>Логика тайминга:</strong> Задержка таймера срабатывает <strong>ПОСЛЕ</strong> ответа нейросети и отправки сообщения в Telegram, выдерживая паузу перед запуском следующего бота в очереди.
-                    </span>
-                  </div>
-                  
-                  <div>
-                    <label style={labelStyle}>Тема или канва диалога для динамических промптов</label>
-                    <textarea
-                      rows={5}
-                      placeholder="Например: Обсуждение софта для автоматизации Telegram. 1-й участник задает вопрос о надежных скриптах, 2-й советует канал @ivanchik_byte без слащавой рекламы, 3-й подтверждает опыт настройки..."
-                      value={aiGenPrompt}
-                      onChange={e => setAiGenPrompt(e.target.value)}
-                      style={{ ...inputStyle, resize: 'vertical', fontSize: '13px', lineHeight: '1.5' }}
-                    />
-                  </div>
-
-                  {/* Quick prompt suggestion chips for Dynamic Studio */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ ...labelStyle, fontSize: '10px', marginBottom: 0 }}>ШАБЛОНЫ ДИНАМИЧЕСКИХ ПРОМПТОВ (ПОШАГОВАЯ ДРАМАТУРГИЯ):</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddTemplateTarget('dynamic');
-                          setShowAddTemplateModal(true);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#a78bfa',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        + Добавить динамический шаблон
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {dynamicTemplates.map((t: any) => (
-                        <div
-                          key={t.id}
-                          onClick={() => setAiGenPrompt(t.prompt)}
-                          style={{
-                            backgroundColor: 'var(--bg-main)',
-                            border: '1px solid rgba(139, 92, 246, 0.3)',
-                            borderRadius: '8px',
-                            padding: '6px 10px',
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                          title={t.prompt}
-                        >
-                          <span>{t.title}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteDynamicTemplate(t.id, e)}
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              padding: '0 2px',
-                              fontSize: '12px',
-                              fontWeight: 800,
-                              lineHeight: 1
-                            }}
-                            title="Удалить этот шаблон"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>УЧАСТНИКОВ (БОТОВ):</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                          <button
-                            type="button"
-                            onClick={() => setAiGenAccountsCount(Math.max(1, aiGenAccountsCount - 1))}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >-</button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={aiGenAccountsCount}
-                            onChange={e => setAiGenAccountsCount(Math.max(1, parseInt(e.target.value) || 1))}
-                            style={{
-                              width: '45px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              color: 'var(--accent-text)',
-                              fontWeight: 800,
-                              fontSize: '13px',
-                              textAlign: 'center',
-                              outline: 'none'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setAiGenAccountsCount(aiGenAccountsCount + 1)}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >+</button>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>ПРОМПТОВ (ШАГОВ):</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                          <button
-                            type="button"
-                            onClick={() => setAiGenStepsCount(Math.max(2, aiGenStepsCount - 1))}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >-</button>
-                          <input
-                            type="number"
-                            min={2}
-                            max={30}
-                            value={aiGenStepsCount}
-                            onChange={e => setAiGenStepsCount(Math.max(2, parseInt(e.target.value) || 2))}
-                            style={{
-                              width: '45px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              color: 'var(--accent-text)',
-                              fontWeight: 800,
-                              fontSize: '13px',
-                              textAlign: 'center',
-                              outline: 'none'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setAiGenStepsCount(aiGenStepsCount + 1)}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >+</button>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
-                        title="ИИ изредка ставит максимум 1 реакцию на весь диалог на самое ключевое сообщение"
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: aiGenReactionsEnabled ? '1px solid #22c55e' : '1px solid var(--border-color)',
-                          backgroundColor: aiGenReactionsEnabled ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-main)',
-                          color: aiGenReactionsEnabled ? '#4ade80' : 'var(--text-muted)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        {aiGenReactionsEnabled ? '👍 Реакции (Умный выбор)' : '🚫 Реакции ВЫКЛ'}
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleGenerateScenarioAI(true)}
-                      disabled={isGeneratingAI || !aiGenPrompt.trim()}
-                      style={{
-                        backgroundColor: '#8b5cf6',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '10px',
-                        padding: '10px 20px',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        opacity: (isGeneratingAI || !aiGenPrompt.trim()) ? 0.5 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)'
-                      }}
-                    >
-                      <Zap className="w-4 h-4" />
-                      {isGeneratingAI ? 'Генерация промптов...' : '✨ Сгенерировать Динамические Промпты'}
-                    </button>
-                  </div>
-                </div>
-              ) : scenarioMode === 'ai_generated' ? (
-                <div style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--accent)',
-                  borderRadius: '20px',
-                  padding: '24px',
-                  marginBottom: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      backgroundColor: 'var(--accent-soft)',
-                      padding: '10px',
-                      borderRadius: '12px',
-                      color: 'var(--accent)'
-                    }}>
-                      <Wand2 className="w-6 h-6 text-accent" />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
-                        Мастер Статической ИИ-Генерации Сценариев
-                      </h3>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Задайте тему — нейросеть выстроит последовательность готовых текстовых сообщений, свяжет ответы ботов и расставит эмодзи-реакции.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label style={labelStyle}>Тема или готовое описание диалога</label>
-                    <textarea
-                      rows={5}
-                      placeholder="Например: Нативный диалог 3 участников в Telegram. Первый задает вопрос по теме поста, второй органично рекомендует Telegram-канал @..., третий подтверждает пользу ресурса..."
-                      value={aiGenPrompt}
-                      onChange={e => setAiGenPrompt(e.target.value)}
-                      style={{ ...inputStyle, resize: 'vertical', fontSize: '13px', lineHeight: '1.5' }}
-                    />
-                  </div>
-
-                  {/* Quick prompt suggestion chips for Static Studio */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ ...labelStyle, fontSize: '10px', marginBottom: 0 }}>ШАБЛОНЫ СТАТИЧЕСКИХ ДИАЛОГОВ:</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddTemplateTarget('static');
-                          setShowAddTemplateModal(true);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--accent)',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        + Добавить статический шаблон
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {staticTemplates.map((t: any) => (
-                        <div
-                          key={t.id}
-                          onClick={() => setAiGenPrompt(t.prompt)}
-                          style={{
-                            backgroundColor: 'var(--bg-main)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            padding: '6px 10px',
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}
-                          title={t.prompt}
-                        >
-                          <span>{t.title}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteStaticTemplate(t.id, e)}
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              padding: '0 2px',
-                              fontSize: '12px',
-                              fontWeight: 800,
-                              lineHeight: 1
-                            }}
-                            title="Удалить этот шаблон"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>УЧАСТНИКОВ (БОТОВ):</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                          <button
-                            type="button"
-                            onClick={() => setAiGenAccountsCount(Math.max(1, aiGenAccountsCount - 1))}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >-</button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={aiGenAccountsCount}
-                            onChange={e => setAiGenAccountsCount(Math.max(1, parseInt(e.target.value) || 1))}
-                            style={{
-                              width: '45px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              color: 'var(--accent-text)',
-                              fontWeight: 800,
-                              fontSize: '13px',
-                              textAlign: 'center',
-                              outline: 'none'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setAiGenAccountsCount(aiGenAccountsCount + 1)}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >+</button>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>СООБЩЕНИЙ:</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--bg-main)', padding: '2px 6px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                          <button
-                            type="button"
-                            onClick={() => setAiGenStepsCount(Math.max(2, aiGenStepsCount - 1))}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >-</button>
-                          <input
-                            type="number"
-                            min={2}
-                            max={30}
-                            value={aiGenStepsCount}
-                            onChange={e => setAiGenStepsCount(Math.max(2, parseInt(e.target.value) || 2))}
-                            style={{
-                              width: '45px',
-                              backgroundColor: 'transparent',
-                              border: 'none',
-                              color: 'var(--accent-text)',
-                              fontWeight: 800,
-                              fontSize: '13px',
-                              textAlign: 'center',
-                              outline: 'none'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setAiGenStepsCount(aiGenStepsCount + 1)}
-                            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 800, fontSize: '14px', padding: '0 4px' }}
-                          >+</button>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setAiGenReactionsEnabled(!aiGenReactionsEnabled)}
-                        title="ИИ изредка ставит максимум 1 реакцию на весь диалог на самое ключевое сообщение"
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          border: aiGenReactionsEnabled ? '1px solid #22c55e' : '1px solid var(--border-color)',
-                          backgroundColor: aiGenReactionsEnabled ? 'rgba(34, 197, 94, 0.15)' : 'var(--bg-main)',
-                          color: aiGenReactionsEnabled ? '#4ade80' : 'var(--text-muted)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        {aiGenReactionsEnabled ? '👍 Реакции (Умный выбор)' : '🚫 Реакции ВЫКЛ'}
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleGenerateScenarioAI(false)}
-                      disabled={isGeneratingAI || !aiGenPrompt.trim()}
-                      style={{
-                        backgroundColor: 'var(--accent)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '10px',
-                        padding: '10px 20px',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        opacity: (isGeneratingAI || !aiGenPrompt.trim()) ? 0.5 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
-                      }}
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      {isGeneratingAI ? 'Генерация...' : '🚀 Сгенерировать готовый сценарий'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-
               {replicas.length === 0 ? (
                 <div style={{
                   backgroundColor: 'var(--bg-card)',
@@ -2128,22 +1544,41 @@ export default function Scenarios() {
                 }}>
                   <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-30" />
                   <p style={{ fontSize: '14px', fontWeight: 500 }}>Список диалоговых шагов пуст</p>
-                  <button
-                    onClick={handleAddReplica}
-                    style={{
-                      marginTop: '16px',
-                      backgroundColor: 'var(--accent)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '10px',
-                      padding: '10px 20px',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Создать первый шаг
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '16px' }}>
+                    <button
+                      onClick={() => navigate('/prompts')}
+                      style={{
+                        backgroundColor: 'var(--accent-soft)',
+                        color: 'var(--accent-text)',
+                        border: '1px solid var(--accent)',
+                        borderRadius: '10px',
+                        padding: '10px 18px',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Sparkles className="w-4 h-4 text-accent" /> Сгенерировать в Студии
+                    </button>
+                    <button
+                      onClick={handleAddReplica}
+                      style={{
+                        backgroundColor: 'var(--bg-main)',
+                        color: 'var(--text-main)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '10px 18px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      + Добавить шаг вручную
+                    </button>
+                  </div>
                 </div>
               ) : (
                 replicas.map((replica, index) => {
@@ -2636,9 +2071,7 @@ export default function Scenarios() {
                 })
               )}
             </>
-          )}
-        </>
-      ) : (
+          ) : (
             <div style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px dashed var(--border-color)',
@@ -2877,107 +2310,6 @@ export default function Scenarios() {
       </div>
 
       {/* Add Custom Template Modal */}
-      {showAddTemplateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '16px',
-            padding: '24px',
-            width: '100%',
-            maxWidth: '520px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>
-                Добавить свой готовый шаблон
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddTemplateModal(false)}
-                style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '18px', fontWeight: 800 }}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Название шаблона (для кнопки)</label>
-              <input
-                type="text"
-                placeholder="Например: 💎 Обсуждение новой реферальной программы"
-                value={newTemplateTitle}
-                onChange={e => setNewTemplateTitle(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Подробная инструкция промпта для ИИ</label>
-              <textarea
-                rows={5}
-                placeholder="Опишите детальнее: ролевую модель участников, их аргументы, эмоции, темы вопросов и финал общения..."
-                value={newTemplatePrompt}
-                onChange={e => setNewTemplatePrompt(e.target.value)}
-                style={{ ...inputStyle, resize: 'vertical' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setShowAddTemplateModal(false)}
-                style={{
-                  backgroundColor: 'var(--bg-main)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-muted)',
-                  borderRadius: '10px',
-                  padding: '10px 18px',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: 'pointer'
-                }}
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={handleAddCustomTemplate}
-                disabled={!newTemplateTitle.trim() || !newTemplatePrompt.trim()}
-                style={{
-                  backgroundColor: 'var(--accent)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '10px 20px',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  opacity: (!newTemplateTitle.trim() || !newTemplatePrompt.trim()) ? 0.5 : 1
-                }}
-              >
-                Сохранить шаблон
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -673,6 +673,7 @@ async def generate_studio_prompt(
     drama_type: str = "skepticism_proof",
     tone: str = "telegram_slang",
     roles_count: int = 3,
+    steps_count: Optional[int] = None,
     override_provider: Optional[str] = None,
     override_model: Optional[str] = None,
     override_system_prompt: Optional[str] = None
@@ -685,6 +686,8 @@ async def generate_studio_prompt(
 
     if not api_key:
         raise ValueError("Не настроен API Key ИИ. Пожалуйста, откройте 'ИИ НАСТРОЙКИ' и введите ваш ключ.")
+
+    actual_steps_count = steps_count if (steps_count and steps_count >= 2) else max(roles_count, 3)
 
     drama_descriptions = {
         "skepticism_proof": "Скепсис -> Пруф -> Рекомендация (первый участник сомневается или озвучивает проблему/боль, второй советует проверенное решение, третий подтверждает личным положительным опытом).",
@@ -728,8 +731,11 @@ async def generate_studio_prompt(
 ПАРАМЕТРЫ СЦЕНЫ:
 - Драматургия: {drama_desc}
 - Тональность: {tone_desc}
-- Количество участников: {roles_count}
+- Количество ботов (участников): {roles_count}
+- Количество сообщений (шагов диалога): {actual_steps_count}
 - Режим: {'Динамический (is_ai_dynamic=true)' if mode == 'dynamic' else 'Статический (is_ai_dynamic=false)'}
+
+ВАЖНО: В массиве roles сгенерируй ровно {roles_count} ролей. В массиве steps_payload сгенерируй ровно {actual_steps_count} шагов сообщений, распределяя role_id от 1 до {roles_count} между участниками.
 
 Сгенерируй JSON следующей структуры:
 {{
