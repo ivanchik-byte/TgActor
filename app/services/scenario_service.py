@@ -68,6 +68,7 @@ async def execute_scenario(
 
     target_chat_id = chat_id
     default_reply_to = discussion_message_id
+    post_context_text = ""
     probe_success = False
     last_diag = None
     last_ex = None
@@ -110,7 +111,8 @@ async def execute_scenario(
                         if disc_msg and getattr(disc_msg, 'chat', None):
                             target_chat_id = disc_msg.chat.id
                             default_reply_to = disc_msg.id
-                            logger.info(f"Resolved discussion for channel {chat_id} post {post_id}: group={target_chat_id}, header_id={default_reply_to}")
+                            post_context_text = getattr(disc_msg, 'text', None) or getattr(disc_msg, 'caption', None) or ""
+                            logger.info(f"Resolved discussion for channel {chat_id} post {post_id}: group={target_chat_id}, header_id={default_reply_to}, post_len={len(post_context_text)}")
                         else:
                             raise ValueError("Discussion message has no valid chat")
                     except Exception as ex:
@@ -356,7 +358,7 @@ async def execute_scenario(
                                 sender_label = p_acc.first_name or p_acc.username or sender_label
                             thread_history.append({"sender": sender_label, "text": getattr(p_step, '_gen_text', p_step.text or '')})
 
-                    post_ctx = getattr(scenario, 'title', None) or str(target_chat_id)
+                    post_ctx = post_context_text.strip() if post_context_text else (getattr(scenario, 'title', None) or str(target_chat_id))
                     gen_text = await generate_dynamic_step_text(
                         session=session,
                         post_text=post_ctx,
