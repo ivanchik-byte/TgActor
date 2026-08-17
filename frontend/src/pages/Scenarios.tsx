@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, CheckCircle2, X } from 'lucide-react';
+import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, CheckCircle2, X, BookOpen, ChevronDown } from 'lucide-react';
 import { useToast } from '../components/ToastContext';
 
 interface Replica {
@@ -360,6 +360,7 @@ export default function Scenarios() {
 
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
 
   const handleExportJSON = async (scenarioId: number) => {
     try {
@@ -1572,32 +1573,89 @@ export default function Scenarios() {
                   </button>
 
                   {libraryTemplates.length > 0 && (
-                    <select
-                      onChange={(e) => {
-                        const t = libraryTemplates.find((x: any) => String(x.id) === e.target.value);
-                        if (t) handleApplyLibraryTemplate(t);
-                        e.target.value = '';
-                      }}
-                      defaultValue=""
-                      style={{
-                        backgroundColor: 'var(--bg-main)',
-                        color: 'var(--text-main)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        outline: 'none'
-                      }}
-                    >
-                      <option value="" disabled>Применить шаблон из Библиотеки...</option>
-                      {libraryTemplates.map((t: any) => (
-                        <option key={t.id} value={t.id}>
-                          {t.title} [{t.mode === 'dynamic' ? 'ИИ' : 'Текст'}]
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsTemplateDropdownOpen(!isTemplateDropdownOpen)}
+                        style={{
+                          backgroundColor: 'var(--bg-main)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          padding: '6px 11px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        className="hover:border-[var(--accent)] transition-all active:scale-[0.98]"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-accent" />
+                        <span>Шаблоны из Библиотеки</span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-[var(--text-muted)] transition-transform duration-200 ${isTemplateDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {isTemplateDropdownOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setIsTemplateDropdownOpen(false)} />
+                          <div
+                            className="absolute left-0 mt-2 w-80 max-h-80 overflow-y-auto rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1"
+                            style={{ backdropFilter: 'blur(16px)' }}
+                          >
+                            <div className="px-2.5 py-1 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center justify-between border-b border-[var(--border-color)] pb-1.5 mb-1">
+                              <span>Библиотека шаблонов</span>
+                              <span className="text-[var(--accent-text)] font-mono">{libraryTemplates.length}</span>
+                            </div>
+                            {libraryTemplates.map((t: any) => {
+                              let stepCount = 0;
+                              try {
+                                if (t.steps_payload) {
+                                  const p = JSON.parse(t.steps_payload);
+                                  if (Array.isArray(p)) stepCount = p.length;
+                                } else if (t.roles_breakdown) {
+                                  const p = JSON.parse(t.roles_breakdown);
+                                  if (Array.isArray(p)) stepCount = p.length;
+                                }
+                              } catch {}
+                              return (
+                                <button
+                                  key={t.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleApplyLibraryTemplate(t);
+                                    setIsTemplateDropdownOpen(false);
+                                  }}
+                                  className="w-full p-2 rounded-lg text-left hover:bg-[var(--bg-card-hover)] transition-all flex flex-col gap-1 cursor-pointer border border-transparent hover:border-[var(--border-color)] group"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-bold text-[var(--text-main)] group-hover:text-[var(--accent-text)] transition-colors truncate">
+                                      {t.title}
+                                    </span>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${t.mode === 'dynamic' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-sky-500/15 text-sky-400'}`}>
+                                        {t.mode === 'dynamic' ? 'ИИ' : 'Текст'}
+                                      </span>
+                                      {stepCount > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[var(--bg-main)] text-[var(--text-muted)] border border-[var(--border-color)]">
+                                          {stepCount} смс
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {t.description && (
+                                    <p className="text-[11px] text-[var(--text-muted)] line-clamp-1 leading-snug">
+                                      {t.description}
+                                    </p>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
 
                   {/* Quick Step Count Selector (КОЛ смс) */}
