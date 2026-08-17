@@ -1,4 +1,4 @@
-# TgActor (TgCast) — Программа для управления Telegram-аккаунтами и создания живых диалогов
+# TgActor — Программа для управления Telegram-аккаунтами и создания живых диалогов
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white" alt="Python" />
@@ -27,8 +27,10 @@ TgActor — это программа с веб-интерфейсом для у
 1. [Что умеет программа](#что-умеет-программа)
 2. [Скриншоты интерфейса](#скриншоты-интерфейса)
 3. [Как это работает](#как-это-работает)
-4. [Установка и запуск на Linux / VPS](#установка-и-запуск-на-linux--vps)
-5. [Установка и запуск на Windows](#установка-и-запуск-на-windows)
+4. [Установка через Docker (Рекомендуемый способ)](#установка-через-docker-рекомендуемый-способ)
+   - [Установка на Linux / VPS](#1-установка-на-linux--vps)
+   - [Установка на Windows](#2-установка-на-windows)
+5. [Установка без Docker (Локально)](#установка-без-docker-локально)
 6. [Генерация секретного ключа (SECRET_KEY)](#генерация-секретного-ключа-secret_key)
 7. [Настройка файла .env](#настройка-файла-env)
 8. [Устранение частых ошибок](#устранение-частых-ошибок)
@@ -92,55 +94,116 @@ TgActor — это программа с веб-интерфейсом для у
 
 ---
 
-## Установка и запуск на Linux / VPS
+## Установка через Docker (Рекомендуемый способ)
 
-Самый простой способ запуска — через Docker.
+Установка через Docker является самой быстрой и надежной, так как автоматически настраивает базу данных PostgreSQL, брокер Redis, бэкенд и собранный веб-интерфейс.
 
-1. Склонируйте репозиторий:
+### 1. Установка на Linux / VPS
+
+1. Убедитесь, что на сервере установлены Git и Docker:
    ```bash
-   git clone https://github.com/ivanchik-byte/TgCast.git
-   cd TgCast
+   sudo apt update && sudo apt install -y git docker.io docker-compose-v2
    ```
 
-2. Скопируйте файл настроек:
+2. Склонируйте репозиторий:
+   ```bash
+   git clone https://github.com/ivanchik-byte/TgActor.git
+   cd TgActor
+   ```
+
+3. Создайте файл конфигурации `.env`:
    ```bash
    cp .env.example .env
    ```
 
-3. Сгенерируйте секретный ключ:
+4. Сгенерируйте секретный ключ для шифрования данных:
    ```bash
    python3 -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
-   Вставьте полученный ключ в строку `SECRET_KEY=` внутри файла `.env`, а также укажите свой пароль в `ADMIN_PASSWORD=`.
+   Откройте файл `.env` (`nano .env`) и вставьте сгенерированный ключ в строки:
+   ```env
+   SECRET_KEY=вставьте_сгенерированный_ключ
+   ENCRYPTION_KEY=вставьте_сгенерированный_ключ
+   ADMIN_PASSWORD=ваш_пароль_для_входа
+   ```
 
-4. Запустите программу:
+5. Запустите проект:
    ```bash
    docker compose up -d --build
    ```
 
-5. Откройте панель в браузере: `http://IP_ВАШЕГО_СЕРВЕРА:8000`.
+6. Откройте панель в браузере: `http://IP_ВАШЕГО_СЕРВЕРА:8000`.
 
 ---
 
-## Установка и запуск на Windows
+### 2. Установка на Windows
 
-1. Установите программу [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-2. Откройте PowerShell или командную строку:
+1. Установите [Docker Desktop для Windows](https://www.docker.com/products/docker-desktop/) (при установке оставьте галочку WSL 2).
+2. Запустите PowerShell или командную строку (CMD) и выполните:
    ```powershell
-   git clone https://github.com/ivanchik-byte/TgCast.git
-   cd TgCast
+   git clone https://github.com/ivanchik-byte/TgActor.git
+   cd TgActor
    Copy-Item .env.example .env
    ```
-3. Сгенерируйте секретный ключ:
+3. Сгенерируйте ключ шифрования:
    ```powershell
    python -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
-   Откройте файл `.env` в Блокноте, вставьте сгенерированный ключ в `SECRET_KEY` и задайте пароль в `ADMIN_PASSWORD`.
-4. Запустите контейнеры:
+4. Откройте файл `.env` в Блокноте и заполните:
+   - `SECRET_KEY` и `ENCRYPTION_KEY` — сгенерированным ключом.
+   - `ADMIN_PASSWORD` — вашим паролем для входа.
+5. Запустите программу:
    ```powershell
    docker compose up -d --build
    ```
-5. Откройте в браузере: `http://localhost:8000`.
+6. Откройте в браузере: `http://localhost:8000`.
+
+---
+
+## Установка без Docker (Локально)
+
+Если вы не хотите использовать Docker, вы можете запустить проект напрямую через Python и Node.js.
+
+### Требования:
+- Python 3.11 или выше
+- Node.js 18+ и npm
+- Запущенный Redis сервер (или локальный Redis)
+
+### Шаги запуска:
+
+1. Клонирование и настройка виртуального окружения:
+   ```bash
+   git clone https://github.com/ivanchik-byte/TgActor.git
+   cd TgActor
+   python3 -m venv venv
+   source venv/bin/activate  # На Windows: .\venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+2. Сборка интерфейса:
+   ```bash
+   cd frontend
+   npm install
+   npm run build
+   cd ..
+   ```
+
+3. Настройка файла `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+   Укажите ваш `SECRET_KEY`, `ADMIN_PASSWORD` и параметры подключения к БД (по умолчанию для локального запуска без Docker можно использовать SQLite: `DATABASE_URL=sqlite+aiosqlite:///./data/tgactor.db`).
+
+4. Применение миграций базы данных:
+   ```bash
+   alembic upgrade head
+   ```
+
+5. Запуск сервера:
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+   Панель будет доступна по адресу: `http://localhost:8000`.
 
 ---
 
@@ -152,7 +215,7 @@ TgActor — это программа с веб-интерфейсом для у
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Скопируйте полученную строку и вставьте в `.env` в поле `SECRET_KEY=`.
+Скопируйте полученную строку и вставьте в `.env` в поля `SECRET_KEY=` и `ENCRYPTION_KEY=`.
 
 ---
 
@@ -160,39 +223,45 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 | Параметр | Описание | Значение по умолчанию |
 | :--- | :--- | :--- |
-| `ADMIN_PASSWORD` | Пароль для входа в веб-панель | `admin` |
-| `SECRET_KEY` | Секретный ключ шифрования сессий | Сгенерированный ключ |
-| `DATABASE_URL` | Подключение к базе данных PostgreSQL | `postgresql+asyncpg://tgactor:tgactor_password@db:5432/tgactor_db` |
-| `REDIS_URL` | Подключение к брокеру Redis | `redis://redis:6379/0` |
-| `ENABLE_CHANNEL_MONITOR` | Включить фоновый мониторинг каналов | `True` |
-| `ENABLE_INBOX_LISTENER` | Включить прием личных сообщений | `True` |
+| `ADMIN_PASSWORD` | Пароль для входа в веб-панель управления | `admin` |
+| `SECRET_KEY` | Секретный ключ шифрования сессий и токенов | Сгенерированный ключ |
+| `ENCRYPTION_KEY` | Ключ шифрования TData и сессий | Сгенерированный ключ |
+| `DATABASE_URL` | Строка подключения к PostgreSQL или SQLite | `postgresql+asyncpg://tgactor:tgactor_password@db:5432/tgactor_db` |
+| `REDIS_URL` | Строка подключения к брокеру Redis | `redis://redis:6379/0` |
+| `PORT` | Порт для веб-интерфейса (если 8000 занят) | `8000` |
+| `ENABLE_CHANNEL_MONITOR` | Фоновый опрос каналов и авто-запуск сценариев | `True` |
+| `ENABLE_INBOX_LISTENER` | Фоновое слушание и стриминг входящих ЛС | `True` |
 
 ---
 
 ## Устранение частых ошибок
 
-- Не заходит в панель (Unauthorized): проверьте пароль в файле `.env` и очистите куки сайта в браузере.
-- Боты не комментируют: проверьте, что в конструкторе сценариев есть хотя бы один активный сценарий с заполненными шагами, и что у канала открыты комментарии.
-- ИИ долго думает: в окне «Настройки ИИ» переключите модель на быструю (например, `meta/llama-3.3-70b-instruct` или `deepseek-chat`).
+- Не заходит в панель (Unauthorized): проверьте правильность `ADMIN_PASSWORD` в файле `.env` и очистите куки сайта в браузере.
+- Порт 8000 уже занят: укажите другой порт в файле `.env` (например, `PORT=8080`) и перезапустите через `docker compose up -d`.
+- Боты не комментируют: проверьте, что в конструкторе сценариев есть хотя бы один активный сценарий с заполненными шагами, и что у целевого канала открыты комментарии.
+- ИИ долго генерирует ответ: в окне «Настройки ИИ» выберите более легкую и быструю модель (например, `meta/llama-3.3-70b-instruct` или `deepseek-chat`).
 
-Полезные команды для управления:
+Полезные команды для обслуживания:
 ```bash
-# Посмотреть логи бэкенда
+# Просмотр логов бэкенда в реальном времени
 docker compose logs -f backend
 
-# Перезапустить бэкенд
+# Перезапуск бэкенда
 docker compose restart backend
 
-# Остановить программу
+# Остановка всех контейнеров
 docker compose down
+
+# Обновление и пересборка контейнеров
+docker compose up -d --build
 ```
 
 ---
 
 ## Контакты и лицензия
 
-- Telegram-канал разработчика: [https://t.me/ivanchik_byte](https://t.me/ivanchik_byte)
-- Личные сообщения: [https://t.me/ivanchikbyte](https://t.me/ivanchikbyte)
+- Telegram-канал разработчика: [https://t.me/ivanchik_byte](https://t.me/ivanchik_byte) — обновления, готовые сценарии, скрипты и кейсы.
+- Личные сообщения: [https://t.me/ivanchikbyte](https://t.me/ivanchikbyte) — вопросы по проекту, баг-репорты и предложения.
 - Лицензия: [MIT License](LICENSE)
 
 Отказ от ответственности: программа разработана для тестирования, исследований и демонстрационных целей. Используйте софт с соблюдением правил платформы Telegram.
