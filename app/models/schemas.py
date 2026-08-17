@@ -186,6 +186,7 @@ class PromptTemplateBase(BaseModel):
     prompt_text: str
     system_instruction: Optional[str] = None
     roles_breakdown: Optional[str] = None
+    steps_payload: Optional[str] = None
     tags: Optional[str] = None
     is_builtin: Optional[bool] = False
 
@@ -201,6 +202,7 @@ class PromptTemplateUpdate(BaseModel):
     prompt_text: Optional[str] = None
     system_instruction: Optional[str] = None
     roles_breakdown: Optional[str] = None
+    steps_payload: Optional[str] = None
     tags: Optional[str] = None
     is_builtin: Optional[bool] = None
 

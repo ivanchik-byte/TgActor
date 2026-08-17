@@ -712,82 +712,70 @@ async def generate_studio_prompt(
     }
     tone_desc = tone_descriptions.get(tone, tone_descriptions["telegram_slang"])
 
-    system_prompt = f"""Ты — главный архитектор промптов и сценариев для комментирования в Telegram (Prompt Studio Engine v3.3).
-Твоя задача — превратить краткую задумку пользователя в идеальный, точечно проработанный сценарий диалога.
+    system_prompt = f"""Ты — элитный сценарист и архитектор промптов для комментирования в Telegram (Prompt Studio Engine v4.0).
+Твоя цель — создавать ультра-реалистичные, живые диалоги между реальными пользователями интернета, которые невозможно отличить от настоящих людей.
 
-ПРАВИЛА И СТИЛЬ:
-1. КАТЕГОРИЧЕСКИ БЕЗ ЭМОДЗИ И СМАЙЛИКОВ в текстах сообщений и примерах.
+ГЛАВНЫЕ ПРАВИЛА И СТИЛЬ:
+1. КАТЕГОРИЧЕСКИ БЕЗ ЭМОДЗИ И СМАЙЛИКОВ в текстах реплик и примерах.
 2. НИКАКИХ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ.
 3. НИКАКИХ ДЛИННЫХ ТИРЕ (—).
-4. Участники — незнакомые люди в интернете, общаются на «ты», без рекламной лести.
+4. Общение на «ты», как на живом форуме или в комментариях Telegram. Никакой канцелярщины, рекламы в лоб и роботоподобных фраз!
 5. Режим: {'ДИНАМИЧЕСКИЙ (боты генерируют фразы на лету по точечным промптам)' if mode == 'dynamic' else 'СТАТИЧЕСКИЙ (готовые фиксированные реплики)'}.
 
-ВАЖНЕЙШЕЕ ТРЕБОВАНИЕ ДЛЯ ДИНАМИЧЕСКОГО РЕЖИМА:
-В поле "ai_prompt" для каждого шага НЕЛЬЗЯ писать просто готовую фразу!
-В поле "ai_prompt" ты ОБЯЗАН написать ПОДРОБНУЮ ИНСТРУКЦИЮ ДЛЯ НЕЙРОСЕТИ:
-- Какую роль исполняет бот (Роль 1, Роль 2 и т.д.);
-- На какое предыдущее сообщение он отвечает и какую мысль развивает;
-- Что конкретно он должен спросить, аргументировать или посоветовать;
-- Какой интонации придерживаться (бытовой скепсис, уверенный совет, уточнение, благодарность).
-А в поле "text" (или "sample_text") напиши один реалистичный пример такой реплики для превью.
+КРИТИЧЕСКИ ВАЖНЫЕ ТРЕБОВАНИЯ К ПОЛЮ "ai_prompt":
+1. ЗАПРЕЩЕНО писать сухие инфинитивы типа "Начать разговор...", "Ответить скептически...", "Слушать обе стороны...". Это мусор, а не промпты!
+2. КАЖДЫЙ "ai_prompt" должен быть ПОЛНОЦЕННОЙ ДИРЕКТИВНОЙ РОЛЕВОЙ ИНСТРУКЦИЕЙ ДЛЯ НЕЙРОСЕТИ.
+Пример идеального ai_prompt для шага 1:
+"Ты — Новичок (Роль 1). Начни тред в комментариях под постом от первого лица: поделись реальной болью, что старые методы не дают результата, и спроси у участников, как они сейчас решают эту задачу. Пиши живо, на 'ты', 1-2 предложения, без эмодзи и без точки в конце."
+Пример идеального ai_prompt для шага 2:
+"Ты — Опытный практик (Роль 2). Ответь на сообщение Новичка (Шаг 1). Объясни на пальцах, почему старый подход не работает, и порекомендуй проверенный нативный инструмент/метод. Пиши уверенно и просто, без рекламы, без эмодзи и без точки в конце."
+Пример идеального ai_prompt для шага 3:
+"Ты — Скептик (Роль 3). Вклинись в разговор между Новичком и Практиком (Шаг 2). Вырази легкое сомнение в стоимости или сложности предложенного метода, задай неудобный вопрос. Пиши лаконично с легким сарказмом, без эмодзи и без точки в конце."
+
+ТРЕБОВАНИЕ К КОЛИЧЕСТВУ СООБЩЕНИЙ:
+Массив "steps_payload" ОБЯЗАН содержать РОВНО {actual_steps_count} элементов (шагов)!
+Если запрошено {actual_steps_count} сообщений, сгенерируй ровно {actual_steps_count} шагов (от step_order 1 до step_order {actual_steps_count}), распределяя роли {roles_count} ботов по цепочке.
 
 Формат ответа: СТРОГО валидный JSON-объект."""
 
     user_instructions = f"""
-Задание пользователя:
+Тема и задумка пользователя:
 "{topic}"
 
 ПАРАМЕТРЫ СЦЕНЫ:
 - Драматургия: {drama_desc}
 - Тональность: {tone_desc}
-- Количество ботов (участников): {roles_count}
-- Количество сообщений (шагов диалога): {actual_steps_count}
+- Количество ботов (ролей): {roles_count}
+- Количество сообщений (шагов диалога): {actual_steps_count} (ОБЯЗАТЕЛЬНО СГЕНЕРИРУЙ РОВНО {actual_steps_count} ШАГОВ В steps_payload!)
 - Режим: {'Динамический (is_ai_dynamic=true)' if mode == 'dynamic' else 'Статический (is_ai_dynamic=false)'}
 
-ВАЖНО:
-1. В массиве "roles" сгенерируй ровно {roles_count} ролей с ролями от 1 до {roles_count}.
-2. В массиве "steps_payload" сгенерируй ровно {actual_steps_count} шагов диалога, распределяя role_id между участниками.
-3. Шаги с 2 по {actual_steps_count} должны логично ссылаться на предыдущие реплики через reply_to_step (например, шаг 2 отвечает на шаг 1 через reply_to_step: 1).
-
-Сгенерируй JSON следующей структуры:
+СТРУКТУРА JSON:
 {{
-  "title": "Ёмкое название сценария",
+  "title": "Ёмкое и понятное название диалога",
   "category": "software",
   "mode": "{mode}",
-  "prompt_text": "Развернутый, структурированный промпт сценария для ИИ, описывающий общую канву, распределение ролей и суть обсуждения без дословных кавычек",
+  "prompt_text": "Развернутый общий промпт сценария для ИИ, описывающий контекст поста, драматургию обсуждения и ключевой посыл",
   "roles": [
     {{
       "role_order": 1,
       "role_name": "Новичок / Зачинщик",
       "goal": "Задать боль или вопрос в комментариях",
-      "instruction": "Подробная ролевая инструкция для бота 1...",
-      "sample_text": "Пример реалистичной фразы без точки на конце и без эмодзи"
+      "instruction": "Ты — Новичок. Начинаешь тред под постом, задаешь вопрос по теме...",
+      "sample_text": "Пример фразы без точки на конце и без эмодзи"
     }}
   ],
   "steps_payload": [
+    // ВНИМАНИЕ: Сгенерируй здесь РОВНО {actual_steps_count} элементов с step_order от 1 до {actual_steps_count}!
     {{
       "step_order": 1,
       "role_id": 1,
       "role_name": "Новичок / Зачинщик",
       "text": "Пример реалистичной живой реплики без точки на конце",
-      "ai_prompt": "Ты — Новичок (Роль 1). Начни тред в комментариях под постом. Задай естественный вопрос с легким любопытством по теме... Общайся на 'ты', кратко, без эмодзи и без точки в конце.",
+      "ai_prompt": "Ты — Новичок (Роль 1). Начни тред в комментариях под постом от первого лица... Пиши на 'ты', без эмодзи и без точки в конце",
       "is_ai_dynamic": {str(mode == 'dynamic').lower()},
       "reply_to_step": null,
       "delay_before_min": 4.0,
       "delay_before_max": 8.0,
-      "reactions": null,
-      "reaction_count": 0
-    }},
-    {{
-      "step_order": 2,
-      "role_id": 2,
-      "role_name": "Эксперт / Советчик",
-      "text": "Пример ответа второго бота без точки на конце",
-      "ai_prompt": "Ты — Эксперт (Роль 2). Ответь на вопрос Новичка (Шаг 1). Посоветуй проверенное решение... Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце.",
-      "is_ai_dynamic": {str(mode == 'dynamic').lower()},
-      "reply_to_step": 1,
-      "delay_before_min": 5.0,
-      "delay_before_max": 10.0,
       "reactions": null,
       "reaction_count": 0
     }}
@@ -808,14 +796,97 @@ async def generate_studio_prompt(
     if not isinstance(data, dict):
         raise ValueError("Invalid structure received from AI Prompt Studio")
 
-    # Sanitize strings
-    for role in data.get("roles", []):
+    # Ensure roles list is valid
+    roles = data.get("roles")
+    if not isinstance(roles, list) or len(roles) == 0:
+        roles = [
+            {
+                "role_order": i + 1,
+                "role_name": f"Участник #{i + 1}",
+                "goal": "Поддержать живой диалог",
+                "instruction": f"Ты — Участник #{i + 1}. Веди естественную беседу на 'ты' без эмодзи.",
+                "sample_text": f"Интересно, как сейчас это устроено"
+            }
+            for i in range(roles_count)
+        ]
+        data["roles"] = roles
+
+    # Sanitize roles
+    for role in roles:
         if isinstance(role, dict) and "sample_text" in role:
             role["sample_text"] = sanitize_telegram_comment(role["sample_text"])
 
-    for step in data.get("steps_payload", []):
-        if isinstance(step, dict) and "text" in step:
-            step["text"] = sanitize_telegram_comment(step["text"])
+    # Ensure steps_payload has EXACTLY actual_steps_count steps
+    raw_steps = data.get("steps_payload")
+    if not isinstance(raw_steps, list):
+        raw_steps = []
 
+    steps_payload: List[Dict[str, Any]] = []
+    num_roles = max(len(roles), 1)
+
+    for idx in range(actual_steps_count):
+        role_order = (idx % num_roles) + 1
+        role_obj = next((r for r in roles if r.get("role_order") == role_order), roles[role_order - 1 if role_order - 1 < len(roles) else 0])
+        role_name = role_obj.get("role_name") or f"Бот #{role_order}"
+
+        if idx < len(raw_steps) and isinstance(raw_steps[idx], dict):
+            step = raw_steps[idx]
+            step["step_order"] = idx + 1
+            step["role_id"] = step.get("role_id") or role_order
+            step["role_name"] = role_name
+            if mode == "dynamic":
+                step["is_ai_dynamic"] = True
+                if not step.get("ai_prompt") or len(str(step.get("ai_prompt")).strip()) < 10:
+                    step["ai_prompt"] = f"Ты — {role_name} (Роль {role_order}). Ответь на предыдущую реплику (Шаг #{idx}). Развей мысль по теме, пиши на 'ты' живо, без эмодзи и без точки в конце."
+            else:
+                step["is_ai_dynamic"] = False
+                step["ai_prompt"] = None
+            if idx > 0 and step.get("reply_to_step") is None:
+                step["reply_to_step"] = idx
+            if "text" in step:
+                step["text"] = sanitize_telegram_comment(str(step["text"]))
+            if "sample_text" in step:
+                step["sample_text"] = sanitize_telegram_comment(str(step["sample_text"]))
+            steps_payload.append(step)
+        else:
+            # Generate missing step algorithmically
+            prev_step_num = idx
+            if idx == 0:
+                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Начни живое обсуждение под постом от первого лица: задай открытый вопрос по теме. Пиши просто на 'ты', 1-2 предложения, без эмодзи и без точки в конце."
+                sample = role_obj.get("sample_text") or "Кто в курсе, как сейчас лучше это делать"
+                reply_target = None
+            elif idx == 1:
+                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Ответь на сообщение из Шага #1. Посоветуй проверенное решение или поделись опытом. Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце."
+                sample = role_obj.get("sample_text") or "Тут главное не спешить и делать всё по шагам"
+                reply_target = 1
+            elif idx == 2:
+                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Вклинись в тред (Шаг #2). Вырази легкое сомнение или задай уточняющий вопрос по рискам и затратам. Пиши лаконично на 'ты', без эмодзи и без точки в конце."
+                sample = "А по затратам как выходит, окупается вообще"
+                reply_target = 2
+            elif idx == actual_steps_count - 1:
+                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Подведи позитивный итог дискуссии (Шаг #{prev_step_num}), поблагодари за совет. Пиши лаконично, без эмодзи и без точки в конце."
+                sample = "Понял, спасибо за наводку, попробую на днях"
+                reply_target = prev_step_num
+            else:
+                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Ответь на реплику из Шага #{prev_step_num}. Добавь важный нюанс или аргумент из практики. Пиши живо на 'ты', без эмодзи и без точки в конце."
+                sample = "Да, там еще важно учитывать текущие комиссии"
+                reply_target = prev_step_num
+
+            steps_payload.append({
+                "step_order": idx + 1,
+                "role_id": role_order,
+                "role_name": role_name,
+                "text": sanitize_telegram_comment(sample),
+                "sample_text": sanitize_telegram_comment(sample),
+                "ai_prompt": ai_prompt_text if mode == "dynamic" else None,
+                "is_ai_dynamic": mode == "dynamic",
+                "reply_to_step": reply_target,
+                "delay_before_min": 4.0,
+                "delay_before_max": 9.0,
+                "reactions": "👍" if idx == actual_steps_count - 1 else None,
+                "reaction_count": 1 if idx == actual_steps_count - 1 else 0
+            })
+
+    data["steps_payload"] = steps_payload
     return data
 
