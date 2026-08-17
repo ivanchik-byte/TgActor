@@ -29,7 +29,8 @@ import {
   Swords,
   Rocket,
   Wrench,
-  Users
+  Users,
+  SlidersHorizontal
 } from 'lucide-react';
 import { useToast } from '../components/ToastContext';
 
@@ -87,7 +88,7 @@ const DRAMA_PRESETS = [
   {
     id: 'skepticism_proof',
     title: 'Скепсис → Пруф → Рекомендация',
-    desc: 'Сомнения в надежности/банах → совет решения → подтверждение личным опытом',
+    desc: 'Озвучивание проблемы или сомнений → совет проверенного решения → подтверждение личным опытом',
     icon: Shield,
     color: '#a78bfa',
     badge: 'Воронка доверия'
@@ -95,7 +96,7 @@ const DRAMA_PRESETS = [
   {
     id: 'warmup_interest',
     title: 'Прогрев интереса & Кейс',
-    desc: 'Интригующий вопрос о механике → объяснение фишек и пользы → вопрос по настройке',
+    desc: 'Интригующий вопрос о механике → обсуждение результатов и деталей → уточняющий вопрос',
     icon: TrendingUp,
     color: '#4ade80',
     badge: 'Прогрев'
@@ -103,7 +104,7 @@ const DRAMA_PRESETS = [
   {
     id: 'expert_qa',
     title: 'Вопрос эксперту (Q&A)',
-    desc: 'Сложный практический вопрос → экспертный ответ по существу → подтверждение',
+    desc: 'Сложный практический вопрос по теме → экспертный емкий совет → подтверждение пользы',
     icon: HelpCircle,
     color: '#38bdf8',
     badge: 'Экспертиза'
@@ -111,15 +112,15 @@ const DRAMA_PRESETS = [
   {
     id: 'friendly_dispute',
     title: 'Живой спор мнений',
-    desc: 'Две стороны приводят свои доводы без негатива → третий подводит баланс',
+    desc: 'Две стороны аргументированно отстаивают разные подходы без негатива → третий подводит баланс',
     icon: Swords,
     color: '#f87171',
     badge: 'Вовлечение'
   },
   {
     id: 'native_mention',
-    title: 'Кейс комбайна @ivanchik_byte',
-    desc: 'Обсуждение автоматизации комментирования → рекомендация проверенного софта',
+    title: 'Нативная рекомендация',
+    desc: 'Естественное обсуждение задачи и сухое, искреннее упоминание нужного инструмента или услуги',
     icon: Rocket,
     color: '#ec4899',
     badge: 'Интеграция'
@@ -127,18 +128,26 @@ const DRAMA_PRESETS = [
   {
     id: 'problem_solving',
     title: 'Разбор проблемы / Фикс',
-    desc: 'Жалоба на ошибку/прокси → технический разбор ошибки → пошаговое решение',
+    desc: 'Жалоба на трудность/ошибку → разбор причины → проверенный пошаговый совет',
     icon: Wrench,
     color: '#fbbf24',
     badge: 'Техподдержка'
   },
   {
     id: 'crypto_insight',
-    title: 'Крипто-инсайд & Трейдинг',
-    desc: 'Быстрый обмен мнениями по TON/USDT, комиссиям и переводам без рекламы',
+    title: 'Обсуждение рынка / Трейдинг',
+    desc: 'Быстрый обмен мнениями по тарифам, комиссиям, переводам и инструментам',
     icon: Coins,
     color: '#2dd4bf',
-    badge: 'Крипта'
+    badge: 'Инсайды'
+  },
+  {
+    id: 'none',
+    title: 'Без шаблона (Свой сценарий)',
+    desc: '«Отключить навязанный шаблон. Впишите сами детальные инструкции в поле выше — ИИ составит диалог строго по вашему описанию»',
+    icon: SlidersHorizontal,
+    color: '#94a3b8',
+    badge: 'Свой формат'
   }
 ];
 
@@ -164,7 +173,7 @@ const TONE_PRESETS = [
   {
     id: 'crypto_trader',
     title: 'Крипта & Трейдинг',
-    sample: 'газ, сеть TON, комиссия, кошелек, холд, свап',
+    sample: 'газ, комиссии, кошельки, переводы, холд, свап',
     badge: 'Web3'
   },
   {
@@ -178,6 +187,12 @@ const TONE_PRESETS = [
     title: 'Дружелюбный советчик',
     sample: 'помощь новичку без лести и занудства',
     badge: 'Помощь'
+  },
+  {
+    id: 'neutral',
+    title: 'Универсальный нейтральный',
+    sample: 'простой живой язык, естественная речь без специфического сленга',
+    badge: 'Базовый'
   }
 ];
 
@@ -186,6 +201,14 @@ const ROLES_PRESETS = [
   { count: 3, label: '3 бота (Рекомендуется)', hint: 'Классический тред: Скептик + Советчик + Пруф' },
   { count: 4, label: '4 бота', hint: 'Активная ветка: Скептик + Эксперт + Сомневающийся + Пруф' },
   { count: 5, label: '5 ботов', hint: 'Массовое живое обсуждение темы' }
+];
+
+const SAMPLE_TOPICS = [
+  'Обсуждение нового сервиса или софта: первый сомневается в надежности, второй делится реальным опытом, третий задает вопрос по тарифам',
+  'Вопрос в комментариях про выбор надежного крипто-кошелька для USDT и TON с минимальными комиссиями',
+  'Кейс по привлечению клиентов и автоматизации: обсуждение результатов и практических фишек',
+  'Спор под постом про тренды рынка: один утверждает, что старые методы не работают, второй приводит контраргументы',
+  'Отзыв о качестве услуги/продукта: реальные впечатления, сравнение с аналогами и рекомендация'
 ];
 
 const COLOR_PALETTE = [
@@ -197,14 +220,6 @@ const COLOR_PALETTE = [
   '#ec4899', // Pink
   '#2dd4bf', // Teal
   '#94a3b8'  // Gray
-];
-
-const SAMPLE_TOPICS = [
-  'Обсуждаем софт от @ivanchik_byte для комментирования в Telegram, первый сомневается в спамблоке, второй советует комбайн, третий подтверждает опытом',
-  'Криптовалютные переводы в USDT и TON без комиссии через проверенные боты',
-  'Как автоматизировать перехват свежих постов через радар каналов и безопасно греть аудиторию',
-  'Спор про нейросети: палятся ли боты в комментариях и как хуманизировать промпты без эмодзи',
-  'Выбор приватных SOCKS5 прокси для Telegram-аккаунтов и защита от сброса сессий'
 ];
 
 export default function Prompts() {
@@ -233,8 +248,8 @@ export default function Prompts() {
   // Studio generator parameters
   const [studioTopic, setStudioTopic] = useState('');
   const [studioMode, setStudioMode] = useState<'dynamic' | 'static'>('dynamic');
-  const [studioDrama, setStudioDrama] = useState<'skepticism_proof' | 'warmup_interest' | 'expert_qa' | 'friendly_dispute'>('skepticism_proof');
-  const [studioTone, setStudioTone] = useState<'telegram_slang' | 'tech_slang' | 'concise_casual'>('telegram_slang');
+  const [studioDrama, setStudioDrama] = useState<string>('skepticism_proof');
+  const [studioTone, setStudioTone] = useState<string>('telegram_slang');
   const [studioRolesCount, setStudioRolesCount] = useState<number>(3);
   const [studioResult, setStudioResult] = useState<StudioGenerateData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -938,9 +953,15 @@ export default function Prompts() {
                   rows={3}
                   value={studioTopic}
                   onChange={(e) => setStudioTopic(e.target.value)}
-                  placeholder="Например: Обсуждаем софт от @ivanchik_byte для комментирования в Telegram, один жалуется на блокировки, второй рекомендует комбайн, третий подтверждает опытом..."
+                  placeholder="Опишите любую тему, нишу или сценарий (например: обсуждение новости, реальный отзыв о продукте/услуге, спор о трендах, вопрос к специалисту или свои точечные инструкции для ботов)..."
                   className="w-full p-3 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] text-xs text-[var(--text-main)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--accent)] transition-colors leading-relaxed"
                 />
+                {studioDrama === 'none' && (
+                  <p className="text-[11px] text-[var(--accent-text)] mt-1.5 flex items-center gap-1.5">
+                    <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Режим «Без шаблона» активен: опишите подробно в поле выше, какую мысль или роли должен сыграть каждый бот.</span>
+                  </p>
+                )}
               </div>
 
               {/* 1. Mode Selector Cards */}
