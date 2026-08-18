@@ -37,6 +37,7 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SECRET_KEY=${SECRET_KEY:-${ENCRYPTION_KEY}}
     depends_on:
       db:
         condition: service_healthy
