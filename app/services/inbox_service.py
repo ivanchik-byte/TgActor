@@ -1,7 +1,7 @@
 import os
 import tempfile
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from fastapi import UploadFile
 from sqlalchemy import select, delete
@@ -68,7 +68,7 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
                         continue
                     
                     is_incoming = not msg.outgoing
-                    raw_date = msg.date if msg.date else datetime.utcnow()
+                    raw_date = msg.date if msg.date else datetime.now(timezone.utc)
                     msg_date = raw_date.replace(tzinfo=None) if hasattr(raw_date, 'tzinfo') and raw_date.tzinfo else raw_date
 
                     # Check if message already exists
@@ -184,7 +184,7 @@ async def send_inbox_message(
 
         if file:
             os.makedirs("media/inbox", exist_ok=True)
-            safe_filename = f"out_{int(datetime.utcnow().timestamp())}_{file.filename}"
+            safe_filename = f"out_{int(datetime.now(timezone.utc).timestamp())}_{file.filename}"
             save_path = os.path.join("media", "inbox", safe_filename)
             contents = await file.read()
             with open(save_path, "wb") as f:
@@ -237,7 +237,7 @@ async def send_inbox_message(
                 incoming=False,
                 text=text or (sent_msg.caption if hasattr(sent_msg, 'caption') else ""),
                 media_path=sent_media_path,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             session.add(msg_obj)
             await session.commit()

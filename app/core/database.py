@@ -36,30 +36,41 @@ async def ensure_db_schema_sync():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             
-            # Auto-migrate missing columns for existing PostgreSQL/SQLite tables
-            migrations = [
-                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS mode VARCHAR DEFAULT 'manual'",
-                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_prompt VARCHAR",
-                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_provider VARCHAR",
-                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_model VARCHAR",
-                "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS system_instruction VARCHAR",
-                "ALTER TABLE scenario_steps ADD COLUMN IF NOT EXISTS is_ai_dynamic BOOLEAN DEFAULT FALSE",
-                "ALTER TABLE scenario_steps ADD COLUMN IF NOT EXISTS ai_prompt VARCHAR",
-                "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'active'",
-                "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS source_type VARCHAR DEFAULT 'tdata'",
-                "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "ALTER TABLE inbox_messages ALTER COLUMN peer_id TYPE BIGINT",
-                "ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS message_id BIGINT",
-                "ALTER TABLE inbox_messages ALTER COLUMN message_id DROP NOT NULL",
-                "ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS steps_payload TEXT",
+            is_postgres = engine.dialect.name == "postgresql"
+            
+            # Common migrations (ALTER TABLE ADD COLUMN, UPDATE)
+            common_migrations = [
+                "ALTER TABLE scenarios ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "ALTER TABLE scenarios ADD COLUMN mode VARCHAR DEFAULT 'manual'" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS mode VARCHAR DEFAULT 'manual'",
+                "ALTER TABLE scenarios ADD COLUMN ai_prompt VARCHAR" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_prompt VARCHAR",
+                "ALTER TABLE scenarios ADD COLUMN ai_provider VARCHAR" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_provider VARCHAR",
+                "ALTER TABLE scenarios ADD COLUMN ai_model VARCHAR" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS ai_model VARCHAR",
+                "ALTER TABLE scenarios ADD COLUMN system_instruction VARCHAR" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS system_instruction VARCHAR",
+                "ALTER TABLE scenario_steps ADD COLUMN is_ai_dynamic BOOLEAN DEFAULT FALSE" if not is_postgres else "ALTER TABLE scenario_steps ADD COLUMN IF NOT EXISTS is_ai_dynamic BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE scenario_steps ADD COLUMN ai_prompt VARCHAR" if not is_postgres else "ALTER TABLE scenario_steps ADD COLUMN IF NOT EXISTS ai_prompt VARCHAR",
+                "ALTER TABLE accounts ADD COLUMN status VARCHAR DEFAULT 'active'" if not is_postgres else "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS status VARCHAR DEFAULT 'active'",
+                "ALTER TABLE accounts ADD COLUMN source_type VARCHAR DEFAULT 'tdata'" if not is_postgres else "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS source_type VARCHAR DEFAULT 'tdata'",
+                "ALTER TABLE accounts ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" if not is_postgres else "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "ALTER TABLE inbox_messages ADD COLUMN message_id BIGINT" if not is_postgres else "ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS message_id BIGINT",
+                "ALTER TABLE prompt_templates ADD COLUMN steps_payload TEXT" if not is_postgres else "ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS steps_payload TEXT",
                 "UPDATE prompt_templates SET title = 'Скепсис и рекомендация проверенного решения', prompt_text = 'Диалог в ветке комментариев про выбор проверенного решения. Первый сомневается и жалуется на риски. Второй советует надежный вариант без лишней воды. Третий подтверждает личным положительным опытом.' WHERE title LIKE '%ivanchik%' OR prompt_text LIKE '%ivanchik%'",
-                "ALTER TABLE monitored_channels ALTER COLUMN no_repeat_scenarios TYPE BOOLEAN USING (CASE WHEN no_repeat_scenarios::text IN ('1', 'true', 't', 'TRUE') THEN TRUE ELSE FALSE END)",
             ]
-            for stmt in migrations:
+            for stmt in common_migrations:
                 try:
                     await conn.execute(text(stmt))
                 except Exception as m_ex:
                     logger.debug(f"Migration note for '{stmt}': {m_ex}")
+
+            if is_postgres:
+                pg_migrations = [
+                    "ALTER TABLE inbox_messages ALTER COLUMN peer_id TYPE BIGINT",
+                    "ALTER TABLE inbox_messages ALTER COLUMN message_id DROP NOT NULL",
+                    "ALTER TABLE monitored_channels ALTER COLUMN no_repeat_scenarios TYPE BOOLEAN USING (CASE WHEN no_repeat_scenarios::text IN ('1', 'true', 't', 'TRUE') THEN TRUE ELSE FALSE END)",
+                ]
+                for stmt in pg_migrations:
+                    try:
+                        await conn.execute(text(stmt))
+                    except Exception as m_ex:
+                        logger.debug(f"PostgreSQL migration note for '{stmt}': {m_ex}")
     except Exception as ex:
         logger.warning(f"Database schema init note: {ex}")

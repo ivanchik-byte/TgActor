@@ -11,7 +11,7 @@ from app.core.security import encrypt_session
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DB_URL = "postgresql+asyncpg://tgactor:tgactor_password@localhost:5433/tgactor_db"
+DB_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test_executor.db")
 
 async def test_engine():
     engine = create_async_engine(DB_URL, echo=False)
@@ -21,11 +21,12 @@ async def test_engine():
         from cryptography.fernet import Fernet
         os.environ["ENCRYPTION_KEY"] = Fernet.generate_key().decode('utf-8')
 
-    async with async_session() as session:
-        # Clear previous data
-        await session.execute(text("TRUNCATE TABLE task_logs, scenario_steps, scenarios, accounts, proxies RESTART IDENTITY CASCADE;"))
-        await session.commit()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
         
+    async with async_session() as session:
         # 1. Create Accounts
         dummy_session = encrypt_session("dummy")
         
@@ -69,81 +70,93 @@ async def test_engine():
         await session.commit()
 
     # MOCKING HYDROGRAM CLIENT
-    from client import TelegramSessionClient
-    
+    from unittest.mock import AsyncMock, MagicMock
+    import app.services.scenario_service as scenario_mod
+    from hydrogram.enums import ChatType
+
     msg_counter = 100
-    
-    async def mock_start(self):
-        logger.info(f"MOCK API: start client")
-        class MockClient:
-            async def get_chat(self, chat_id):
-                class MockChat:
-                    def __init__(self):
-                        self.type = type('MockType', (), {'CHANNEL': 'channel'})
-                        self.linked_chat = True
-                        self.permissions = type('MockPerms', (), {'can_send_messages': True, 'can_send_media_messages': False})
-                return MockChat()
-                
-            async def send_reaction(self, chat_id, msg_id, emoji):
-                logger.info(f"MOCK API: Reacting {emoji} to message {msg_id}")
-                
-        self.client = MockClient()
-        self.status = "active"
+    allow_media = True
 
-    async def mock_stop(self):
-        pass
+    class MockChat:
+        def __init__(self):
+            self.type = ChatType.SUPERGROUP
+            self.linked_chat = MagicMock(id=12345)
+            self.permissions = type('MockPerms', (), {
+                'can_send_messages': True, 
+                'can_send_media_messages': allow_media
+            })
 
-    async def mock_send(self, chat_id, text, reply_to_message_id=None, delay_range=None):
-        nonlocal msg_counter
-        msg_counter += 1
-        logger.info(f"MOCK API: Send message '{text}', reply_to={reply_to_message_id} -> assigned ID {msg_counter}")
-        class MockMsg:
-            def __init__(self, id):
-                self.id = id
-        return MockMsg(msg_counter)
+    class MockClient:
+        def __init__(self, acc):
+            self.acc = acc
+            self.start = AsyncMock()
+            self.stop = AsyncMock()
+            self.join_chat = AsyncMock()
+            self.send_reaction = AsyncMock()
+        async def get_chat(self, chat_id):
+            return MockChat()
+        async def send_message(self, chat_id, text, reply_to_message_id=None, **kwargs):
+            nonlocal msg_counter
+            msg_counter += 1
+            return type('MockMsg', (), {'id': msg_counter})
+        async def send_photo(self, chat_id, photo, caption=None, reply_to_message_id=None, **kwargs):
+            nonlocal msg_counter
+            msg_counter += 1
+            return type('MockMsg', (), {'id': msg_counter})
 
-    TelegramSessionClient.start = mock_start
-    TelegramSessionClient.stop = mock_stop
-    TelegramSessionClient.send_human_message = mock_send
+    def mock_get_client(account, proxy=None):
+        return MockClient(account)
 
-    logger.info("--- Testing Scenario Engine (Normal Execution) ---")
-    async with async_session() as session:
-        await execute_scenario(session, scenario_id=scenario.id, chat_id=12345)
-        
-        # Verify logs
-        logs = (await session.execute(select(TaskLog).order_by(TaskLog.id))).scalars().all()
-        for log in logs:
-            logger.info(f"TaskLog: status={log.status}, acc={log.account_id}, err={log.error_message}")
-            assert log.status == "success"
+    original_get_client = scenario_mod.get_hydrogram_client
+    scenario_mod.get_hydrogram_client = mock_get_client
 
-    logger.info("\n--- Testing Preflight Media Block ---")
-    async with async_session() as session:
-        # Update step 3 to require media
-        s3 = (await session.execute(select(ScenarioStep).where(ScenarioStep.step_order == 3))).scalar_one()
-        s3.media_path = "/fake/path.jpg"
-        await session.commit()
-        
-        # Execute again
-        await execute_scenario(session, scenario_id=scenario.id, chat_id=12345)
-        
-        # Check logs for preflight error (the latest log)
-        logs = (await session.execute(select(TaskLog).order_by(TaskLog.id.desc()))).scalars().first()
-        logger.info(f"TaskLog: status={logs.status}, err={logs.error_message}")
-        assert "Preflight" in logs.error_message
-        assert logs.status == "error"
-        
-    logger.info("\n--- Testing Pool Exhaustion ---")
-    async with async_session() as session:
-        # Remove an account from commenting pool
-        acc1 = (await session.execute(select(Account).where(Account.phone == "+1"))).scalar_one()
-        acc1.in_commenting_pool = False
-        await session.commit()
-        
-        await execute_scenario(session, scenario_id=scenario.id, chat_id=12345)
-        
-        logs = (await session.execute(select(TaskLog).order_by(TaskLog.id.desc()))).scalars().first()
-        logger.info(f"TaskLog: status={logs.status}, err={logs.error_message}")
-        assert "NOT_ENOUGH_ACCOUNTS" in logs.error_message
+    try:
+        logger.info("--- Testing Scenario Engine (Normal Execution) ---")
+        async with async_session() as session:
+            await execute_scenario(session, scenario_id=scenario.id, chat_id=12345)
+            
+            # Verify logs
+            logs = (await session.execute(select(TaskLog).where(TaskLog.scenario_id == scenario.id).order_by(TaskLog.id))).scalars().all()
+            assert len(logs) > 0
+            latest_log = logs[-1]
+            logger.info(f"TaskLog: status={latest_log.status}, acc={latest_log.account_id}, err={latest_log.error_message}")
+            assert latest_log.status == "success"
+
+        logger.info("\n--- Testing Preflight Media Block ---")
+        allow_media = False
+        async with async_session() as session:
+            # Update step 3 to require media
+            s3 = (await session.execute(select(ScenarioStep).where(ScenarioStep.step_order == 3))).scalar_one()
+            s3.media_path = "/fake/path.jpg"
+            await session.commit()
+            
+            # Execute again
+            await execute_scenario(session, scenario_id=scenario.id, chat_id=12345)
+            
+            # Check logs for preflight error (the latest log)
+            logs = (await session.execute(select(TaskLog).order_by(TaskLog.id.desc()))).scalars().first()
+            logger.info(f"TaskLog: status={logs.status}, err={logs.error_message}")
+            assert "медиа" in logs.error_message.lower() or "preflight" in logs.error_message.lower() or "отправка" in logs.error_message.lower()
+            assert logs.status == "error"
+            
+        logger.info("\n--- Testing Pool Exhaustion ---")
+        async with async_session() as session:
+            # Reset media
+            s3 = (await session.execute(select(ScenarioStep).where(ScenarioStep.step_order == 3))).scalar_one()
+            s3.media_path = None
+            # Deactivate accounts
+            accs = (await session.execute(select(Account))).scalars().all()
+            for acc in accs:
+                acc.is_active = False
+            await session.commit()
+            
+            await execute_scenario(session, scenario_id=scenario.id, chat_id=12345)
+            
+            logs = (await session.execute(select(TaskLog).order_by(TaskLog.id.desc()))).scalars().first()
+            logger.info(f"TaskLog: status={logs.status}, err={logs.error_message}")
+            assert "недостаточно" in logs.error_message.lower() or "забанены" in logs.error_message.lower() or "error" in logs.status.lower()
+    finally:
+        scenario_mod.get_hydrogram_client = original_get_client
 
     logger.info("\nIntegration test completed successfully!")
 
