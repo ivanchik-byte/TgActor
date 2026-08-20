@@ -72,14 +72,44 @@ async def check_proxy_connectivity(proxy: Proxy, timeout: float = 6.0) -> Dict[s
         timeout=timeout
     )
 
+import os
+
 async def is_proxy_required(session: AsyncSession) -> bool:
+    env_use_proxy = os.getenv("USE_PROXY")
+    if env_use_proxy is not None:
+        return env_use_proxy.strip().lower() in ("true", "1", "yes")
     config = await session.get(SystemConfig, "USE_PROXY")
     if not config:
         return True
     return config.value.lower() == "true"
 
-async def validate_account_proxy_mode(session: AsyncSession, account: Account) -> tuple[bool, str]:
+async def validate_account_proxy_mode(session: AsyncSession, account: Account | int) -> tuple[bool, str]:
+    if isinstance(account, int):
+        acc = await session.get(Account, account)
+        if not acc:
+            return False, f"Аккаунт #{account} не найден"
+        account = acc
     required = await is_proxy_required(session)
     if required and not account.proxy_id:
+        account.status = "unassigned_proxy"
         return False, f"Включен строгий режим USE_PROXY=true, но у аккаунта #{account.id} ({account.phone}) не привязан прокси."
     return True, ""
+
+async def bind_proxy_to_account(session: AsyncSession, account_id: int, proxy_id: int) -> bool:
+    """Binds a proxy to an account enforcing 1:1 constraint."""
+    acc = await session.get(Account, account_id)
+    proxy = await session.get(Proxy, proxy_id)
+    if not acc or not proxy:
+        return False
+    # Check 1:1 constraint (proxy cannot be bound to another account)
+    stmt = select(Account).where(Account.proxy_id == proxy_id, Account.id != account_id)
+    res = await session.execute(stmt)
+    existing = res.scalars().first()
+    if existing:
+        return False
+    acc.proxy_id = proxy_id
+    if acc.status == "unassigned_proxy":
+        acc.status = "active"
+    await session.commit()
+    return True
+

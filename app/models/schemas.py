@@ -20,8 +20,7 @@ class AccountResponse(AccountBase):
     pool_type: Optional[str] = 'commenting'
     proxy_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AccountCustomNameUpdate(BaseModel):
     custom_name: Optional[str] = None
@@ -59,8 +58,7 @@ class ScenarioUpdate(ScenarioBase):
 class ScenarioResponse(ScenarioBase):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 from app.services.ai_service import DEFAULT_SYSTEM_PROMPT
 
@@ -148,8 +146,7 @@ class ProxyResponse(ProxyBase):
             data["ip"] = h
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MonitoredChannelBase(BaseModel):
     channel_username: str
@@ -164,8 +161,7 @@ class MonitoredChannelCreate(MonitoredChannelBase):
 class MonitoredChannelResponse(MonitoredChannelBase):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CategoryItem(BaseModel):
     id: str
