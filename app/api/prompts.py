@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,7 +85,7 @@ async def create_prompt_category(req: CategoryCreate):
     # Generate slug ID from label
     cat_id = re.sub(r'[^a-zA-Z0-9а-яА-ЯёЁ_]+', '_', label.lower()).strip('_')
     if not cat_id:
-        cat_id = f"cat_{int(datetime.utcnow().timestamp())}"
+        cat_id = f"cat_{int(datetime.now(timezone.utc).timestamp())}"
 
     async with async_session() as session:
         categories = await _get_all_categories(session)

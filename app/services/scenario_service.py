@@ -172,9 +172,16 @@ async def execute_scenario(
                         },
                         scenario_id=scenario_id
                     )
-                    await session.commit()
-                    await probe_client.stop()
-                    return
+            any_media = any(bool(getattr(s, 'media_path', None)) for s in steps)
+            avail_ok, avail_err = await check_chat_availability(probe_client, target_chat_id, requires_media=any_media)
+            if not avail_ok:
+                error_msg = f"Preflight check failed: {avail_err}"
+                logger.error(error_msg)
+                log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+                session.add(log)
+                await session.commit()
+                await probe_client.stop()
+                return
 
             probe_success = True
             await probe_client.stop()
@@ -364,6 +371,7 @@ async def execute_scenario(
     logger.info(f"🎭 Scenario {scenario_id} assigned roles: {[(r_id, acc.custom_name or acc.username or acc.first_name or acc.id) for r_id, acc in role_account_map.items()]}")
 
     step_msg_map: Dict[int, int] = {}
+    joined_roles: set[int] = set()
     
     for idx, step in enumerate(steps):
         role_id = step.role_id

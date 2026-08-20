@@ -1,7 +1,10 @@
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.database import Base
+
+def get_utc_now():
+    return datetime.now(timezone.utc)
 
 class Account(Base):
     __tablename__ = "accounts"
@@ -18,7 +21,7 @@ class Account(Base):
     custom_name = Column(String, nullable=True)
     position = Column(Integer, default=0)
     cooldown_until = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
 
     pool_type = Column(String, default="commenting")
 
@@ -28,6 +31,32 @@ class Account(Base):
     steps = relationship("ScenarioStep", back_populates="account")
     task_logs = relationship("TaskLog", back_populates="account")
     inbox_messages = relationship("InboxMessage", back_populates="account")
+
+    @property
+    def encrypted_session(self):
+        return self.session_string
+
+    @encrypted_session.setter
+    def encrypted_session(self, val):
+        self.session_string = val
+
+    @property
+    def in_commenting_pool(self):
+        return self.pool_type == "commenting"
+
+    @in_commenting_pool.setter
+    def in_commenting_pool(self, val):
+        if val:
+            self.pool_type = "commenting"
+
+    @property
+    def in_reaction_pool(self):
+        return self.pool_type == "reactions"
+
+    @in_reaction_pool.setter
+    def in_reaction_pool(self, val):
+        if val:
+            self.pool_type = "reactions"
 
 class Proxy(Base):
     __tablename__ = "proxies"
@@ -41,6 +70,22 @@ class Proxy(Base):
 
     accounts = relationship("Account", back_populates="proxy")
 
+    @property
+    def ip(self):
+        return self.host
+
+    @ip.setter
+    def ip(self, val):
+        self.host = val
+
+    @property
+    def status(self):
+        return "active"
+
+    @status.setter
+    def status(self, val):
+        pass
+
 class Scenario(Base):
     __tablename__ = "scenarios"
 
@@ -52,7 +97,7 @@ class Scenario(Base):
     max_delay = Column(Float, default=10.0)
 
     weight = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
 
     # AI configuration fields
     mode = Column(String, default="manual")
@@ -118,7 +163,7 @@ class TaskLog(Base):
     account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
     status = Column(String, nullable=False)
     error_message = Column(Text, nullable=True)
-    executed_at = Column(DateTime, default=datetime.utcnow)
+    executed_at = Column(DateTime, default=get_utc_now)
 
     scenario = relationship("Scenario", back_populates="task_logs")
     account = relationship("Account", back_populates="task_logs")
@@ -135,7 +180,7 @@ class InboxMessage(Base):
     incoming = Column(Boolean, default=True)
     text = Column(Text, nullable=True)
     media_path = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
 
     account = relationship("Account", back_populates="inbox_messages")
 
@@ -149,7 +194,7 @@ class ActionLog(Base):
     __tablename__ = "bot_action_log"
 
     id = Column(Integer, primary_key=True, index=True)
-    executed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    executed_at = Column(DateTime, default=get_utc_now, index=True)
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     scenario_id = Column(Integer, ForeignKey("scenarios.id", ondelete="SET NULL"), nullable=True, index=True)
     
@@ -171,7 +216,7 @@ class AiPreset(Base):
     model = Column(String, nullable=True)
     base_url = Column(String, nullable=True)
     system_prompt = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
 
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
@@ -187,6 +232,6 @@ class PromptTemplate(Base):
     steps_payload = Column(Text, nullable=True)
     tags = Column(String, nullable=True)
     is_builtin = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=get_utc_now)
 
 

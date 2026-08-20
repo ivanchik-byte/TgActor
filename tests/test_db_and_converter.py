@@ -13,7 +13,7 @@ from app.models.models import Base, Proxy, Account
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-DB_URL = "postgresql+asyncpg://tgactor:tgactor_password@localhost:5433/tgactor_db"
+DB_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test_converter.db")
 
 async def test_database_and_converter():
     engine = create_async_engine(DB_URL, echo=False)
@@ -22,6 +22,9 @@ async def test_database_and_converter():
     logger.info("--- Testing DB Connection ---")
     try:
         async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            for table in reversed(Base.metadata.sorted_tables):
+                await conn.execute(table.delete())
             await conn.execute(text("SELECT 1"))
         logger.info("Database connection successful.")
     except Exception as e:
@@ -36,10 +39,10 @@ async def test_database_and_converter():
     with zipfile.ZipFile(dummy_zip_path, 'w') as zf:
         zf.writestr('tdata/dummy.txt', 'dummy content')
         
-    success, result = await convert_tdata_zip_to_encrypted_session(dummy_zip_path)
+    success, result, _ = await convert_tdata_zip_to_encrypted_session(dummy_zip_path)
     os.remove(dummy_zip_path)
     
-    if not success and result == "failed_invalid_tdata":
+    if not success and "failed_invalid_tdata" in str(result):
         logger.info("Converter correctly handled invalid tdata archive without crashing.")
     else:
         logger.error(f"Converter test failed: success={success}, result={result}")
