@@ -95,45 +95,59 @@ async def run_channel_monitor():
                                     # Genuinely new post detected!
                                     _last_checked_msg_id[ch_user] = latest_msg_id
 
-                                scenario = await pick_random_scenario(session, channel)
-                                if scenario:
-                                    delay = random.randint(channel.min_delay_seconds, channel.max_delay_seconds)
-                                    logger.info(f"New post detected in {ch_user} (msg #{latest_msg_id}). Triggering scenario '{scenario.title}' in {delay}s...")
-                                    await log_action(
-                                        session,
-                                        action_type="channel_monitor",
-                                        status="ok",
-                                        target=ch_user,
-                                        target_id=f"msg #{latest_msg_id or 'new'} -> sc #{scenario.id}",
-                                        details={
-                                            "summary": f"Замечен новый пост #{latest_msg_id} в {ch_user}. Боты готовятся к сценарию '{scenario.title}' (задержка {delay}с)",
-                                            "scenario_title": scenario.title,
-                                            "delay_seconds": delay,
-                                            "msg_id": latest_msg_id,
-                                            "post_preview": latest_post_text[:250],
-                                            "badge": "🎯 Новый пост"
-                                        },
-                                        scenario_id=scenario.id
+                                mode = getattr(channel, 'execution_mode', 'scenario') or 'scenario'
+                                if mode == 'first_comment':
+                                    delay = random.randint(channel.min_delay_seconds, channel.max_delay_seconds) if channel.max_delay_seconds >= channel.min_delay_seconds else channel.min_delay_seconds
+                                    logger.info(f"⚡ First comment sniper triggered for {ch_user} (msg #{latest_msg_id}) in {delay}s...")
+                                    if delay > 0:
+                                        await asyncio.sleep(delay)
+                                    from app.services.first_comment_service import send_first_comment
+                                    await send_first_comment(
+                                        session=session,
+                                        channel=channel,
+                                        post_id=latest_msg_id or 0,
+                                        post_text=latest_post_text
                                     )
-                                    await asyncio.sleep(delay)
-                                    await execute_scenario(session, scenario.id, ch_user, discussion_message_id=latest_msg_id)
                                 else:
-                                    warning_msg = f"В канале {ch_user} вышел новый пост (msg #{latest_msg_id}), но нет активных сценариев с сообщениями для ответа."
-                                    logger.warning(warning_msg)
-                                    await log_action(
-                                        session,
-                                        action_type="channel_monitor",
-                                        status="error",
-                                        target=ch_user,
-                                        target_id=f"Нет сценариев • {ch_user}",
-                                        details={
-                                            "summary": "Нет активных сценариев с шагами",
-                                            "category": "no_scenarios",
-                                            "badge": "Нет сценария",
-                                            "error": warning_msg,
-                                            "msg_id": latest_msg_id
-                                        }
-                                    )
+                                    scenario = await pick_random_scenario(session, channel)
+                                    if scenario:
+                                        delay = random.randint(channel.min_delay_seconds, channel.max_delay_seconds)
+                                        logger.info(f"New post detected in {ch_user} (msg #{latest_msg_id}). Triggering scenario '{scenario.title}' in {delay}s...")
+                                        await log_action(
+                                            session,
+                                            action_type="channel_monitor",
+                                            status="ok",
+                                            target=ch_user,
+                                            target_id=f"msg #{latest_msg_id or 'new'} -> sc #{scenario.id}",
+                                            details={
+                                                "summary": f"Замечен новый пост #{latest_msg_id} в {ch_user}. Боты готовятся к сценарию '{scenario.title}' (задержка {delay}с)",
+                                                "scenario_title": scenario.title,
+                                                "delay_seconds": delay,
+                                                "msg_id": latest_msg_id,
+                                                "post_preview": latest_post_text[:250],
+                                                "badge": "🎯 Новый пост"
+                                            },
+                                            scenario_id=scenario.id
+                                        )
+                                        await asyncio.sleep(delay)
+                                        await execute_scenario(session, scenario.id, ch_user, discussion_message_id=latest_msg_id)
+                                    else:
+                                        warning_msg = f"В канале {ch_user} вышел новый пост (msg #{latest_msg_id}), но нет активных сценариев с сообщениями для ответа."
+                                        logger.warning(warning_msg)
+                                        await log_action(
+                                            session,
+                                            action_type="channel_monitor",
+                                            status="error",
+                                            target=ch_user,
+                                            target_id=f"Нет сценариев • {ch_user}",
+                                            details={
+                                                "summary": "Нет активных сценариев с шагами",
+                                                "category": "no_scenarios",
+                                                "badge": "Нет сценария",
+                                                "error": warning_msg,
+                                                "msg_id": latest_msg_id
+                                            }
+                                        )
                             except Exception as ex:
                                 diag = classify_telegram_error(ex)
                                 logger.warning(f"Error monitoring channel {ch_user} ({diag['badge']}): {ex}")
