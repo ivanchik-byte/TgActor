@@ -154,6 +154,13 @@ class MonitoredChannelBase(BaseModel):
     min_delay_seconds: Optional[int] = 10
     max_delay_seconds: Optional[int] = 30
     no_repeat_scenarios: Optional[bool] = True
+    execution_mode: Optional[str] = "scenario"
+    sender_account_id: Optional[int] = None
+    send_as_mode: Optional[str] = "account"
+    send_as_channel_username: Optional[str] = None
+    custom_prompt: Optional[str] = None
+    ai_model: Optional[str] = None
+    skip_ads: Optional[bool] = True
 
 class MonitoredChannelCreate(MonitoredChannelBase):
     pass

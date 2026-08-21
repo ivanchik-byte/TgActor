@@ -242,3 +242,40 @@ async def delete_account(account_id: int):
         await session.delete(acc)
         await session.commit()
         return {"status": "ok"}
+
+@router.get("/api/accounts/{account_id}/admin-channels")
+async def get_account_admin_channels(account_id: int):
+    """Retrieve channels where the account is creator or administrator with permission to post."""
+    async with async_session() as session:
+        acc = await session.get(Account, account_id)
+        if not acc:
+            raise HTTPException(404, detail="Account not found")
+
+        client = get_hydrogram_client(acc, getattr(acc, "proxy", None))
+        channels_list = []
+        try:
+            await client.start()
+            async for dialog in client.get_dialogs(limit=100):
+                chat = dialog.chat
+                chat_type = str(getattr(chat, "type", "")).lower()
+                is_creator = getattr(chat, "is_creator", False)
+                
+                # Check if it is a channel or supergroup
+                if "channel" in chat_type or is_creator:
+                    channels_list.append({
+                        "id": chat.id,
+                        "title": getattr(chat, "title", "Канал"),
+                        "username": getattr(chat, "username", None) or "",
+                        "is_creator": is_creator,
+                        "type": chat_type
+                    })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error fetching admin channels for account #{account_id}: {e}")
+        finally:
+            try:
+                await client.stop()
+            except Exception:
+                pass
+
+        return channels_list

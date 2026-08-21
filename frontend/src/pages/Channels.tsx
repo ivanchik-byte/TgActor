@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
   Radio, Trash2, Plus, Power, PowerOff, Loader2,
-  Clock, Shuffle, Search, ExternalLink, Activity,
-  ShieldAlert,
-  Layers, Terminal, Check, LogIn, Users, Square
+  Clock, Search, ExternalLink, Activity,
+  ShieldAlert, Layers, Terminal, Check, LogIn,
+  Zap, ShieldCheck, Settings,
+  Megaphone, RotateCw
 } from 'lucide-react';
 import { useToast } from '../components/ToastContext';
 import { ModalOverlay } from '../components/ModalOverlay';
@@ -18,7 +19,28 @@ interface ChannelItem {
   min_delay_seconds: number;
   max_delay_seconds: number;
   no_repeat_scenarios: boolean;
+  execution_mode?: 'scenario' | 'first_comment';
+  sender_account_id?: number | null;
+  send_as_mode?: 'account' | 'channel';
+  send_as_channel_username?: string | null;
+  custom_prompt?: string | null;
+  ai_model?: string | null;
+  skip_ads?: boolean;
 }
+
+interface AdminChannelInfo {
+  id: number;
+  title: string;
+  username?: string;
+  is_creator?: boolean;
+}
+
+const FIRST_COMMENT_PRESETS = [
+  { id: 'expert', label: 'Экспертный тезис', prompt: 'Напиши короткий (1 предложение) экспертный инсайт или профессиональное уточнение к теме поста. Без воды, без точки в конце.' },
+  { id: 'question', label: 'Вопрос по теме', prompt: 'Задай один острый или вовлекающий вопрос автору или аудитории по содержанию поста. В конце поставь знак вопроса.' },
+  { id: 'insight', label: 'Практический опыт', prompt: 'Дополни новость полезной деталью или практическим наблюдением из реального опыта. Без эмодзи, без точки в конце.' },
+  { id: 'humor', label: 'Ирония / реакция', prompt: 'Напиши остроумную, ироничную и короткую реакцию на новость. Живой сленг, без смайлов, без точки в конце.' }
+];
 
 export default function Channels() {
   const queryClient = useQueryClient();
@@ -31,9 +53,25 @@ export default function Channels() {
   const [newChannels, setNewChannels] = useState('');
   const [minDelay, setMinDelay] = useState(10);
   const [maxDelay, setMaxDelay] = useState(30);
-  const [noRepeat, setNoRepeat] = useState(true);
+  const [noRepeat] = useState(true);
   const [autoJoinOnAdd, setAutoJoinOnAdd] = useState(true);
   const [autoJoinCountOnAdd, setAutoJoinCountOnAdd] = useState(3);
+
+  // First comment sniper mode fields for Add Form
+  const [addMode, setAddMode] = useState<'scenario' | 'first_comment'>('scenario');
+  const [senderAccountId, setSenderAccountId] = useState<number | ''>('');
+  const [sendAsChannelToggle, setSendAsChannelToggle] = useState(false);
+  const [sendAsChannel, setSendAsChannel] = useState('');
+  const [manualChannelInput, setManualChannelInput] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [skipAds, setSkipAds] = useState(true);
+  const [verifyState, setVerifyState] = useState<{ loading: boolean; ok?: boolean; msg?: string }>({ loading: false });
+
+  // Edit channel modal state
+  const [editingChannel, setEditingChannel] = useState<ChannelItem | null>(null);
+  const [editSendAsChannelToggle, setEditSendAsChannelToggle] = useState(false);
+  const [editManualChannelInput, setEditManualChannelInput] = useState(false);
+  const [editVerifyState, setEditVerifyState] = useState<{ loading: boolean; ok?: boolean; msg?: string }>({ loading: false });
 
   // Smooth joiner state
   const [joinLinks, setJoinLinks] = useState('');
@@ -43,12 +81,12 @@ export default function Channels() {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState<'all' | 'active' | 'paused'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'active' | 'paused' | 'first_comment'>('all');
 
   // Confirm delete modal state
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
-  // Inline delay editing states { [channelId]: { min, max, dirty } }
+  // Inline delay editing states
   const [delayDrafts, setDelayDrafts] = useState<Record<number, { min: number; max: number }>>({});
 
   // Queries
@@ -62,9 +100,30 @@ export default function Channels() {
     queryFn: async () => (await axios.get('/api/accounts')).data
   });
 
-  const commentingAccounts = useMemo(() => {
-    return accounts.filter((a: any) => a.is_active && (a.pool === 'commenting' || !a.pool));
+  const activeAccounts = useMemo(() => {
+    return accounts.filter((a: any) => a.is_active);
   }, [accounts]);
+
+  // Admin channels query for selected account in Add form
+  const { data: addAdminChannels = [], isFetching: isAddAdminChannelsLoading, refetch: refetchAddAdminChannels } = useQuery<AdminChannelInfo[]>({
+    queryKey: ['adminChannels', senderAccountId],
+    queryFn: async () => {
+      if (!senderAccountId) return [];
+      return (await axios.get(`/api/accounts/${senderAccountId}/admin-channels`)).data;
+    },
+    enabled: Boolean(senderAccountId && sendAsChannelToggle)
+  });
+
+  // Admin channels query for selected account in Edit modal
+  const editAccId = editingChannel?.sender_account_id;
+  const { data: editAdminChannels = [], isFetching: isEditAdminChannelsLoading, refetch: refetchEditAdminChannels } = useQuery<AdminChannelInfo[]>({
+    queryKey: ['adminChannels', editAccId],
+    queryFn: async () => {
+      if (!editAccId) return [];
+      return (await axios.get(`/api/accounts/${editAccId}/admin-channels`)).data;
+    },
+    enabled: Boolean(editAccId && editSendAsChannelToggle)
+  });
 
   const { data: monitorStatus } = useQuery({
     queryKey: ['monitorStatus'],
@@ -80,16 +139,45 @@ export default function Channels() {
     }
   });
 
-  const { data: scenarios = [] } = useQuery({
-    queryKey: ['scenarios'],
-    queryFn: async () => (await axios.get('/api/scenarios')).data
-  });
-
   const { data: logs = [] } = useQuery({
     queryKey: ['taskLogs'],
     queryFn: async () => (await axios.get('/api/logs')).data,
     refetchInterval: 3000
   });
+
+  // Verify send_as permission
+  const handleVerifySendAs = async (accId: number | '', chName: string, isEdit = false) => {
+    if (!accId) {
+      showToast('Выберите аккаунт для проверки прав', 'warning');
+      return;
+    }
+    if (!chName.trim()) {
+      showToast('Укажите юзернейм канала', 'warning');
+      return;
+    }
+
+    const setTargetState = isEdit ? setEditVerifyState : setVerifyState;
+    setTargetState({ loading: true });
+
+    try {
+      const resp = await axios.post('/api/channels/verify-send-as', {
+        account_id: Number(accId),
+        channel_username: chName.trim()
+      });
+      if (resp.data.ok) {
+        const msg = `Доступ подтвержден: "${resp.data.title}" (ID: ${resp.data.channel_id})`;
+        setTargetState({ loading: false, ok: true, msg });
+        showToast(msg, 'success');
+      } else {
+        setTargetState({ loading: false, ok: false, msg: resp.data.error || 'Ошибка проверки' });
+        showToast(resp.data.error || 'Нет доступа к отправке от имени канала', 'error');
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Ошибка связи с сервером при проверке';
+      setTargetState({ loading: false, ok: false, msg });
+      showToast(msg, 'error');
+    }
+  };
 
   // Smooth join mutations
   const startSmoothJoinMutation = useMutation({
@@ -103,7 +191,7 @@ export default function Channels() {
     },
     onSuccess: () => {
       refetchSmoothJoin();
-      showToast('Плавный вход ботов запущен!', 'success');
+      showToast('Плавный вход ботов запущен', 'success');
     },
     onError: (err: any) => {
       showToast(err?.response?.data?.detail || 'Ошибка запуска плавного входа', 'error');
@@ -116,7 +204,7 @@ export default function Channels() {
     },
     onSuccess: () => {
       refetchSmoothJoin();
-      showToast('Процесс плавного входа отменён', 'info');
+      showToast('Процесс плавного входа отменен', 'info');
     }
   });
 
@@ -128,6 +216,12 @@ export default function Channels() {
         min_delay_seconds: minDelay,
         max_delay_seconds: maxDelay,
         no_repeat_scenarios: noRepeat,
+        execution_mode: addMode,
+        sender_account_id: senderAccountId ? Number(senderAccountId) : null,
+        send_as_mode: sendAsChannelToggle ? 'channel' : 'account',
+        send_as_channel_username: sendAsChannelToggle ? (sendAsChannel.trim() || null) : null,
+        custom_prompt: customPrompt.trim() || null,
+        skip_ads: skipAds,
         auto_join_bots: autoJoinOnAdd,
         auto_join_count: autoJoinCountOnAdd
       })).data;
@@ -137,13 +231,26 @@ export default function Channels() {
       queryClient.invalidateQueries({ queryKey: ['channels'] });
       refetchSmoothJoin();
       const count = data?.added_ids?.length || 1;
+      const modeLabel = addMode === 'first_comment' ? 'Режим: Первый комментарий' : 'Режим: Сценарий';
       if (autoJoinOnAdd) {
-        showToast(`Добавлено каналов: ${count}. Запущен плавный вход ${autoJoinCountOnAdd} ботов!`, 'success');
+        showToast(`Добавлено каналов: ${count} (${modeLabel}). Запущен плавный вход ботов.`, 'success');
       } else {
-        showToast(`Успешно добавлено каналов: ${count}`, 'success');
+        showToast(`Добавлено каналов: ${count} (${modeLabel})`, 'success');
       }
     },
-    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка добавления каналов!', 'error')
+    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка добавления каналов', 'error')
+  });
+
+  const saveEditChannel = useMutation({
+    mutationFn: async (updated: Partial<ChannelItem> & { id: number }) => {
+      return (await axios.patch(`/api/channels/${updated.id}`, updated)).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
+      setEditingChannel(null);
+      showToast('Параметры канала сохранены', 'success');
+    },
+    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка сохранения настроек канала', 'error')
   });
 
   const deleteChannel = useMutation({
@@ -151,7 +258,7 @@ export default function Channels() {
     onSuccess: () => {
       setConfirmDeleteId(null);
       queryClient.invalidateQueries({ queryKey: ['channels'] });
-      showToast('Канал удалён из мониторинга.', 'info');
+      showToast('Канал исключен из мониторинга', 'info');
     },
     onError: () => showToast('Ошибка при удалении канала', 'error')
   });
@@ -161,16 +268,16 @@ export default function Channels() {
       await axios.patch(`/api/channels/${id}`, { is_active: active });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['channels'] }),
-    onError: () => showToast('Не удалось переключить статус канала', 'error')
+    onError: () => showToast('Не удалось изменить статус канала', 'error')
   });
 
-  const toggleNoRepeat = useMutation({
-    mutationFn: async ({ id, val }: { id: number; val: boolean }) => {
-      await axios.patch(`/api/channels/${id}`, { no_repeat_scenarios: val });
+  const toggleExecutionMode = useMutation({
+    mutationFn: async ({ id, mode }: { id: number; mode: 'scenario' | 'first_comment' }) => {
+      await axios.patch(`/api/channels/${id}`, { execution_mode: mode });
     },
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['channels'] });
-      showToast('Параметр антиповтора обновлен', 'success');
+      showToast(`Режим переключен: ${vars.mode === 'first_comment' ? 'Первый комментарий' : 'Сценарий'}`, 'success');
     }
   });
 
@@ -188,7 +295,7 @@ export default function Channels() {
         delete next[vars.id];
         return next;
       });
-      showToast('Задержки успешно сохранены!', 'success');
+      showToast('Задержки обновлены', 'success');
     }
   });
 
@@ -196,16 +303,16 @@ export default function Channels() {
     mutationFn: async () => axios.post('/api/channels/monitor/start'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitorStatus'] });
-      showToast('Радар мониторинга запущен!', 'success');
+      showToast('Мониторинг запущен', 'success');
     },
-    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка запуска мониторинга!', 'error')
+    onError: (err: any) => showToast(err?.response?.data?.detail || 'Ошибка запуска мониторинга', 'error')
   });
 
   const stopMonitor = useMutation({
     mutationFn: async () => axios.post('/api/channels/monitor/stop'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['monitorStatus'] });
-      showToast('Мониторинг приостановлен.', 'info');
+      showToast('Мониторинг приостановлен', 'info');
     }
   });
 
@@ -220,17 +327,25 @@ export default function Channels() {
 
       if (filterMode === 'active') return ch.is_active;
       if (filterMode === 'paused') return !ch.is_active;
+      if (filterMode === 'first_comment') return ch.execution_mode === 'first_comment';
       return true;
     });
   }, [channels, searchQuery, filterMode]);
 
-  // Detected parsed handles in textarea
   const detectedChannelCount = useMemo(() => {
     if (!newChannels.trim()) return 0;
     return newChannels.replace(/,/g, '\n').split('\n').map(s => s.trim()).filter(Boolean).length;
   }, [newChannels]);
 
   const activeChannelsCount = channels.filter(c => c.is_active).length;
+  const firstCommentCount = channels.filter(c => c.execution_mode === 'first_comment').length;
+
+  const openEditModal = (ch: ChannelItem) => {
+    setEditingChannel({ ...ch });
+    setEditSendAsChannelToggle(ch.send_as_mode === 'channel');
+    setEditManualChannelInput(false);
+    setEditVerifyState({ loading: false });
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '40px' }}>
@@ -239,22 +354,16 @@ export default function Channels() {
         isOpen={confirmDeleteId !== null}
         onClose={() => setConfirmDeleteId(null)}
         title="Удаление канала"
-        subtitle="Канал будет исключен из очереди автоматического сканирования"
+        subtitle="Канал будет исключен из очереди автоматического мониторинга"
         icon={<ShieldAlert className="w-5 h-5 text-red-500" />}
         footer={
           <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
             <button
               onClick={() => setConfirmDeleteId(null)}
               style={{
-                flex: 1,
-                backgroundColor: 'var(--bg-main)',
-                color: 'var(--text-main)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '10px',
-                padding: '10px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
+                flex: 1, backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
+                border: '1px solid var(--border-color)', borderRadius: '10px', padding: '10px',
+                fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               }}
             >
               Отмена
@@ -263,27 +372,331 @@ export default function Channels() {
               onClick={() => confirmDeleteId && deleteChannel.mutate(confirmDeleteId)}
               disabled={deleteChannel.isPending}
               style={{
-                flex: 1,
-                backgroundColor: '#ef4444',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '10px',
-                padding: '10px',
-                fontSize: '13px',
-                fontWeight: 700,
+                flex: 1, backgroundColor: '#ef4444', color: '#fff', border: 'none',
+                borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: 700,
                 cursor: deleteChannel.isPending ? 'not-allowed' : 'pointer',
                 opacity: deleteChannel.isPending ? 0.6 : 1,
               }}
             >
-              {deleteChannel.isPending ? 'Удаление...' : 'Да, удалить'}
+              {deleteChannel.isPending ? 'Удаление...' : 'Удалить'}
             </button>
           </div>
         }
       >
         <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-          Вы уверены, что хотите удалить этот канал? Сценарии комментирования больше не будут запускаться по его новым публикациям.
+          Вы уверены, что хотите удалить этот канал? Задачи комментирования по новым публикациям будут остановлены.
         </p>
       </ModalOverlay>
+
+      {/* Edit Channel Modal */}
+      {editingChannel && (
+        <ModalOverlay
+          isOpen={editingChannel !== null}
+          onClose={() => setEditingChannel(null)}
+          title={`Настройки канала @${editingChannel.channel_username}`}
+          subtitle="Режим комментирования, авторство и параметры генерации"
+          icon={<Settings className="w-5 h-5 text-accent" />}
+          footer={
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <button
+                type="button"
+                onClick={() => setEditingChannel(null)}
+                style={{
+                  flex: 1, backgroundColor: 'var(--bg-main)', color: 'var(--text-main)',
+                  border: '1px solid var(--border-color)', borderRadius: '10px', padding: '10px',
+                  fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  saveEditChannel.mutate({
+                    id: editingChannel.id,
+                    execution_mode: editingChannel.execution_mode || 'scenario',
+                    sender_account_id: editingChannel.sender_account_id ? Number(editingChannel.sender_account_id) : null,
+                    send_as_mode: editSendAsChannelToggle ? 'channel' : 'account',
+                    send_as_channel_username: editSendAsChannelToggle ? (editingChannel.send_as_channel_username || null) : null,
+                    custom_prompt: editingChannel.custom_prompt || null,
+                    min_delay_seconds: editingChannel.min_delay_seconds,
+                    max_delay_seconds: editingChannel.max_delay_seconds,
+                    skip_ads: editingChannel.skip_ads !== false
+                  });
+                }}
+                disabled={saveEditChannel.isPending}
+                style={{
+                  flex: 1, backgroundColor: 'var(--accent)', color: '#fff', border: 'none',
+                  borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: 700,
+                  cursor: saveEditChannel.isPending ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {saveEditChannel.isPending ? 'Сохранение...' : 'Сохранить изменения'}
+              </button>
+            </div>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Mode Switcher */}
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>
+                Режим работы
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingChannel({ ...editingChannel, execution_mode: 'scenario' })}
+                  style={{
+                    padding: '10px', borderRadius: '10px',
+                    border: (editingChannel.execution_mode || 'scenario') === 'scenario' ? '1px solid #10b981' : '1px solid var(--border-color)',
+                    backgroundColor: (editingChannel.execution_mode || 'scenario') === 'scenario' ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-main)',
+                    color: (editingChannel.execution_mode || 'scenario') === 'scenario' ? '#10b981' : 'var(--text-muted)',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', fontWeight: 700
+                  }}
+                >
+                  <Layers className="w-4 h-4" />
+                  <span>Ветка сценария</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingChannel({ ...editingChannel, execution_mode: 'first_comment' })}
+                  style={{
+                    padding: '10px', borderRadius: '10px',
+                    border: editingChannel.execution_mode === 'first_comment' ? '1px solid #6366f1' : '1px solid var(--border-color)',
+                    backgroundColor: editingChannel.execution_mode === 'first_comment' ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-main)',
+                    color: editingChannel.execution_mode === 'first_comment' ? '#818cf8' : 'var(--text-muted)',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', fontWeight: 700
+                  }}
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Первый комментарий</span>
+                </button>
+              </div>
+            </div>
+
+            {/* First Comment Custom Settings in Modal */}
+            {editingChannel.execution_mode === 'first_comment' && (
+              <div style={{
+                backgroundColor: 'var(--bg-main)', border: '1px solid rgba(99, 102, 241, 0.25)',
+                borderRadius: '14px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px'
+              }}>
+                {/* Sender Account */}
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    Рабочий аккаунт
+                  </label>
+                  <select
+                    value={editingChannel.sender_account_id || ''}
+                    onChange={e => setEditingChannel({ ...editingChannel, sender_account_id: e.target.value ? Number(e.target.value) : null })}
+                    style={{
+                      width: '100%', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                      borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                    }}
+                  >
+                    <option value="">Автовыбор из пула активных аккаунтов</option>
+                    {activeAccounts.map((acc: any) => (
+                      <option key={acc.id} value={acc.id}>
+                        ID #{acc.id} {acc.custom_name ? `• ${acc.custom_name}` : ''} ({acc.username ? `@${acc.username}` : acc.phone})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Send As Channel Toggle */}
+                <div
+                  onClick={() => setEditSendAsChannelToggle(!editSendAsChannelToggle)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                    padding: '10px 12px', borderRadius: '10px',
+                    backgroundColor: editSendAsChannelToggle ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-card)',
+                    border: `1px solid ${editSendAsChannelToggle ? 'rgba(99, 102, 241, 0.35)' : 'var(--border-color)'}`
+                  }}
+                >
+                  <div style={{
+                    width: '20px', height: '20px', borderRadius: '6px',
+                    backgroundColor: editSendAsChannelToggle ? '#6366f1' : 'transparent',
+                    border: `1px solid ${editSendAsChannelToggle ? '#6366f1' : 'var(--border-color)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0
+                  }}>
+                    {editSendAsChannelToggle && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Megaphone className="w-4 h-4 text-indigo-400" />
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                      От лица канала ({editSendAsChannelToggle ? 'ВКЛ' : 'ВЫКЛ'})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Channel selection if toggle ON */}
+                {editSendAsChannelToggle && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                        Канал для публикации
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => refetchEditAdminChannels()}
+                          disabled={isEditAdminChannelsLoading || !editingChannel.sender_account_id}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            backgroundColor: 'transparent', border: 'none', color: '#818cf8', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                          }}
+                        >
+                          <RotateCw className={`w-3 h-3 ${isEditAdminChannelsLoading ? 'animate-spin' : ''}`} />
+                          <span>Обновить список</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditManualChannelInput(!editManualChannelInput)}
+                          style={{
+                            backgroundColor: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                          }}
+                        >
+                          {editManualChannelInput ? 'Выбрать из списка' : 'Ввести вручную'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {!editManualChannelInput && editAdminChannels.length > 0 ? (
+                      <select
+                        value={editingChannel.send_as_channel_username || ''}
+                        onChange={e => setEditingChannel({ ...editingChannel, send_as_channel_username: e.target.value })}
+                        style={{
+                          width: '100%', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                          borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                        }}
+                      >
+                        <option value="">Выберите канал аккаунта</option>
+                        {editAdminChannels.map(c => (
+                          <option key={c.id} value={c.username ? `@${c.username}` : String(c.id)}>
+                            {c.title} {c.username ? `(@${c.username})` : `(ID: ${c.id})`} {c.is_creator ? '• Создатель' : '• Админ'}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <input
+                          type="text"
+                          placeholder="@my_channel"
+                          value={editingChannel.send_as_channel_username || ''}
+                          onChange={e => setEditingChannel({ ...editingChannel, send_as_channel_username: e.target.value })}
+                          style={{
+                            flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                            borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleVerifySendAs(editingChannel.sender_account_id || '', editingChannel.send_as_channel_username || '', true)}
+                          disabled={editVerifyState.loading}
+                          style={{
+                            backgroundColor: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)',
+                            color: '#818cf8', borderRadius: '8px', padding: '0 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+                          }}
+                        >
+                          {editVerifyState.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Проверить'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Prompt Presets & Editor */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                      Инструкция для генерации
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+                    {FIRST_COMMENT_PRESETS.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setEditingChannel({ ...editingChannel, custom_prompt: p.prompt })}
+                        style={{
+                          padding: '3px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 600,
+                          backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', cursor: 'pointer'
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    rows={3}
+                    placeholder="Системный промпт (по умолчанию: лаконичный релевантный комментарий)"
+                    value={editingChannel.custom_prompt || ''}
+                    onChange={e => setEditingChannel({ ...editingChannel, custom_prompt: e.target.value })}
+                    style={{
+                      width: '100%', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                      borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                    }}
+                  />
+                </div>
+
+                {/* Anti-ad toggle */}
+                <div
+                  onClick={() => setEditingChannel({ ...editingChannel, skip_ads: editingChannel.skip_ads === false ? true : false })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                    padding: '8px 10px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{
+                    width: '18px', height: '18px', borderRadius: '4px',
+                    backgroundColor: editingChannel.skip_ads !== false ? '#10b981' : 'transparent',
+                    border: `1px solid ${editingChannel.skip_ads !== false ? '#10b981' : 'var(--border-color)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'
+                  }}>
+                    {editingChannel.skip_ads !== false && <Check className="w-3 h-3" />}
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Фильтрация рекламы (пропуск erid / #реклама)
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Timing Inputs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                  Мин. пауза (сек)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editingChannel.min_delay_seconds}
+                  onChange={e => setEditingChannel({ ...editingChannel, min_delay_seconds: Number(e.target.value) })}
+                  style={{
+                    width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                    borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                  Макс. пауза (сек)
+                </label>
+                <input
+                  type="number"
+                  min={editingChannel.min_delay_seconds}
+                  value={editingChannel.max_delay_seconds}
+                  onChange={e => setEditingChannel({ ...editingChannel, max_delay_seconds: Number(e.target.value) })}
+                  style={{
+                    width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                    borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
 
       {/* Hero Control Station */}
       <div style={{
@@ -330,7 +743,7 @@ export default function Channels() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                Мониторинг Telegram-каналов
+                Мониторинг каналов
               </h1>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -348,7 +761,7 @@ export default function Channels() {
               </div>
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-              Автоматический перехват свежих публикаций и запуск реалистичных веток обсуждений ботами.
+              Автоматический перехват публикаций: диалоговые сценарии или мгновенный первый комментарий от имени канала.
             </p>
           </div>
         </div>
@@ -374,8 +787,6 @@ export default function Channels() {
                 transition: 'all 0.2s ease',
                 boxShadow: '0 4px 12px rgba(239, 68, 68, 0.15)'
               }}
-              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'}
-              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
             >
               <PowerOff className="w-4 h-4" />
               {stopMonitor.isPending ? 'Остановка...' : 'Приостановить сканирование'}
@@ -400,11 +811,9 @@ export default function Channels() {
                 boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
                 opacity: (startMonitor.isPending || channels.length === 0) ? 0.5 : 1
               }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
             >
               {startMonitor.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
-              {startMonitor.isPending ? 'Запуск радара...' : 'Запустить радар мониторинга'}
+              {startMonitor.isPending ? 'Запуск...' : 'Запустить сканирование'}
             </button>
           )}
         </div>
@@ -438,7 +847,7 @@ export default function Channels() {
           }}
         >
           <Radio className="w-4 h-4" />
-          <span>📡 Мониторинг постов</span>
+          <span>Мониторинг каналов</span>
           <span style={{
             fontSize: '10px',
             padding: '1px 6px',
@@ -460,9 +869,9 @@ export default function Channels() {
             fontSize: '13px',
             fontWeight: 700,
             cursor: 'pointer',
-            border: activeTab === 'joiner' ? '1px solid #8b5cf6' : '1px solid var(--border-color)',
-            backgroundColor: activeTab === 'joiner' ? 'rgba(139, 92, 246, 0.12)' : 'var(--bg-card)',
-            color: activeTab === 'joiner' ? '#a78bfa' : 'var(--text-muted)',
+            border: activeTab === 'joiner' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+            backgroundColor: activeTab === 'joiner' ? 'var(--accent-soft)' : 'var(--bg-card)',
+            color: activeTab === 'joiner' ? 'var(--accent-text)' : 'var(--text-muted)',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -470,21 +879,21 @@ export default function Channels() {
           }}
         >
           <LogIn className="w-4 h-4" />
-          <span>🚪 Плавный вход ботов</span>
+          <span>Плавный инвайтер</span>
           {smoothJoinStatus?.status === 'running' && (
             <span style={{
               fontSize: '10px',
               padding: '2px 8px',
               borderRadius: '10px',
-              backgroundColor: '#8b5cf6',
+              backgroundColor: '#10b981',
               color: '#fff',
               fontWeight: 800,
               display: 'flex',
               alignItems: 'center',
               gap: '4px'
             }}>
-              <Loader2 className="w-3 h-3 animate-spin" />
-              В ПРОЦЕССЕ ({smoothJoinStatus.progress_percent || 0}%)
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              В процессе
             </span>
           )}
         </button>
@@ -492,11 +901,11 @@ export default function Channels() {
 
       {activeTab === 'monitor' ? (
         <>
-          {/* KPI Metrics Dashboard Bar */}
+          {/* Metrics Overview Bar */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px'
+            gap: '14px'
           }}>
             <div style={{
               backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
@@ -514,7 +923,7 @@ export default function Channels() {
                   {channels.length}
                 </div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Всего в базе
+                  Всего на контроле
                 </div>
               </div>
             </div>
@@ -546,17 +955,17 @@ export default function Channels() {
             }}>
               <div style={{
                 width: '42px', height: '42px', borderRadius: '12px',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)', color: '#818cf8',
+                backgroundColor: 'rgba(99, 102, 241, 0.15)', color: '#818cf8',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
-                <Layers className="w-5 h-5" />
+                <Zap className="w-5 h-5" />
               </div>
               <div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                  {scenarios.length}
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#818cf8', letterSpacing: '-0.02em' }}>
+                  {firstCommentCount}
                 </div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Пул сценариев
+                  Первый комментарий
                 </div>
               </div>
             </div>
@@ -577,7 +986,7 @@ export default function Channels() {
                   {logs.length}
                 </div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Событий зафиксировано
+                  Зафиксировано событий
                 </div>
               </div>
             </div>
@@ -586,7 +995,7 @@ export default function Channels() {
           {/* Main Workspace Layout */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(340px, 400px) 1fr',
+            gridTemplateColumns: 'minmax(340px, 440px) 1fr',
             gap: '24px',
             alignItems: 'start'
           }}>
@@ -620,23 +1029,97 @@ export default function Channels() {
                     padding: '2px 8px', borderRadius: '6px',
                     backgroundColor: 'var(--accent-soft)', color: 'var(--accent-text)'
                   }}>
-                    {detectedChannelCount} найдено
+                    {detectedChannelCount} в списке
                   </span>
                 )}
               </div>
 
+              {/* Mode Selection Segmented Control */}
+              <div>
+                <label style={{
+                  fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '8px', display: 'block'
+                }}>
+                  Режим комментирования
+                </label>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '8px',
+                  backgroundColor: 'var(--bg-main)',
+                  padding: '4px',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddMode('scenario');
+                      setMinDelay(10);
+                      setMaxDelay(30);
+                    }}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: addMode === 'scenario' ? '1px solid #10b981' : 'none',
+                      backgroundColor: addMode === 'scenario' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                      color: addMode === 'scenario' ? '#10b981' : 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span>Ветка сценария</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddMode('first_comment');
+                      setMinDelay(0);
+                      setMaxDelay(2);
+                    }}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: addMode === 'first_comment' ? '1px solid #6366f1' : 'none',
+                      backgroundColor: addMode === 'first_comment' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                      color: addMode === 'first_comment' ? '#818cf8' : 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>Первый комментарий</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Target channels input */}
               <div>
                 <label style={{
                   fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
                   letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '6px', display: 'block'
                 }}>
-                  Ссылки или @username каналов
+                  Ссылки или юзернеймы целевых каналов
                 </label>
                 <textarea
                   placeholder={"@channel_one\nhttps://t.me/channel_two\nchannel_three"}
                   value={newChannels}
                   onChange={e => setNewChannels(e.target.value)}
-                  rows={5}
+                  rows={4}
                   style={{
                     width: '100%',
                     backgroundColor: 'var(--bg-main)',
@@ -652,10 +1135,221 @@ export default function Channels() {
                     transition: 'border-color 0.2s'
                   }}
                 />
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  Вставьте построчно или через запятую. Поддерживаются ссылки t.me/... и @юзернеймы.
-                </p>
               </div>
+
+              {/* FIRST COMMENT SPECIFIC SETTINGS */}
+              {addMode === 'first_comment' && (
+                <div style={{
+                  backgroundColor: 'rgba(99, 102, 241, 0.06)',
+                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  borderRadius: '14px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8' }}>
+                    <Zap className="w-4 h-4" />
+                    <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Параметры первого комментария
+                    </span>
+                  </div>
+
+                  {/* Sender Account */}
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', display: 'block' }}>
+                      Рабочий аккаунт
+                    </label>
+                    <select
+                      value={senderAccountId}
+                      onChange={e => setSenderAccountId(e.target.value ? Number(e.target.value) : '')}
+                      style={{
+                        width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                        borderRadius: '10px', padding: '9px 12px', fontSize: '13px', color: 'var(--text-main)', outline: 'none'
+                      }}
+                    >
+                      <option value="">Автовыбор из активных аккаунтов</option>
+                      {activeAccounts.map((acc: any) => (
+                        <option key={acc.id} value={acc.id}>
+                          ID #{acc.id} {acc.custom_name ? `• ${acc.custom_name}` : ''} ({acc.username ? `@${acc.username}` : acc.phone})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Send As Channel Toggle */}
+                  <div
+                    onClick={() => setSendAsChannelToggle(!sendAsChannelToggle)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                      padding: '10px 12px', borderRadius: '10px',
+                      backgroundColor: sendAsChannelToggle ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-main)',
+                      border: `1px solid ${sendAsChannelToggle ? 'rgba(99, 102, 241, 0.35)' : 'var(--border-color)'}`
+                    }}
+                  >
+                    <div style={{
+                      width: '20px', height: '20px', borderRadius: '6px',
+                      backgroundColor: sendAsChannelToggle ? '#6366f1' : 'transparent',
+                      border: `1px solid ${sendAsChannelToggle ? '#6366f1' : 'var(--border-color)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0
+                    }}>
+                      {sendAsChannelToggle && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Megaphone className="w-4 h-4 text-indigo-400" />
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                          От лица канала ({sendAsChannelToggle ? 'ВКЛ' : 'ВЫКЛ'})
+                        </div>
+                        <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: 0 }}>
+                          Публикация сообщения с аватаром и именем Telegram-канала
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Channel selection if toggle ON */}
+                  {sendAsChannelToggle && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                          Канал для публикации
+                        </label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => refetchAddAdminChannels()}
+                            disabled={isAddAdminChannelsLoading || !senderAccountId}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '4px',
+                              backgroundColor: 'transparent', border: 'none', color: '#818cf8', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            }}
+                          >
+                            <RotateCw className={`w-3 h-3 ${isAddAdminChannelsLoading ? 'animate-spin' : ''}`} />
+                            <span>Обновить список</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManualChannelInput(!manualChannelInput)}
+                            style={{
+                              backgroundColor: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            }}
+                          >
+                            {manualChannelInput ? 'Выбрать из списка' : 'Ввести вручную'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {!manualChannelInput && addAdminChannels.length > 0 ? (
+                        <select
+                          value={sendAsChannel}
+                          onChange={e => setSendAsChannel(e.target.value)}
+                          style={{
+                            width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                            borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                          }}
+                        >
+                          <option value="">Выберите канал аккаунта</option>
+                          {addAdminChannels.map(c => (
+                            <option key={c.id} value={c.username ? `@${c.username}` : String(c.id)}>
+                              {c.title} {c.username ? `(@${c.username})` : `(ID: ${c.id})`} {c.is_creator ? '• Создатель' : '• Админ'}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <input
+                            type="text"
+                            placeholder="@my_channel"
+                            value={sendAsChannel}
+                            onChange={e => setSendAsChannel(e.target.value)}
+                            style={{
+                              flex: 1, backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                              borderRadius: '8px', padding: '8px 12px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleVerifySendAs(senderAccountId, sendAsChannel, false)}
+                            disabled={verifyState.loading}
+                            style={{
+                              backgroundColor: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.35)',
+                              color: '#818cf8', borderRadius: '8px', padding: '0 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+                            }}
+                          >
+                            {verifyState.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Проверить'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Prompt Studio with Quick Presets */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                        Инструкция для генерации
+                      </label>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+                      {FIRST_COMMENT_PRESETS.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setCustomPrompt(p.prompt)}
+                          style={{
+                            padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
+                            backgroundColor: customPrompt === p.prompt ? 'rgba(99, 102, 241, 0.25)' : 'var(--bg-main)',
+                            border: `1px solid ${customPrompt === p.prompt ? '#6366f1' : 'var(--border-color)'}`,
+                            color: customPrompt === p.prompt ? '#818cf8' : 'var(--text-muted)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      rows={3}
+                      placeholder="Кастомная инструкция (например: 'Остроумный экспертный комментарий строго по теме')"
+                      value={customPrompt}
+                      onChange={e => setCustomPrompt(e.target.value)}
+                      style={{
+                        width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                        borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  {/* Anti-Ad Shield Toggle */}
+                  <div
+                    onClick={() => setSkipAds(!skipAds)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                      padding: '10px 12px', borderRadius: '10px',
+                      backgroundColor: skipAds ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-main)',
+                      border: `1px solid ${skipAds ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`
+                    }}
+                  >
+                    <div style={{
+                      width: '20px', height: '20px', borderRadius: '6px',
+                      backgroundColor: skipAds ? '#10b981' : 'transparent',
+                      border: `1px solid ${skipAds ? '#10b981' : 'var(--border-color)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0
+                    }}>
+                      {skipAds && <Check className="w-3.5 h-3.5" />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                        Фильтрация рекламных постов
+                      </div>
+                      <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: 0 }}>
+                        Пропуск постов с маркировкой #реклама, erid и спонсорскими ссылками
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Preset Delay Selectors */}
               <div>
@@ -664,16 +1358,22 @@ export default function Channels() {
                     fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
                     letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 0
                   }}>
-                    Пауза после выхода нового поста
+                    Пауза перед отправкой
                   </label>
-                  <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>до старта ветки</span>
+                  <span style={{ fontSize: '10px', color: '#818cf8', fontWeight: 600 }}>
+                    {addMode === 'first_comment' ? 'Мгновенная реакция' : 'до старта ветки'}
+                  </span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                  {[
-                    { label: '⚡ 5–15 сек', min: 5, max: 15 },
-                    { label: '⚖️ 10–30 сек', min: 10, max: 30 },
-                    { label: '🛡️ 30–60 сек', min: 30, max: 60 }
-                  ].map(preset => {
+                  {(addMode === 'first_comment' ? [
+                    { label: '0–2 сек', min: 0, max: 2 },
+                    { label: '1–3 сек', min: 1, max: 3 },
+                    { label: '3–8 сек', min: 3, max: 8 }
+                  ] : [
+                    { label: '5–15 сек', min: 5, max: 15 },
+                    { label: '10–30 сек', min: 10, max: 30 },
+                    { label: '30–60 сек', min: 30, max: 60 }
+                  ]).map(preset => {
                     const isActive = minDelay === preset.min && maxDelay === preset.max;
                     return (
                       <button
@@ -684,16 +1384,11 @@ export default function Channels() {
                           setMaxDelay(preset.max);
                         }}
                         style={{
-                          padding: '8px 4px',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          fontWeight: 600,
+                          padding: '8px 4px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
                           border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-color)',
                           backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--bg-main)',
                           color: isActive ? 'var(--accent-text)' : 'var(--text-muted)',
-                          cursor: 'pointer',
-                          textAlign: 'center',
-                          transition: 'all 0.15s'
+                          cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s'
                         }}
                       >
                         {preset.label}
@@ -711,9 +1406,9 @@ export default function Channels() {
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     value={minDelay}
-                    onChange={e => setMinDelay(Math.max(1, Number(e.target.value)))}
+                    onChange={e => setMinDelay(Math.max(0, Number(e.target.value)))}
                     style={{
                       width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
                       borderRadius: '10px', padding: '9px 12px', fontSize: '13px', color: 'var(--text-main)', outline: 'none'
@@ -737,10 +1432,10 @@ export default function Channels() {
                 </div>
               </div>
 
-              {/* Auto-join Bots to Discussion Group Toggle */}
+              {/* Auto-join Bots */}
               <div style={{
-                backgroundColor: autoJoinOnAdd ? 'rgba(139, 92, 246, 0.08)' : 'var(--bg-main)',
-                border: `1px solid ${autoJoinOnAdd ? 'rgba(139, 92, 246, 0.3)' : 'var(--border-color)'}`,
+                backgroundColor: autoJoinOnAdd ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-main)',
+                border: `1px solid ${autoJoinOnAdd ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-color)'}`,
                 borderRadius: '12px',
                 padding: '12px 14px',
                 display: 'flex',
@@ -752,77 +1447,47 @@ export default function Channels() {
                   style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
                 >
                   <div style={{
-                    width: '22px', height: '22px', borderRadius: '6px',
-                    backgroundColor: autoJoinOnAdd ? '#8b5cf6' : 'transparent',
-                    border: `1px solid ${autoJoinOnAdd ? '#8b5cf6' : 'var(--border-color)'}`,
+                    width: '20px', height: '20px', borderRadius: '6px',
+                    backgroundColor: autoJoinOnAdd ? '#6366f1' : 'transparent',
+                    border: `1px solid ${autoJoinOnAdd ? '#6366f1' : 'var(--border-color)'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: '#fff', flexShrink: 0
                   }}>
                     {autoJoinOnAdd && <Check className="w-3.5 h-3.5" />}
                   </div>
                   <div>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <LogIn className="w-3.5 h-3.5 text-accent" />
-                      <span>Авто-вход ботов в обсуждения</span>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
+                      Плавный вход в чат обсуждения
                     </div>
-                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      Плавно заведёт ботов в чат с антиспам-паузами 30–90 сек.
+                    <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: 0 }}>
+                      Автоматическое добавление аккаунтов в группу перед комментированием
                     </p>
                   </div>
                 </div>
 
                 {autoJoinOnAdd && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Завести:</span>
-                    {[3, 5, 10].map(cnt => (
-                      <button
-                        key={cnt}
-                        type="button"
-                        onClick={() => setAutoJoinCountOnAdd(cnt)}
-                        style={{
-                          padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700,
-                          border: autoJoinCountOnAdd === cnt ? '1px solid #8b5cf6' : '1px solid var(--border-color)',
-                          backgroundColor: autoJoinCountOnAdd === cnt ? 'rgba(139, 92, 246, 0.25)' : 'var(--bg-main)',
-                          color: autoJoinCountOnAdd === cnt ? '#c4b5fd' : 'var(--text-muted)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {cnt} ботов
-                      </button>
-                    ))}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px', borderTop: '1px solid rgba(99, 102, 241, 0.15)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Количество ботов:</span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {[1, 2, 3, 5].map(n => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setAutoJoinCountOnAdd(n)}
+                          style={{
+                            padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700,
+                            border: autoJoinCountOnAdd === n ? '1px solid #6366f1' : '1px solid var(--border-color)',
+                            backgroundColor: autoJoinCountOnAdd === n ? '#6366f1' : 'var(--bg-main)',
+                            color: autoJoinCountOnAdd === n ? '#fff' : 'var(--text-muted)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
-              </div>
-
-              {/* Anti-repeat Toggle */}
-              <div
-                onClick={() => setNoRepeat(!noRepeat)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer',
-                  padding: '12px 14px', borderRadius: '12px',
-                  backgroundColor: noRepeat ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-main)',
-                  border: `1px solid ${noRepeat ? 'rgba(16, 185, 129, 0.25)' : 'var(--border-color)'}`,
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{
-                  width: '24px', height: '24px', borderRadius: '6px',
-                  backgroundColor: noRepeat ? '#10b981' : 'transparent',
-                  border: `1px solid ${noRepeat ? '#10b981' : 'var(--border-color)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', flexShrink: 0
-                }}>
-                  {noRepeat && <Check className="w-3.5 h-3.5" />}
-                </div>
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Shuffle className="w-3.5 h-3.5 text-accent" />
-                    <span>Антиповтор сценариев</span>
-                  </div>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    Исключает отправку одинакового сценария в один канал дважды подряд.
-                  </p>
-                </div>
               </div>
 
               {/* Submit Button */}
@@ -830,7 +1495,7 @@ export default function Channels() {
                 onClick={() => addChannels.mutate()}
                 disabled={!newChannels.trim() || addChannels.isPending}
                 style={{
-                  backgroundColor: 'var(--accent)',
+                  backgroundColor: addMode === 'first_comment' ? '#6366f1' : 'var(--accent)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '12px',
@@ -847,7 +1512,7 @@ export default function Channels() {
                 }}
               >
                 {addChannels.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                {addChannels.isPending ? 'Сохранение каналов...' : 'Добавить в мониторинг'}
+                {addChannels.isPending ? 'Сохранение...' : addMode === 'first_comment' ? 'Добавить в режим первого комментария' : 'Добавить в мониторинг'}
               </button>
             </div>
 
@@ -867,10 +1532,10 @@ export default function Channels() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                   <div>
                     <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
-                      Флот каналов на радаре
+                      Список каналов на контроле
                     </h2>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                      Индивидуальные настройки таймингов и антиповтора для каждого канала.
+                      Индивидуальные настройки режимов, задержек и авторства.
                     </p>
                   </div>
 
@@ -895,7 +1560,7 @@ export default function Channels() {
                     </div>
 
                     <div style={{ display: 'flex', backgroundColor: 'var(--bg-main)', borderRadius: '10px', padding: '3px', border: '1px solid var(--border-color)' }}>
-                      {(['all', 'active', 'paused'] as const).map(mode => (
+                      {(['all', 'active', 'paused', 'first_comment'] as const).map(mode => (
                         <button
                           key={mode}
                           onClick={() => setFilterMode(mode)}
@@ -907,7 +1572,7 @@ export default function Channels() {
                             transition: 'all 0.15s'
                           }}
                         >
-                          {mode === 'all' ? 'Все' : mode === 'active' ? 'Вкл' : 'Выкл'}
+                          {mode === 'all' ? 'Все' : mode === 'active' ? 'Вкл' : mode === 'paused' ? 'Пауза' : '1-й коммент'}
                         </button>
                       ))}
                     </div>
@@ -930,35 +1595,39 @@ export default function Channels() {
                     </p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {filteredChannels.map(ch => {
                       const draft = delayDrafts[ch.id] || { min: ch.min_delay_seconds, max: ch.max_delay_seconds };
                       const isDirty = draft.min !== ch.min_delay_seconds || draft.max !== ch.max_delay_seconds;
+                      const isFirstComment = ch.execution_mode === 'first_comment';
 
                       return (
                         <div
                           key={ch.id}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '12px 16px', borderRadius: '12px',
-                            backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                            padding: '14px 18px', borderRadius: '14px',
+                            backgroundColor: 'var(--bg-main)',
+                            border: `1px solid ${isFirstComment ? 'rgba(99, 102, 241, 0.25)' : 'var(--border-color)'}`,
                             transition: 'all 0.15s ease',
-                            opacity: ch.is_active ? 1 : 0.65
+                            opacity: ch.is_active ? 1 : 0.65,
+                            flexWrap: 'wrap',
+                            gap: '12px'
                           }}
                         >
-                          {/* Left: Channel Info */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {/* Left: Channel Info & Badges */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '220px' }}>
                             <div style={{
-                              width: '32px', height: '32px', borderRadius: '10px',
-                              backgroundColor: ch.is_active ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                              color: ch.is_active ? '#10b981' : '#ef4444',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center'
+                              width: '36px', height: '36px', borderRadius: '10px',
+                              backgroundColor: isFirstComment ? 'rgba(99, 102, 241, 0.15)' : ch.is_active ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                              color: isFirstComment ? '#818cf8' : ch.is_active ? '#10b981' : '#ef4444',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                             }}>
-                              <Radio className="w-4 h-4" />
+                              {isFirstComment ? <Zap className="w-4 h-4" /> : <Radio className="w-4 h-4" />}
                             </div>
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-main)' }}>
                                   @{ch.channel_username}
                                 </span>
                                 <a
@@ -970,9 +1639,31 @@ export default function Channels() {
                                   <ExternalLink className="w-3 h-3" />
                                 </a>
                               </div>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                ID #{ch.id}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                                {isFirstComment ? (
+                                  <span style={{
+                                    fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '6px',
+                                    backgroundColor: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                  }}>
+                                    <Zap className="w-2.5 h-2.5" />
+                                    {ch.send_as_mode === 'channel' && ch.send_as_channel_username ? `Канал: ${ch.send_as_channel_username}` : 'Первый комментарий'}
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '6px',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                  }}>
+                                    <Layers className="w-2.5 h-2.5" />
+                                    Сценарий
+                                  </span>
+                                )}
+
+                                {ch.skip_ads && isFirstComment && (
+                                  <span style={{ fontSize: '10px', color: '#10b981', display: 'inline-flex', alignItems: 'center' }} title="Фильтр рекламы активен">
+                                    <ShieldCheck className="w-3 h-3" />
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -986,14 +1677,14 @@ export default function Channels() {
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>пауза:</span>
                             <input
                               type="number"
-                              min={1}
+                              min={0}
                               value={draft.min}
                               onChange={e => {
                                 const val = Number(e.target.value);
                                 setDelayDrafts(prev => ({ ...prev, [ch.id]: { ...draft, min: val } }));
                               }}
                               style={{
-                                width: '40px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                                width: '38px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
                                 borderRadius: '6px', padding: '2px 4px', fontSize: '11px', color: 'var(--text-main)', textAlign: 'center', outline: 'none'
                               }}
                             />
@@ -1007,7 +1698,7 @@ export default function Channels() {
                                 setDelayDrafts(prev => ({ ...prev, [ch.id]: { ...draft, max: val } }));
                               }}
                               style={{
-                                width: '40px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                                width: '38px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
                                 borderRadius: '6px', padding: '2px 4px', fontSize: '11px', color: 'var(--text-main)', textAlign: 'center', outline: 'none'
                               }}
                             />
@@ -1026,24 +1717,38 @@ export default function Channels() {
                             )}
                           </div>
 
-                          {/* Right: Actions */}
+                          {/* Right: Mode & Actions */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {/* Anti-repeat badge button */}
+                            {/* Mode toggle button */}
                             <button
-                              onClick={() => toggleNoRepeat.mutate({ id: ch.id, val: !ch.no_repeat_scenarios })}
+                              onClick={() => toggleExecutionMode.mutate({ id: ch.id, mode: isFirstComment ? 'scenario' : 'first_comment' })}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '6px 10px', borderRadius: '8px',
-                                border: `1px solid ${ch.no_repeat_scenarios ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-color)'}`,
-                                backgroundColor: ch.no_repeat_scenarios ? 'rgba(99, 102, 241, 0.12)' : 'transparent',
-                                color: ch.no_repeat_scenarios ? '#818cf8' : 'var(--text-muted)',
+                                border: isFirstComment ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid rgba(16, 185, 129, 0.3)',
+                                backgroundColor: isFirstComment ? 'rgba(99, 102, 241, 0.15)' : 'rgba(16, 185, 129, 0.08)',
+                                color: isFirstComment ? '#818cf8' : '#10b981',
                                 fontSize: '11px', fontWeight: 700, cursor: 'pointer',
                                 transition: 'all 0.15s'
                               }}
-                              title="Антиповтор сценариев"
+                              title="Нажмите для переключения режима (Сценарий / Первый комментарий)"
                             >
-                              <Shuffle className="w-3 h-3" />
-                              <span>{ch.no_repeat_scenarios ? 'Антиповтор' : 'Повторы'}</span>
+                              {isFirstComment ? <Zap className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
+                              <span>{isFirstComment ? '1-й коммент' : 'Сценарий'}</span>
+                            </button>
+
+                            {/* Edit modal button */}
+                            <button
+                              onClick={() => openEditModal(ch)}
+                              style={{
+                                width: '32px', height: '32px', borderRadius: '8px',
+                                border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)',
+                                color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', transition: 'all 0.15s'
+                              }}
+                              title="Параметры канала"
+                            >
+                              <Settings className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Active Switch */}
@@ -1102,270 +1807,130 @@ export default function Channels() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Terminal className="w-4 h-4 text-accent" />
+                    <div style={{
+                      width: '28px', height: '28px', borderRadius: '8px',
+                      backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <Terminal className="w-4 h-4" />
+                    </div>
                     <h3 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)' }}>
-                      Телеметрия и события радара
+                      Журнал событий мониторинга
                     </h3>
                   </div>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {logs.length} событий в буфере
+                    Live обновление
                   </span>
                 </div>
 
-                {logs.length === 0 ? (
-                  <div style={{
-                    padding: '20px', borderRadius: '10px',
-                    backgroundColor: 'var(--bg-main)', textAlign: 'center',
-                    fontSize: '12px', color: 'var(--text-muted)'
-                  }}>
-                    Ожидание новых постов и событий...
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '240px', overflowY: 'auto' }}>
-                    {logs.slice(0, 20).map((log: any) => {
-                      const isSuccess = log.status === 'bots_engaged' || log.status === 'success';
-                      const isPost = log.status === 'post_detected';
-                      const isError = log.status === 'error';
-
+                <div style={{
+                  maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px',
+                  paddingRight: '4px'
+                }}>
+                  {logs.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                      Событий пока не зафиксировано
+                    </div>
+                  ) : (
+                    logs.slice(0, 15).map((log: any) => {
+                      const isSuccess = log.status === 'success' || log.status === 'ok';
                       return (
                         <div
                           key={log.id}
                           style={{
-                            padding: '9px 12px',
-                            borderRadius: '8px',
-                            backgroundColor: 'var(--bg-main)',
-                            border: '1px solid var(--border-color)',
-                            fontSize: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '10px'
+                            padding: '10px 14px', borderRadius: '10px',
+                            backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px'
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, overflow: 'hidden' }}>
-                            <span style={{
-                              fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px',
-                              textTransform: 'uppercase', flexShrink: 0,
-                              backgroundColor: isSuccess ? 'rgba(16,185,129,0.12)' : isPost ? 'rgba(99,102,241,0.12)' : isError ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.05)',
-                              color: isSuccess ? '#10b981' : isPost ? '#818cf8' : isError ? '#ef4444' : 'var(--text-main)',
-                              border: `1px solid ${isSuccess ? 'rgba(16,185,129,0.3)' : isPost ? 'rgba(99,102,241,0.3)' : isError ? 'rgba(239,68,68,0.3)' : 'var(--border-color)'}`
-                            }}>
-                              {log.status}
-                            </span>
-                            <span style={{
-                              color: 'var(--text-main)', fontSize: '12px',
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                            }}>
-                              {log.error_message || log.status}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{
+                              width: '8px', height: '8px', borderRadius: '50%',
+                              backgroundColor: isSuccess ? '#10b981' : '#ef4444',
+                              flexShrink: 0
+                            }} />
+                            <span style={{ fontSize: '12px', color: 'var(--text-main)', wordBreak: 'break-all' }}>
+                              {log.error_message || `Сценарий #${log.scenario_id} завершен`}
                             </span>
                           </div>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'monospace' }}>
-                            {new Date(log.executed_at).toLocaleTimeString()}
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                            {log.executed_at ? new Date(log.executed_at).toLocaleTimeString() : ''}
                           </span>
                         </div>
                       );
-                    })}
-                  </div>
-                )}
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </>
       ) : (
-        /* Smooth Fleet Joiner Workspace */
+        /* Smooth Joiner Tab Workspace */
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(360px, 440px) 1fr',
-          gap: '24px',
-          alignItems: 'start'
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '18px',
+          padding: '28px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '24px'
         }}>
-          {/* Left Column: Joiner Settings Form */}
-          <div style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '18px',
-            padding: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '18px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                backgroundColor: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <LogIn className="w-5 h-5" />
-              </div>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)' }}>
+              Плавный инвайтер ботов в группы обсуждений
+            </h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              Безопасный автоматический вход ботов в чаты с человеческими рандомизированными паузами для обхода антиспам-фильтров.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-main)' }}>
-                  Мастер плавного входа ботов
-                </h2>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Поочередное вступление аккаунтов с защитой от банов Telegram
-                </p>
-              </div>
-            </div>
-
-            {/* Target Links Input */}
-            <div>
-              <label style={{
-                fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '6px', display: 'block'
-              }}>
-                Ссылки на группы / чаты / каналы
-              </label>
-              <textarea
-                placeholder={"https://t.me/target_group\n@chat_username\nhttps://t.me/+joinchat_hash"}
-                value={joinLinks}
-                onChange={e => setJoinLinks(e.target.value)}
-                rows={4}
-                disabled={smoothJoinStatus?.status === 'running'}
-                style={{
-                  width: '100%',
-                  backgroundColor: 'var(--bg-main)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '12px',
-                  padding: '12px 14px',
-                  fontSize: '13px',
-                  color: 'var(--text-main)',
-                  outline: 'none',
-                  fontFamily: 'monospace',
-                  lineHeight: '1.6',
-                  resize: 'vertical'
-                }}
-              />
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Поддерживаются публичные ссылки, юзернеймы и приватные инвайт-ссылки.
-              </p>
-            </div>
-
-            {/* Account Pool Size Selection */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <label style={{
-                  fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-                  letterSpacing: '0.05em', color: 'var(--text-muted)'
-                }}>
-                  Количество ботов для входа
+                <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px', display: 'block' }}>
+                  Ссылки на каналы или чаты для входа
                 </label>
-                <span style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600 }}>
-                  Доступно: {commentingAccounts.length} акк.
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '8px' }}>
-                {[
-                  { label: '3 бота', val: 3 },
-                  { label: '5 ботов', val: 5 },
-                  { label: '10 ботов', val: 10 },
-                  { label: `Все (${commentingAccounts.length})`, val: commentingAccounts.length || 1 }
-                ].map(opt => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    disabled={smoothJoinStatus?.status === 'running'}
-                    onClick={() => setJoinAccountCount(opt.val)}
-                    style={{
-                      padding: '7px 4px',
-                      borderRadius: '8px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      border: joinAccountCount === opt.val ? '1px solid #8b5cf6' : '1px solid var(--border-color)',
-                      backgroundColor: joinAccountCount === opt.val ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-main)',
-                      color: joinAccountCount === opt.val ? '#c4b5fd' : 'var(--text-muted)',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Точное число:</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={commentingAccounts.length || 100}
-                  value={joinAccountCount}
-                  disabled={smoothJoinStatus?.status === 'running'}
-                  onChange={e => setJoinAccountCount(Math.max(1, Number(e.target.value)))}
+                <textarea
+                  rows={6}
+                  placeholder={"https://t.me/chat_one\n@channel_two\nhttps://t.me/+private_link"}
+                  value={joinLinks}
+                  onChange={e => setJoinLinks(e.target.value)}
                   style={{
-                    width: '80px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
-                    borderRadius: '8px', padding: '6px 10px', fontSize: '12px', color: 'var(--text-main)', outline: 'none'
+                    width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                    borderRadius: '12px', padding: '12px', fontSize: '13px', color: 'var(--text-main)', outline: 'none'
                   }}
                 />
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>аккаунтов из пула</span>
-              </div>
-            </div>
-
-            {/* Interval / Periodicity Selection */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <label style={{
-                  fontSize: '11px', fontWeight: 700, textTransform: 'uppercase',
-                  letterSpacing: '0.05em', color: 'var(--text-muted)'
-                }}>
-                  Периодичность входа (пауза между ботами)
-                </label>
-                <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>
-                  🛡️ Антибан
-                </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '10px' }}>
-                {[
-                  { label: '⚡ Быстрый (15–30с)', min: 15, max: 30 },
-                  { label: '⚖️ Стандарт (30–90с)', min: 30, max: 90 },
-                  { label: '🛡️ Скрытный (90–240с)', min: 90, max: 240 }
-                ].map(preset => {
-                  const isActive = joinMinDelay === preset.min && joinMaxDelay === preset.max;
-                  return (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      disabled={smoothJoinStatus?.status === 'running'}
-                      onClick={() => {
-                        setJoinMinDelay(preset.min);
-                        setJoinMaxDelay(preset.max);
-                      }}
-                      style={{
-                        padding: '8px 4px',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        border: isActive ? '1px solid #8b5cf6' : '1px solid var(--border-color)',
-                        backgroundColor: isActive ? 'rgba(139, 92, 246, 0.15)' : 'var(--bg-main)',
-                        color: isActive ? '#c4b5fd' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        transition: 'all 0.15s'
-                      }}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
+                    Ботов на чат
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={joinAccountCount}
+                    onChange={e => setJoinAccountCount(Math.max(1, Number(e.target.value)))}
+                    style={{
+                      width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+                      borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)'
+                    }}
+                  />
+                </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                     Мин. пауза (сек)
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min={5}
                     value={joinMinDelay}
-                    disabled={smoothJoinStatus?.status === 'running'}
-                    onChange={e => setJoinMinDelay(Math.max(1, Number(e.target.value)))}
+                    onChange={e => setJoinMinDelay(Math.max(5, Number(e.target.value)))}
                     style={{
                       width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
-                      borderRadius: '10px', padding: '9px 12px', fontSize: '13px', color: 'var(--text-main)', outline: 'none'
+                      borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)'
                     }}
                   />
                 </div>
@@ -1377,284 +1942,79 @@ export default function Channels() {
                     type="number"
                     min={joinMinDelay}
                     value={joinMaxDelay}
-                    disabled={smoothJoinStatus?.status === 'running'}
                     onChange={e => setJoinMaxDelay(Math.max(joinMinDelay, Number(e.target.value)))}
                     style={{
                       width: '100%', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
-                      borderRadius: '10px', padding: '9px 12px', fontSize: '13px', color: 'var(--text-main)', outline: 'none'
+                      borderRadius: '8px', padding: '8px 10px', fontSize: '12px', color: 'var(--text-main)'
                     }}
                   />
                 </div>
               </div>
-            </div>
 
-            {/* Anti-spam Advice Note */}
-            <div style={{
-              backgroundColor: 'rgba(139, 92, 246, 0.08)',
-              border: '1px solid rgba(139, 92, 246, 0.25)',
-              borderRadius: '12px',
-              padding: '12px 14px',
-              fontSize: '11px',
-              color: '#c4b5fd',
-              lineHeight: '1.5'
-            }}>
-              <strong>💡 Как это работает:</strong> Первый бот заходит сразу через свой прокси, затем система делает паузу {joinMinDelay}–{joinMaxDelay} сек перед запуском следующего бота. Это полностью исключает спам-блокировку чата.
-            </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => startSmoothJoinMutation.mutate()}
+                  disabled={!joinLinks.trim() || startSmoothJoinMutation.isPending || smoothJoinStatus?.status === 'running'}
+                  style={{
+                    flex: 1, backgroundColor: 'var(--accent)', color: '#fff', border: 'none',
+                    borderRadius: '12px', padding: '12px', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                    opacity: (!joinLinks.trim() || smoothJoinStatus?.status === 'running') ? 0.5 : 1
+                  }}
+                >
+                  {startSmoothJoinMutation.isPending ? 'Запуск...' : 'Запустить плавный вход'}
+                </button>
 
-            {/* Action Buttons */}
-            {smoothJoinStatus?.status === 'running' ? (
-              <button
-                onClick={() => cancelSmoothJoinMutation.mutate()}
-                disabled={cancelSmoothJoinMutation.isPending}
-                style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                  border: '1px solid rgba(239, 68, 68, 0.4)',
-                  color: '#ef4444',
-                  borderRadius: '12px',
-                  padding: '13px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {cancelSmoothJoinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
-                <span>Прервать плавный вход</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => startSmoothJoinMutation.mutate()}
-                disabled={!joinLinks.trim() || startSmoothJoinMutation.isPending}
-                style={{
-                  backgroundColor: '#8b5cf6',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '13px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease',
-                  opacity: (!joinLinks.trim() || startSmoothJoinMutation.isPending) ? 0.5 : 1
-                }}
-              >
-                {startSmoothJoinMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-                <span>Запустить плавный вход ({joinAccountCount} ботов)</span>
-              </button>
-            )}
-          </div>
-
-          {/* Right Column: Live Telemetry & Progress Display */}
-          <div style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '18px',
-            padding: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <h2 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
-                  Телеметрия плавного входа
-                </h2>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  Отслеживание статуса каждого аккаунта в реальном времени
-                </p>
-              </div>
-
-              {/* Status Badge */}
-              <div style={{
-                padding: '5px 12px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                backgroundColor: smoothJoinStatus?.status === 'running' ? 'rgba(139, 92, 246, 0.15)' :
-                                 smoothJoinStatus?.status === 'done' ? 'rgba(16, 185, 129, 0.15)' :
-                                 smoothJoinStatus?.status === 'cancelled' ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-main)',
-                border: `1px solid ${smoothJoinStatus?.status === 'running' ? '#8b5cf6' :
-                                      smoothJoinStatus?.status === 'done' ? '#10b981' :
-                                      smoothJoinStatus?.status === 'cancelled' ? '#ef4444' : 'var(--border-color)'}`,
-                color: smoothJoinStatus?.status === 'running' ? '#c4b5fd' :
-                       smoothJoinStatus?.status === 'done' ? '#10b981' :
-                       smoothJoinStatus?.status === 'cancelled' ? '#ef4444' : 'var(--text-muted)'
-              }}>
-                <span style={{
-                  width: '6px', height: '6px', borderRadius: '50%',
-                  backgroundColor: smoothJoinStatus?.status === 'running' ? '#8b5cf6' :
-                                   smoothJoinStatus?.status === 'done' ? '#10b981' :
-                                   smoothJoinStatus?.status === 'cancelled' ? '#ef4444' : 'var(--text-muted)'
-                }} />
-                {smoothJoinStatus?.status === 'running' ? 'В ПРОЦЕССЕ ВХОДА' :
-                 smoothJoinStatus?.status === 'done' ? 'УСПЕШНО ЗАВЕРШЕНО' :
-                 smoothJoinStatus?.status === 'cancelled' ? 'ОТМЕНЕНО' : 'ГОТОВ К ЗАПУСКУ'}
-              </div>
-            </div>
-
-            {/* Progress Bar & KPI Stats */}
-            <div style={{
-              backgroundColor: 'var(--bg-main)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '14px',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
-                  Общий прогресс операции
-                </span>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#a78bfa' }}>
-                  {smoothJoinStatus?.progress_percent || 0}%
-                </span>
-              </div>
-
-              {/* Progress Track */}
-              <div style={{
-                width: '100%', height: '8px', borderRadius: '4px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  width: `${smoothJoinStatus?.progress_percent || 0}%`,
-                  height: '100%',
-                  backgroundColor: '#8b5cf6',
-                  borderRadius: '4px',
-                  transition: 'width 0.4s ease'
-                }} />
-              </div>
-
-              {/* Mini KPI Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '6px' }}>
-                <div style={{
-                  backgroundColor: 'var(--bg-card)', padding: '10px 12px', borderRadius: '10px',
-                  border: '1px solid var(--border-color)', textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#10b981' }}>
-                    {smoothJoinStatus?.joined_count || 0}
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Успешно
-                  </div>
-                </div>
-
-                <div style={{
-                  backgroundColor: 'var(--bg-card)', padding: '10px 12px', borderRadius: '10px',
-                  border: '1px solid var(--border-color)', textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#ef4444' }}>
-                    {smoothJoinStatus?.failed_count || 0}
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Ошибок
-                  </div>
-                </div>
-
-                <div style={{
-                  backgroundColor: 'var(--bg-card)', padding: '10px 12px', borderRadius: '10px',
-                  border: '1px solid var(--border-color)', textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-main)' }}>
-                    {smoothJoinStatus?.total_accounts || 0}
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                    Всего задач
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Current Active Step & Countdown Box */}
-            {smoothJoinStatus?.status === 'running' && (
-              <div style={{
-                backgroundColor: 'rgba(139, 92, 246, 0.08)',
-                border: '1px solid rgba(139, 92, 246, 0.25)',
-                borderRadius: '14px',
-                padding: '14px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Users className="w-5 h-5 text-accent" />
-                  <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Вход выполняет:</div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#c4b5fd' }}>
-                      {smoothJoinStatus.current_account || 'Инициализация...'}
-                    </div>
-                  </div>
-                </div>
-
-                {smoothJoinStatus.next_delay_seconds > 0 && (
-                  <div style={{
-                    padding: '6px 12px', borderRadius: '8px',
-                    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-                    fontSize: '12px', fontWeight: 700, color: '#c4b5fd',
-                    display: 'flex', alignItems: 'center', gap: '6px'
-                  }}>
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Пауза: {smoothJoinStatus.next_delay_seconds} сек</span>
-                  </div>
+                {smoothJoinStatus?.status === 'running' && (
+                  <button
+                    type="button"
+                    onClick={() => cancelSmoothJoinMutation.mutate()}
+                    disabled={cancelSmoothJoinMutation.isPending}
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)',
+                      borderRadius: '12px', padding: '12px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
+                    }}
+                  >
+                    Отменить
+                  </button>
                 )}
               </div>
-            )}
+            </div>
 
-            {/* Live Log Console */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Terminal className="w-3.5 h-3.5 text-accent" />
-                  <span>Журнал вступлений</span>
+            {/* Smooth Join Status Card */}
+            <div style={{
+              backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
+              borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Текущий статус процесса
                 </span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  {smoothJoinStatus?.logs?.length || 0} записей
+                <span style={{
+                  fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px',
+                  backgroundColor: smoothJoinStatus?.status === 'running' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
+                  color: smoothJoinStatus?.status === 'running' ? '#10b981' : 'var(--text-muted)'
+                }}>
+                  {smoothJoinStatus?.status === 'running' ? 'ВЫПОЛНЯЕТСЯ' : 'НЕ АКТИВЕН'}
                 </span>
               </div>
 
               <div style={{
-                backgroundColor: 'var(--bg-main)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '12px',
-                padding: '12px',
-                maxHeight: '280px',
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-                fontFamily: 'monospace',
-                fontSize: '11px'
+                maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px',
+                fontSize: '12px', fontFamily: 'monospace'
               }}>
-                {!smoothJoinStatus?.logs || smoothJoinStatus.logs.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    Журнал пуст. Нажмите «Запустить плавный вход», чтобы начать операцию.
+                {(!smoothJoinStatus?.logs || smoothJoinStatus.logs.length === 0) ? (
+                  <div style={{ color: 'var(--text-muted)', padding: '20px 0', textAlign: 'center' }}>
+                    Логи инвайтинга появятся здесь после запуска процесса
                   </div>
                 ) : (
-                  smoothJoinStatus.logs.map((item: string, idx: number) => (
+                  smoothJoinStatus.logs.map((item: string, i: number) => (
                     <div
-                      key={idx}
+                      key={i}
                       style={{
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        backgroundColor: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        color: item.startsWith('✅') ? '#10b981' :
-                               item.startsWith('❌') ? '#ef4444' :
-                               item.startsWith('⏳') ? '#a78bfa' : 'var(--text-main)'
+                        padding: '6px 10px', borderRadius: '6px',
+                        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                        color: item.startsWith('OK') || item.includes('Успешно') ? '#10b981' : item.includes('Ошибка') ? '#ef4444' : 'var(--text-main)'
                       }}
                     >
                       {item}
@@ -1665,61 +2025,6 @@ export default function Channels() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {confirmDeleteId !== null && (
-        <ModalOverlay isOpen={confirmDeleteId !== null} onClose={() => setConfirmDeleteId(null)}>
-          <div style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '18px',
-            padding: '24px',
-            maxWidth: '400px',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-main)' }}>
-                Удалить канал?
-              </h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-              Канал будет удален из базы мониторинга. Боты перестанут комментировать новые публикации в нем.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteId(null)}
-                style={{
-                  padding: '8px 16px', borderRadius: '10px', border: '1px solid var(--border-color)',
-                  backgroundColor: 'transparent', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
-                }}
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={() => confirmDeleteId && deleteChannel.mutate(confirmDeleteId)}
-                style={{
-                  padding: '8px 16px', borderRadius: '10px', border: 'none',
-                  backgroundColor: '#ef4444', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer'
-                }}
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
       )}
     </div>
   );

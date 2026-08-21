@@ -52,7 +52,13 @@ async def ensure_db_schema_sync():
                 "ALTER TABLE accounts ADD COLUMN source_type VARCHAR DEFAULT 'tdata'" if not is_postgres else "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS source_type VARCHAR DEFAULT 'tdata'",
                 "ALTER TABLE accounts ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" if not is_postgres else "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 "ALTER TABLE inbox_messages ADD COLUMN message_id BIGINT" if not is_postgres else "ALTER TABLE inbox_messages ADD COLUMN IF NOT EXISTS message_id BIGINT",
-                "ALTER TABLE prompt_templates ADD COLUMN steps_payload TEXT" if not is_postgres else "ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS steps_payload TEXT",
+                "ALTER TABLE monitored_channels ADD COLUMN execution_mode VARCHAR DEFAULT 'scenario'" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS execution_mode VARCHAR DEFAULT 'scenario'",
+                "ALTER TABLE monitored_channels ADD COLUMN sender_account_id INTEGER" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS sender_account_id INTEGER",
+                "ALTER TABLE monitored_channels ADD COLUMN send_as_mode VARCHAR DEFAULT 'account'" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS send_as_mode VARCHAR DEFAULT 'account'",
+                "ALTER TABLE monitored_channels ADD COLUMN send_as_channel_username VARCHAR" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS send_as_channel_username VARCHAR",
+                "ALTER TABLE monitored_channels ADD COLUMN custom_prompt TEXT" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS custom_prompt TEXT",
+                "ALTER TABLE monitored_channels ADD COLUMN ai_model VARCHAR" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS ai_model VARCHAR",
+                "ALTER TABLE monitored_channels ADD COLUMN skip_ads BOOLEAN DEFAULT TRUE" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS skip_ads BOOLEAN DEFAULT TRUE",
                 "UPDATE prompt_templates SET title = 'Скепсис и рекомендация проверенного решения', prompt_text = 'Диалог в ветке комментариев про выбор проверенного решения. Первый сомневается и жалуется на риски. Второй советует надежный вариант без лишней воды. Третий подтверждает личным положительным опытом.' WHERE title LIKE '%ivanchik%' OR prompt_text LIKE '%ivanchik%'",
             ]
             for stmt in common_migrations:

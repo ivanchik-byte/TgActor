@@ -24,6 +24,14 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
     max_delay = int(payload.get("max_delay_seconds") or 10)
     no_repeat = bool(payload.get("no_repeat_scenarios", True))
 
+    execution_mode = str(payload.get("execution_mode") or "scenario")
+    sender_account_id = payload.get("sender_account_id")
+    send_as_mode = str(payload.get("send_as_mode") or "account")
+    send_as_channel_username = payload.get("send_as_channel_username")
+    custom_prompt = payload.get("custom_prompt")
+    ai_model = payload.get("ai_model")
+    skip_ads = bool(payload.get("skip_ads", True))
+
     if not raw_input:
         raise HTTPException(400, "Укажите имя канала или ссылку t.me")
 
@@ -49,7 +57,14 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
                 is_active=True,
                 min_delay_seconds=min_delay,
                 max_delay_seconds=max_delay,
-                no_repeat_scenarios=no_repeat
+                no_repeat_scenarios=no_repeat,
+                execution_mode=execution_mode,
+                sender_account_id=sender_account_id,
+                send_as_mode=send_as_mode,
+                send_as_channel_username=send_as_channel_username,
+                custom_prompt=custom_prompt,
+                ai_model=ai_model,
+                skip_ads=skip_ads
             )
             session.add(channel)
             await session.flush()
@@ -99,9 +114,44 @@ async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
             ch.max_delay_seconds = int(payload["max_delay_seconds"])
         if "no_repeat_scenarios" in payload:
             ch.no_repeat_scenarios = bool(payload["no_repeat_scenarios"])
+        if "execution_mode" in payload:
+            ch.execution_mode = str(payload["execution_mode"])
+        if "sender_account_id" in payload:
+            ch.sender_account_id = payload["sender_account_id"]
+        if "send_as_mode" in payload:
+            ch.send_as_mode = str(payload["send_as_mode"])
+        if "send_as_channel_username" in payload:
+            ch.send_as_channel_username = payload["send_as_channel_username"]
+        if "custom_prompt" in payload:
+            ch.custom_prompt = payload["custom_prompt"]
+        if "ai_model" in payload:
+            ch.ai_model = payload["ai_model"]
+        if "skip_ads" in payload:
+            ch.skip_ads = bool(payload["skip_ads"])
 
         await session.commit()
         return {"status": "ok"}
+
+@router.post("/api/channels/verify-send-as")
+async def verify_send_as_channel(payload: Dict[str, Any] = Body(...)):
+    """Verify if a specific account can post as a given channel."""
+    account_id = payload.get("account_id")
+    channel_username = str(payload.get("channel_username") or "").strip()
+
+    if not account_id:
+        raise HTTPException(400, "Выберите аккаунт для проверки")
+    if not channel_username:
+        raise HTTPException(400, "Укажите юзернейм канала (@channel)")
+
+    async with async_session() as session:
+        from app.models.models import Account
+        account = await session.get(Account, account_id)
+        if not account:
+            raise HTTPException(404, "Аккаунт не найден")
+
+        from app.services.first_comment_service import check_channel_send_as_permission
+        result = await check_channel_send_as_permission(account, channel_username)
+        return result
 
 @router.delete("/api/channels/{channel_id}")
 async def delete_channel(channel_id: int):
