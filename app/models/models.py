@@ -155,6 +155,17 @@ class MonitoredChannel(Base):
     no_repeat_scenarios = Column(Boolean, default=True)
     history_json = Column(Text, default="[]")
 
+    # Mode: 'scenario' (multi-bot thread) or 'first_comment' (single bot / send as channel)
+    execution_mode = Column(String, default="scenario", nullable=False, server_default="scenario")
+    sender_account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    send_as_mode = Column(String, default="account", nullable=False, server_default="account") # 'account' or 'channel'
+    send_as_channel_username = Column(String, nullable=True)
+    custom_prompt = Column(Text, nullable=True)
+    ai_model = Column(String, nullable=True)
+    skip_ads = Column(Boolean, default=True, server_default="true")
+
+    sender_account = relationship("Account", foreign_keys=[sender_account_id])
+
 class TaskLog(Base):
     __tablename__ = "task_logs"
 
