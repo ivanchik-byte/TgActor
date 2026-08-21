@@ -30,7 +30,7 @@ async def broadcast_inbox_event(event_dict: dict):
 async def lifespan(app):
     port = os.getenv("PORT", "8000")
     logger.info("==================================================")
-    logger.info(f"TgActor Backend v3.1.0 — Successfully started!")
+    logger.info(f"TgActor Backend v3.2.0 — Successfully started!")
     logger.info(f"Dashboard available at: http://localhost:{port}")
     logger.info("==================================================")
 
