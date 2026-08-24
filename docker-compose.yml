@@ -31,7 +31,9 @@ services:
     ports:
       - "${PORT:-8000}:8000"
     volumes:
-      - .:/app
+      # Mount only runtime data; mounting "." would shadow the built frontend/dist
+      - ./data:/app/data
+      - ./media:/app/media
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://tgactor:tgactor_password@db:5432/tgactor_db}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}

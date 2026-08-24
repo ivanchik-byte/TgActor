@@ -3,6 +3,7 @@ import random
 import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import async_session
 from app.telegram.client import get_hydrogram_client
@@ -90,7 +91,7 @@ async def _smooth_join_worker(
     async with async_session() as session:
         try:
             # Fetch accounts with proxies
-            stmt = select(Account).where(Account.id.in_(account_ids))
+            stmt = select(Account).where(Account.id.in_(account_ids)).options(selectinload(Account.proxy))
             res = await session.execute(stmt)
             accounts_map = {acc.id: acc for acc in res.scalars().all()}
 
@@ -107,6 +108,8 @@ async def _smooth_join_worker(
                     if not acc:
                         continue
 
+                    acc_label = acc.custom_name or (f"@{acc.username}" if acc.username else (acc.first_name or f"Бот #{acc.id}"))
+                    was_already_member = False
                     client = get_hydrogram_client(acc, acc.proxy)
                     try:
                         await client.start()

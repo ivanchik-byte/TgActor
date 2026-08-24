@@ -602,7 +602,7 @@ export default function Pools() {
                 {isLoading ? '...' : stats.both}
               </div>
               <div style={{ fontSize: '12px', color: stats.none > 0 ? '#eab308' : 'var(--text-muted)', marginTop: '2px' }}>
-                {stats.none > 0 ? `⚠️ ${stats.none} без пула` : 'Все распределены'}
+        {stats.none > 0 ? ` ${stats.none} без пула` : 'Все распределены'}
               </div>
             </div>
             <div

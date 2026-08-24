@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Dict, Any
@@ -38,8 +39,10 @@ async def save_ai_config(cfg: AISettingsSchema):
             "ai_system_prompt": prompt_to_save,
             "ai_base_url": cfg.ai_base_url.strip() if cfg.ai_base_url else ""
         }
-        # Only update API key if user didn't leave it masked or empty
-        if cfg.ai_api_key and not cfg.ai_api_key.startswith("***") and "..." not in cfg.ai_api_key:
+        # Only update API key if user didn't leave it masked or empty.
+        # The UI mask format is exactly 'XXXX...YYYY'; real keys are longer.
+        is_mask = bool(re.fullmatch(r".{4}\.\.\..{4}", cfg.ai_api_key or ""))
+        if cfg.ai_api_key and not is_mask:
             updates["ai_api_key"] = cfg.ai_api_key.strip()
 
         for key, val in updates.items():
