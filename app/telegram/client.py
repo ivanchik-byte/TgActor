@@ -1,8 +1,11 @@
 from hydrogram import Client
+from app.core.config import TELEGRAM_API_ID, TELEGRAM_API_HASH
 from app.models.models import Account, Proxy
 from app.core.security import decrypt_session
 
-def get_hydrogram_client(account: Account, proxy: Proxy = None, api_id: int = 2040, api_hash: str = "b18441a1ed607415570faf839e64629b") -> Client:
+def get_hydrogram_client(account: Account, proxy: Proxy = None, api_id: int = None, api_hash: str = None) -> Client:
+    api_id = api_id or TELEGRAM_API_ID
+    api_hash = api_hash or TELEGRAM_API_HASH
     plain_session = decrypt_session(account.session_string)
     
     target_proxy = proxy

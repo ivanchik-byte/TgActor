@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.core.database import async_session
@@ -7,6 +8,10 @@ from app.models.models import Account
 from app.services.inbox_service import sync_dialogs_for_account
 
 logger = logging.getLogger(__name__)
+
+# Aggressive MTProto polling risks FloodWait and spam blocks.
+# Default 20s between accounts, configurable via env.
+SYNC_INTERVAL_SECONDS = float(os.getenv("INBOX_SYNC_INTERVAL", "20"))
 
 _listeners_running = False
 _listener_task: asyncio.Task = None
@@ -53,7 +58,7 @@ async def _run_inbox_live_sync():
         except Exception as e:
             logger.error(f"Error in inbox live sync loop: {e}", exc_info=True)
 
-        await asyncio.sleep(3.0)
+        await asyncio.sleep(SYNC_INTERVAL_SECONDS)
 
 async def start_inbox_listeners():
     global _listeners_running, _listener_task

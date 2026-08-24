@@ -1,4 +1,5 @@
 import os
+import asyncio
 import zipfile
 import tempfile
 import logging
@@ -30,7 +31,9 @@ async def convert_tdata_zip_to_encrypted_session(zip_path: str, password: str = 
                 tdata_path = temp_dir
                 
             try:
-                td = TDesktop(tdata_path)
+                # TDesktop parses tdata synchronously; offload to a thread so
+                # the event loop keeps serving requests during the upload
+                td = await asyncio.to_thread(TDesktop, tdata_path)
                 
                 if not td.isLoaded() or not td.accounts:
                     logger.error("opentele failed to load tdata (no valid auth keys found or no accounts).")

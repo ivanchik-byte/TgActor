@@ -33,7 +33,8 @@ import { ToastProvider } from './components/ToastContext';
 
 const queryClient = new QueryClient();
 
-axios.defaults.baseURL = 'http://localhost:8000';
+// Same-origin by default; override via VITE_API_URL for split deployments
+axios.defaults.baseURL = import.meta.env.VITE_API_URL ?? '';
 
 // Setup token authentication and request headers
 const initialToken = localStorage.getItem('tgactor_token');

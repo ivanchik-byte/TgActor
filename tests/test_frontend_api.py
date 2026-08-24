@@ -1,5 +1,6 @@
 import os
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 os.environ["ADMIN_PASSWORD"] = "testpassword"
@@ -24,7 +25,7 @@ config.ADMIN_PASSWORD = "testpassword"
 from app.core.database import engine
 from app.models.models import Base
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(autouse=True)
 async def init_db_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

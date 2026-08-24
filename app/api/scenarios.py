@@ -16,6 +16,9 @@ from app.services.ai_service import generate_scenario_from_prompt
 logger = logging.getLogger("tgactor.scenarios")
 router = APIRouter()
 
+# Keep strong references so GC cannot reap running scenario tasks
+_running_executions: set = set()
+
 class ScenarioExecuteRequest(BaseModel):
     target: str
     post_id: Optional[int] = None
@@ -81,7 +84,11 @@ async def delete_scenario(scenario_id: int):
         scenario = await session.get(Scenario, scenario_id)
         if not scenario:
             raise HTTPException(404, "Scenario not found")
+        # Clean up dependent rows first (FKs may lack ON DELETE on existing tables)
+        from app.models.models import TaskLog, ActionLog
         await session.execute(delete(ScenarioStep).where(ScenarioStep.scenario_id == scenario_id))
+        await session.execute(delete(TaskLog).where(TaskLog.scenario_id == scenario_id))
+        await session.execute(delete(ActionLog).where(ActionLog.scenario_id == scenario_id))
         await session.delete(scenario)
         await session.commit()
         return {"status": "ok"}
@@ -261,6 +268,11 @@ async def run_scenario_endpoint(scenario_id: int, req: ScenarioExecuteRequest):
             raise HTTPException(404, detail="Сценарий не найден.")
     async def _runner():
         async with async_session() as s:
-            await execute_scenario(s, scenario_id, target, post_id)
-    asyncio.create_task(_runner())
+            try:
+                await execute_scenario(s, scenario_id, target, post_id)
+            except Exception as e:
+                logger.error(f"Scenario #{scenario_id} execution failed: {e}", exc_info=True)
+    task = asyncio.create_task(_runner())
+    _running_executions.add(task)
+    task.add_done_callback(_running_executions.discard)
     return {"status": "started", "target": target, "post_id": post_id}

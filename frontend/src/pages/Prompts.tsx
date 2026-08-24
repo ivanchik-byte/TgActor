@@ -750,7 +750,7 @@ export default function Prompts() {
               className="px-4 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-[0.98]"
             >
               <Sparkles className="w-4 h-4" />
-              <span>✨ AI Генератор</span>
+       <span> AI Генератор</span>
             </button>
           </div>
         </div>
@@ -997,12 +997,12 @@ export default function Prompts() {
 
                       {/* SMS Messages Count Badge */}
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)] font-mono">
-                        💬 {effectiveSteps.length} смс
+             {effectiveSteps.length} смс
                       </span>
 
                       {template.is_builtin && (
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
-                          ⭐ Системный
+              Системный
                         </span>
                       )}
                     </div>
@@ -1044,7 +1044,7 @@ export default function Prompts() {
                         onClick={() => setExpandedTemplateId(isExpanded ? null : template.id)}
                         className="text-[var(--accent-text)] hover:underline cursor-pointer font-bold"
                       >
-                        {isExpanded ? 'Свернуть детали ▲' : 'Развернуть цепочку ▼'}
+            {isExpanded ? 'Свернуть детали ▲' : 'Развернуть цепочку ▼'}
                       </button>
                     </div>
                     <p className={`text-xs text-[var(--text-main)] font-mono leading-relaxed ${isExpanded ? '' : 'line-clamp-3'}`}>
@@ -1075,7 +1075,7 @@ export default function Prompts() {
                                 )}
                               </div>
                               <div className="text-[10px] font-mono text-[var(--text-dim)]">
-                                ⏱️ {step.delay_before_min || 4}-{step.delay_before_max || 9}с
+                 {step.delay_before_min || 4}-{step.delay_before_max || 9}с
                               </div>
                             </div>
                             {step.ai_prompt && (
@@ -1213,7 +1213,7 @@ export default function Prompts() {
                       ) : (
                         <Wand2 className="w-3.5 h-3.5" />
                       )}
-                      <span>{isEnhancing ? 'Улучшение...' : '✨ Улучшить с помощью ИИ'}</span>
+           <span>{isEnhancing ? 'Улучшение...' : 'Улучшить с помощью ИИ'}</span>
                     </button>
 
                     <button
@@ -1222,7 +1222,7 @@ export default function Prompts() {
                       className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <Dices className="w-3.5 h-3.5" />
-                      <span>🎲 Случайная идея</span>
+           <span> Случайная идея</span>
                     </button>
                   </div>
                 </div>
@@ -1261,7 +1261,7 @@ export default function Prompts() {
                     </div>
                     <div>
                       <div className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
-                        <span>⚡ Динамические промпты на лету</span>
+            <span> Динамические промпты на лету</span>
                         {studioMode === 'dynamic' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
                       </div>
                       <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-normal">
@@ -1284,7 +1284,7 @@ export default function Prompts() {
                     </div>
                     <div>
                       <div className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
-                        <span>📝 Статический готовый сценарий</span>
+            <span> Статический готовый сценарий</span>
                         {studioMode === 'static' && <Check className="w-3.5 h-3.5 text-sky-400" />}
                       </div>
                       <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-normal">
@@ -1489,7 +1489,7 @@ export default function Prompts() {
                   {/* Mode & Step Count Badge */}
                   <div className="flex items-center gap-2 text-[11px] font-mono text-[var(--text-muted)]">
                     <span className="px-2 py-0.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)]">
-                      {studioResult.mode === 'dynamic' ? '⚡ Динамический' : '📝 Статический'}
+           {studioResult.mode === 'dynamic' ? 'Динамический' : 'Статический'}
                     </span>
                     <span>•</span>
                     <span className="text-[var(--accent-text)] font-semibold">{studioResult.steps_payload.length} смс</span>
@@ -1579,7 +1579,7 @@ export default function Prompts() {
                                 }}
                                 className="bg-[var(--bg-main)] text-[var(--text-muted)] border border-[var(--border-color)] rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-[var(--accent)]"
                               >
-                                <option value="">💬 Новое сообщение (в корень)</option>
+                <option value=""> Новое сообщение (в корень)</option>
                                 {studioResult.steps_payload.slice(0, idx).map((_, pIdx) => (
                                   <option key={pIdx + 1} value={pIdx + 1}>
                                     ↳ Ответ на шаг #{pIdx + 1}
@@ -1591,7 +1591,7 @@ export default function Prompts() {
                             {/* Delay & Delete Step Button */}
                             <div className="flex items-center gap-2">
                               <div className="flex items-center gap-1 text-[11px] font-mono text-[var(--text-dim)] bg-[var(--bg-main)] px-2 py-0.5 rounded-md border border-[var(--border-color)]">
-                                <span>⏱️</span>
+                <span></span>
                                 <input
                                   type="number"
                                   min="1"
@@ -1786,7 +1786,7 @@ export default function Prompts() {
                       title="Сохранить как шаблон в библиотеку промптов для повторного использования"
                     >
                       <BookOpen className="w-3.5 h-3.5 text-[var(--accent-text)]" />
-                      <span>📥 В библиотеку шаблонов</span>
+           <span> В библиотеку шаблонов</span>
                     </button>
 
                     <button
@@ -1802,7 +1802,7 @@ export default function Prompts() {
                       title="Развернуть полноценный живой сценарий со всеми репликами в разделе «Сценарии»"
                     >
                       <Zap className="w-4 h-4" />
-                      <span>🚀 Создать сценарий ({studioResult.steps_payload.length} смс)</span>
+           <span> Создать сценарий ({studioResult.steps_payload.length} смс)</span>
                     </button>
                   </div>
                 </div>
@@ -1899,8 +1899,8 @@ export default function Prompts() {
                   onChange={(e) => setFormMode(e.target.value as any)}
                   className="w-full p-2.5 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] text-xs text-[var(--text-main)] outline-none cursor-pointer"
                 >
-                  <option value="dynamic">⚡ Динамический (is_ai_dynamic)</option>
-                  <option value="static">📝 Статический</option>
+         <option value="dynamic"> Динамический (is_ai_dynamic)</option>
+         <option value="static"> Статический</option>
                 </select>
               </div>
 
@@ -2188,7 +2188,7 @@ export default function Prompts() {
                     }`}
                   >
                     <Zap className="w-4 h-4" />
-                    <span className="text-xs">⚡ Динамический ИИ</span>
+          <span className="text-xs"> Динамический ИИ</span>
                   </button>
                   <button
                     type="button"
@@ -2200,7 +2200,7 @@ export default function Prompts() {
                     }`}
                   >
                     <MessageSquare className="w-4 h-4" />
-                    <span className="text-xs">📝 Фиксированные реплики</span>
+          <span className="text-xs"> Фиксированные реплики</span>
                   </button>
                 </div>
               </div>
@@ -2226,7 +2226,7 @@ export default function Prompts() {
                         )}
                       </div>
                       <span className="text-[10px] font-mono text-[var(--text-dim)] flex-shrink-0">
-                        ⏱️ {step.delay_before_min}-{step.delay_before_max}с
+             {step.delay_before_min}-{step.delay_before_max}с
                       </span>
                     </div>
                   ))}
@@ -2259,7 +2259,7 @@ export default function Prompts() {
                 className="px-5 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md active:scale-[0.98]"
               >
                 <Rocket className="w-4 h-4" />
-                <span>🚀 Создать сценарий ({quickLaunchStepsCount} смс)</span>
+        <span> Создать сценарий ({quickLaunchStepsCount} смс)</span>
               </button>
             </div>
           </div>

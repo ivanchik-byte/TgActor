@@ -27,6 +27,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useToast } from '../components/ToastContext';
 
+// Media endpoints require auth; img tags cannot send headers
+const withMediaToken = (path: string) => {
+  const token = localStorage.getItem('tgactor_token') ?? '';
+  return `${path}?token=${encodeURIComponent(token)}`;
+};
+
 // ─── Types ───────────────────────────────────────────────
 
 interface ChatItem {
@@ -211,7 +217,9 @@ export default function Inbox() {
           ? `${window.location.hostname}:8000`
           : window.location.host;
 
-        ws = new WebSocket(`${protocol}//${host}/ws/inbox`);
+        // Backend requires an auth token on the WebSocket handshake
+        const token = localStorage.getItem('tgactor_token') ?? '';
+        ws = new WebSocket(`${protocol}//${host}/ws/inbox?token=${encodeURIComponent(token)}`);
 
         ws.onopen = () => {
           if (!isUnmounted) setIsWsConnected(true);
@@ -1344,7 +1352,7 @@ export default function Inbox() {
                                 {msg.media_path && isImageFile(msg.media_path) && (
                                   <div style={{ borderRadius: '8px', overflow: 'hidden', marginBottom: '4px', maxWidth: '320px' }}>
                                     <img
-                                      src={msg.media_path}
+                                      src={withMediaToken(msg.media_path)}
                                       alt="Telegram media"
                                       style={{ width: '100%', maxHeight: '280px', objectFit: 'cover', display: 'block' }}
                                     />
@@ -1389,7 +1397,7 @@ export default function Inbox() {
                                 {/* Downloaded non-image media link */}
                                 {msg.media_path && !isImageFile(msg.media_path) && (
                                   <a
-                                    href={msg.media_path}
+                                    href={withMediaToken(msg.media_path)}
                                     target="_blank"
                                     rel="noreferrer"
                                     download

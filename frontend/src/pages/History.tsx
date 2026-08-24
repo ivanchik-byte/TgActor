@@ -257,15 +257,15 @@ export const HistoryPage: React.FC = () => {
       case 'comment':
         return { label: 'Комментирование', icon: MessageSquare, color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' };
       case 'channel_monitor':
-        return { label: '🎯 Радар постов', icon: Radio, color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+    return { label: 'Радар постов', icon: Radio, color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
       case 'bot_banned':
-        return { label: '🚫 Бан бота', icon: ShieldAlert, color: '#f87171', bg: 'rgba(248, 113, 113, 0.15)' };
+    return { label: 'Бан бота', icon: ShieldAlert, color: '#f87171', bg: 'rgba(248, 113, 113, 0.15)' };
       case 'all_bots_banned':
-        return { label: '🚨 Все боты забанены', icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.25)' };
+    return { label: 'Все боты забанены', icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.25)' };
       case 'scenario_complete':
-        return { label: '✅ Сценарий завершен', icon: CheckCircle, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
+    return { label: 'Сценарий завершен', icon: CheckCircle, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
       case 'ai_dynamic_gen':
-        return { label: '⚡ Генерация ИИ', icon: Sparkles, color: '#c084fc', bg: 'rgba(192, 132, 252, 0.15)' };
+    return { label: 'Генерация ИИ', icon: Sparkles, color: '#c084fc', bg: 'rgba(192, 132, 252, 0.15)' };
       case 'reaction_add':
       case 'react':
         return { label: 'Реакция Emoji', icon: Heart, color: '#f472b6', bg: 'rgba(244, 114, 182, 0.15)' };
@@ -630,12 +630,12 @@ export const HistoryPage: React.FC = () => {
               <Sparkles size={14} /> Пресеты:
             </span>
             {[
-              { key: 'all', label: '🤖 Действия ботов' },
-              { key: 'system', label: '📡 Мониторинг каналов' },
-              { key: 'errors', label: '🔴 Ошибки' },
-              { key: 'engagement', label: '💬 Комментарии' },
-              { key: 'cooldowns', label: '⏳ Флуд / Паузы' },
-              { key: 'raw_all', label: '⚡ Все сырые логи' },
+       { key: 'all', label: 'Действия ботов' },
+       { key: 'system', label: 'Мониторинг каналов' },
+       { key: 'errors', label: 'Ошибки' },
+       { key: 'engagement', label: 'Комментарии' },
+       { key: 'cooldowns', label: 'Флуд / Паузы' },
+       { key: 'raw_all', label: 'Все сырые логи' },
             ].map((preset) => (
               <button
                 key={preset.key}
@@ -755,9 +755,9 @@ export const HistoryPage: React.FC = () => {
                 transition: 'all 0.15s ease'
               }}
             >
-              <option value="bot_actions" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>🤖 Действия ботов (без спама)</option>
-              <option value="channel_monitor" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>📡 Мониторинг каналов</option>
-              <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>⚡ Все типы логов</option>
+       <option value="bot_actions" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}> Действия ботов (без спама)</option>
+       <option value="channel_monitor" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}> Мониторинг каналов</option>
+       <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}> Все типы логов</option>
               {filterOptions.action_types.filter(act => act !== 'channel_monitor').map((act) => (
                 <option key={act} value={act} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>
                   {act}
@@ -935,7 +935,7 @@ export const HistoryPage: React.FC = () => {
                           color: 'var(--text-main)',
                           border: '1px solid var(--border-color)'
                         }}>
-                          🎯 {log.target} {log.target_id ? `(${log.target_id})` : ''}
+              {log.target} {log.target_id ? `(${log.target_id})` : ''}
                         </div>
                       )}
 
@@ -1040,7 +1040,7 @@ export const HistoryPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Terminal size={16} style={{ color: 'var(--accent-text)' }} />
               <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>TG_ACTOR_STREAM_LOGGER v3.0</span>
-              <span style={{ color: '#34d399', fontSize: '0.72rem' }}>● LIVE</span>
+       <span style={{ color: '#34d399', fontSize: '0.72rem' }}>● LIVE</span>
             </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}>
@@ -1182,7 +1182,7 @@ export const HistoryPage: React.FC = () => {
 
                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                           <span style={{ color: statusMeta.color, fontWeight: 700, fontSize: '0.78rem' }}>
-                            ● {log.status}
+               {log.status}
                           </span>
                         </td>
 
@@ -1307,7 +1307,7 @@ export const HistoryPage: React.FC = () => {
                 {selectedLog.target && (
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Целевой ресурс (Target):</span>
-                    <strong style={{ color: 'var(--text-main)' }}>🎯 {selectedLog.target} {selectedLog.target_id ? `[${selectedLog.target_id}]` : ''}</strong>
+          <strong style={{ color: 'var(--text-main)' }}> {selectedLog.target} {selectedLog.target_id ? `[${selectedLog.target_id}]` : ''}</strong>
                   </div>
                 )}
               </div>

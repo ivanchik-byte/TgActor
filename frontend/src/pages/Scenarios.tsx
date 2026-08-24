@@ -1220,7 +1220,7 @@ export default function Scenarios() {
                     gap: '4px',
                   }}
                 >
-                  {showSystemPrompt ? '▾' : '▸'} Системная инструкция
+        {showSystemPrompt ? '▾' : '▸'} Системная инструкция
                 </button>
                 {showSystemPrompt && (
                   <textarea
@@ -2042,7 +2042,7 @@ export default function Scenarios() {
                               <label style={{ ...labelStyle, marginBottom: 0 }}>Пауза перед следующим шагом</label>
                               {replica.isAiDynamic && (
                                 <span style={{ fontSize: '10px', color: '#a78bfa', fontWeight: 600 }}>
-                                  ⚡ После ответа ИИ
+                  После ответа ИИ
                                 </span>
                               )}
                             </div>
@@ -2074,7 +2074,7 @@ export default function Scenarios() {
                             </div>
                             {replica.isAiDynamic && (
                               <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                                💡 Задержка выдерживается ПОСЛЕ отправки этого сообщения и перед стартом следующего бота.
+                 Задержка выдерживается ПОСЛЕ отправки этого сообщения и перед стартом следующего бота.
                               </span>
                             )}
                           </div>
@@ -2139,12 +2139,12 @@ export default function Scenarios() {
                                       transition: 'all 0.15s'
                                     }}
                                   >
-                                    {activeEmojiPickerId === replica.id ? 'Скрыть выбор' : 'Палитра ⚡'}
+                  {activeEmojiPickerId === replica.id ? 'Скрыть выбор' : 'Палитра '}
                                   </button>
                                 </div>
                                 {activeEmojiPickerId === replica.id && (
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', backgroundColor: 'var(--bg-main)', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                                    {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
+                  {['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '🤡', '💩'].map(emoji => {
                                       const currentList = (replica.reactions || '').split(/\s+/).filter(Boolean);
                                       const isActive = currentList.includes(emoji);
                                       return (

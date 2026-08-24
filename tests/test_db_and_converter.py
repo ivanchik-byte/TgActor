@@ -1,5 +1,6 @@
 import os
 import asyncio
+import pytest
 import logging
 import zipfile
 import tempfile
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 DB_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test_converter.db")
 
+@pytest.mark.asyncio
 async def test_database_and_converter():
     engine = create_async_engine(DB_URL, echo=False)
     async_session = async_sessionmaker(engine, expire_on_commit=False)

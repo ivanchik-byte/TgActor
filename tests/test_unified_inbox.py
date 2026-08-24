@@ -18,6 +18,7 @@ from app.models.models import Base
 
 from app.core.database import async_session, engine
 
+@pytest.mark.asyncio
 async def test_inbox():
     if "ENCRYPTION_KEY" not in os.environ:
         from cryptography.fernet import Fernet

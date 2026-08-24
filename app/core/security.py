@@ -1,8 +1,11 @@
 import hmac
 import hashlib
 import base64
+import os
+import time
 from typing import List
 from cryptography.fernet import Fernet
+from app.core import config as _config
 from app.core.config import SECRET_KEY, ENCRYPTION_KEY
 
 # Primary cipher
@@ -62,9 +65,40 @@ def decrypt_session(encrypted_string: str) -> str:
     return encrypted_string
 
 def check_password(plain_password: str) -> bool:
-    from app.core.config import ADMIN_PASSWORD
-    return hmac.compare_digest(plain_password.encode(), ADMIN_PASSWORD.encode())
+    # Read live so runtime overrides (tests, env reload) are respected
+    return hmac.compare_digest(plain_password.encode(), _config.ADMIN_PASSWORD.encode())
+
+
+# Token lifetime in seconds (30 days)
+AUTH_TOKEN_TTL = int(os.getenv("AUTH_TOKEN_TTL", str(30 * 24 * 3600)))
+
 
 def generate_auth_token(password: str) -> str:
-    return hmac.new(SECRET_KEY.encode(), password.encode(), hashlib.sha256).hexdigest()
+    """Time-limited token: '<expires_at>.<hmac(secret, password:expires_at)>'."""
+    expires_at = int(time.time()) + AUTH_TOKEN_TTL
+    signature = hmac.new(
+        SECRET_KEY.encode(),
+        f"{password}:{expires_at}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return f"{expires_at}.{signature}"
+
+
+def verify_auth_token(token: str) -> bool:
+    """Validate token signature and expiration. Constant-time compare."""
+    if not token or "." not in token:
+        return False
+    try:
+        expires_part, signature = token.rsplit(".", 1)
+        expires_at = int(expires_part)
+    except ValueError:
+        return False
+    if expires_at < time.time():
+        return False
+    expected = hmac.new(
+        SECRET_KEY.encode(),
+        f"{_config.ADMIN_PASSWORD}:{expires_at}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected)
 
