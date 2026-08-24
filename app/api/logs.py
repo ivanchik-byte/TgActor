@@ -14,10 +14,6 @@ from app.workers.channel_monitor import is_monitor_running, start_channel_monito
 
 router = APIRouter()
 
-@router.get("/api/monitor/status")
-async def get_monitor_status():
-    return {"running": is_monitor_running()}
-
 @router.post("/api/monitor/toggle")
 async def toggle_monitor():
     if is_monitor_running():

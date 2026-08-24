@@ -2,11 +2,14 @@ from fastapi import APIRouter, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Dict, Any, Optional
+import logging
 
 from app.core.database import async_session
 from app.models.models import MonitoredChannel
 from app.models.schemas import MonitoredChannelResponse
 from app.workers.channel_monitor import is_monitor_running, start_channel_monitor, stop_channel_monitor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -22,6 +25,8 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
     raw_input = str(payload.get("channel_identifier") or payload.get("channel_username") or "").strip()
     min_delay = int(payload.get("min_delay_seconds") or 5)
     max_delay = int(payload.get("max_delay_seconds") or 10)
+    if max_delay < min_delay:
+        raise HTTPException(400, "Максимальная задержка не может быть меньше минимальной")
     no_repeat = bool(payload.get("no_repeat_scenarios", True))
 
     execution_mode = str(payload.get("execution_mode") or "scenario")
@@ -112,6 +117,8 @@ async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
             ch.min_delay_seconds = int(payload["min_delay_seconds"])
         if "max_delay_seconds" in payload:
             ch.max_delay_seconds = int(payload["max_delay_seconds"])
+        if ch.max_delay_seconds < ch.min_delay_seconds:
+            raise HTTPException(400, "Максимальная задержка не может быть меньше минимальной")
         if "no_repeat_scenarios" in payload:
             ch.no_repeat_scenarios = bool(payload["no_repeat_scenarios"])
         if "execution_mode" in payload:

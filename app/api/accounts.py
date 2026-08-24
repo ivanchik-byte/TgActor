@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
+from sqlalchemy.orm import selectinload
 from typing import Optional, List
 import tempfile
 import os
 
 from app.core.database import async_session
-from app.models.models import Account, Proxy
+from app.models.models import Account
 from app.models.schemas import (
     AccountCreate, AccountResponse, AccountCustomNameUpdate, 
     AccountReorderRequest, AccountProxyUpdate, AccountPoolsUpdate
@@ -116,13 +117,12 @@ async def test_account(account_id: int):
     Connects via Hydrogram client, calls get_me(), updates status and info, returns status result.
     """
     async with async_session() as session:
-        account = await session.get(Account, account_id)
+        stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
+        account = (await session.execute(stmt)).scalars().first()
         if not account:
             raise HTTPException(404, detail=f"Аккаунт #{account_id} не найден")
-        
-        proxy = None
-        if account.proxy_id:
-            proxy = await session.get(Proxy, account.proxy_id)
+
+        proxy = account.proxy
 
     client = get_hydrogram_client(account, proxy)
     try:
@@ -239,6 +239,12 @@ async def delete_account(account_id: int):
         acc = await session.get(Account, account_id)
         if not acc:
             raise HTTPException(404, detail="Account not found")
+        # Clean up dependent rows first (FKs may lack ON DELETE on existing tables)
+        from app.models.models import InboxMessage, TaskLog, ActionLog, ScenarioStep
+        await session.execute(delete(InboxMessage).where(InboxMessage.account_id == account_id))
+        await session.execute(delete(TaskLog).where(TaskLog.account_id == account_id))
+        await session.execute(delete(ActionLog).where(ActionLog.account_id == account_id))
+        await session.execute(delete(ScenarioStep).where(ScenarioStep.role_id == account_id))
         await session.delete(acc)
         await session.commit()
         return {"status": "ok"}
@@ -247,35 +253,38 @@ async def delete_account(account_id: int):
 async def get_account_admin_channels(account_id: int):
     """Retrieve channels where the account is creator or administrator with permission to post."""
     async with async_session() as session:
-        acc = await session.get(Account, account_id)
+        stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
+        acc = (await session.execute(stmt)).scalars().first()
         if not acc:
             raise HTTPException(404, detail="Account not found")
 
-        client = get_hydrogram_client(acc, getattr(acc, "proxy", None))
-        channels_list = []
-        try:
-            await client.start()
-            async for dialog in client.get_dialogs(limit=100):
-                chat = dialog.chat
-                chat_type = str(getattr(chat, "type", "")).lower()
-                is_creator = getattr(chat, "is_creator", False)
-                
-                # Check if it is a channel or supergroup
-                if "channel" in chat_type or is_creator:
-                    channels_list.append({
-                        "id": chat.id,
-                        "title": getattr(chat, "title", "Канал"),
-                        "username": getattr(chat, "username", None) or "",
-                        "is_creator": is_creator,
-                        "type": chat_type
-                    })
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Error fetching admin channels for account #{account_id}: {e}")
-        finally:
-            try:
-                await client.stop()
-            except Exception:
-                pass
+        proxy = acc.proxy
 
-        return channels_list
+    client = get_hydrogram_client(acc, proxy)
+    channels_list = []
+    try:
+        await client.start()
+        async for dialog in client.get_dialogs(limit=100):
+            chat = dialog.chat
+            chat_type = str(getattr(chat, "type", "")).lower()
+            is_creator = getattr(chat, "is_creator", False)
+            
+            # Check if it is a channel or supergroup
+            if "channel" in chat_type or is_creator:
+                channels_list.append({
+                    "id": chat.id,
+                    "title": getattr(chat, "title", "Канал"),
+                    "username": getattr(chat, "username", None) or "",
+                    "is_creator": is_creator,
+                    "type": chat_type
+                })
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Error fetching admin channels for account #{account_id}: {e}")
+    finally:
+        try:
+            await client.stop()
+        except Exception:
+            pass
+
+    return channels_list

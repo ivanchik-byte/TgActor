@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.core.database import Base
@@ -28,9 +28,9 @@ class Account(Base):
     proxy_id = Column(Integer, ForeignKey("proxies.id", ondelete="SET NULL"), nullable=True)
     proxy = relationship("Proxy", back_populates="accounts")
 
-    steps = relationship("ScenarioStep", back_populates="account")
-    task_logs = relationship("TaskLog", back_populates="account")
-    inbox_messages = relationship("InboxMessage", back_populates="account")
+    # No ORM relationship to ScenarioStep: role_id is a virtual role without FK
+    task_logs = relationship("TaskLog", back_populates="account", cascade="all, delete-orphan")
+    inbox_messages = relationship("InboxMessage", back_populates="account", cascade="all, delete-orphan")
 
     @property
     def encrypted_session(self):
@@ -113,8 +113,10 @@ class ScenarioStep(Base):
     __tablename__ = "scenario_steps"
 
     id = Column(Integer, primary_key=True, index=True)
-    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=False)
-    role_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    scenario_id = Column(Integer, ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=False)
+    # role_id references a virtual scenario role, not a real account row.
+    # AI-generated scenarios may use synthetic role ids, so no FK here.
+    role_id = Column(Integer, nullable=False)
 
     message_type = Column(String, default="normal")
     reply_to_step_id = Column(Integer, ForeignKey("scenario_steps.id"), nullable=True)
@@ -138,7 +140,6 @@ class ScenarioStep(Base):
     step_order = Column(Integer, nullable=False, default=1)
 
     scenario = relationship("Scenario", back_populates="steps")
-    account = relationship("Account", back_populates="steps")
 
     reply_to_step = relationship("ScenarioStep", remote_side=[id])
 
@@ -170,8 +171,8 @@ class TaskLog(Base):
     __tablename__ = "task_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    scenario_id = Column(Integer, ForeignKey("scenarios.id"), nullable=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    scenario_id = Column(Integer, ForeignKey("scenarios.id", ondelete="CASCADE"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True)
     status = Column(String, nullable=False)
     error_message = Column(Text, nullable=True)
     executed_at = Column(DateTime, default=get_utc_now)
@@ -183,7 +184,7 @@ class InboxMessage(Base):
     __tablename__ = "inbox_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     message_id = Column(BigInteger, nullable=True)
     peer_id = Column(BigInteger, nullable=False)
     peer_name = Column(String, nullable=True)
@@ -192,6 +193,10 @@ class InboxMessage(Base):
     text = Column(Text, nullable=True)
     media_path = Column(String, nullable=True)
     created_at = Column(DateTime, default=get_utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("account_id", "peer_id", "message_id", name="uq_inbox_msg"),
+    )
 
     account = relationship("Account", back_populates="inbox_messages")
 

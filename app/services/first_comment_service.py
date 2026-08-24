@@ -71,9 +71,9 @@ async def generate_first_comment(
 ) -> str:
     """Generate a sharp, contextual first comment using AI."""
     ai_cfg = await get_ai_settings(session)
-    provider = ai_cfg.get("ai_provider") or "openai"
-    model = ai_model or ai_cfg.get("ai_default_model") or "gpt-4o-mini"
-    api_key = ai_cfg.get("ai_api_key")
+    provider = ai_cfg.get("provider") or "openai"
+    model = ai_model or ai_cfg.get("default_model") or "gpt-4o-mini"
+    api_key = ai_cfg.get("api_key")
     base_url = ai_cfg.get("ai_base_url")
 
     system_prompt = (custom_prompt or "").strip() or DEFAULT_FIRST_COMMENT_PROMPT
@@ -85,17 +85,13 @@ async def generate_first_comment(
 
 Сгенерируй первый идеальный комментарий к этому посту по правилам системного промпта:"""
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content}
-    ]
-
     try:
         raw_reply = await call_ai_completion(
             provider=provider,
             model=model,
             api_key=api_key,
-            messages=messages,
+            system_prompt=system_prompt,
+            user_prompt=user_content,
             base_url=base_url,
             temperature=0.75,
             max_tokens=150
@@ -161,7 +157,10 @@ async def send_first_comment(
     """
     t_start = time.time()
     ch_user = channel.channel_username
+    sender_account = None
+    client = None
 
+    try:
         # 1. Ad Filtering
         if channel.skip_ads:
             is_ad, ad_marker = is_ad_post(post_text)
@@ -186,9 +185,12 @@ async def send_first_comment(
         # 2. Select Sender Account
         sender_account = None
         if channel.sender_account_id:
-            sender_account = await session.get(Account, channel.sender_account_id)
-            if sender_account and not sender_account.is_active:
-                sender_account = None
+            stmt_sender = (
+                select(Account)
+                .where(Account.id == channel.sender_account_id, Account.is_active == True)
+                .options(selectinload(Account.proxy))
+            )
+            sender_account = (await session.execute(stmt_sender)).scalars().first()
 
         if not sender_account:
             stmt = select(Account).where(Account.is_active == True).options(selectinload(Account.proxy))
@@ -214,130 +216,129 @@ async def send_first_comment(
             comment_text = "годная тема"
 
         # 4. Resolve discussion & Send
-        client = get_hydrogram_client(sender_account, getattr(sender_account, 'proxy', None))
+        client = get_hydrogram_client(sender_account, sender_account.proxy)
+        await client.start()
+        
+        # Check target discussion
+        target_chat_id = ch_user
+        default_reply_to = None
+        
         try:
-            await client.start()
-            
-            # Check target discussion
-            target_chat_id = ch_user
-            default_reply_to = None
-            
+            disc_msg = await client.get_discussion_message(ch_user, post_id)
+            if disc_msg and getattr(disc_msg, 'chat', None):
+                target_chat_id = disc_msg.chat.id
+                default_reply_to = disc_msg.id
+        except Exception as disc_err:
+            logger.warning(f"Notice getting discussion for {ch_user} post #{post_id}: {disc_err}")
+
+        # Preflight permissions check
+        avail_ok, avail_err = await check_chat_availability(client, target_chat_id, requires_media=False)
+        if not avail_ok:
+            error_msg = f"Первый комментарий: доступ к чату обсуждения {target_chat_id} закрыт ({avail_err})"
+            logger.warning(error_msg)
+            session.add(TaskLog(account_id=sender_account.id, status="error", error_message=error_msg))
+            await log_action(
+                session,
+                action_type="first_comment_send",
+                status="error",
+                account_id=sender_account.id,
+                target=ch_user,
+                target_id=f"msg #{post_id}",
+                details={"error": error_msg, "badge": "Ошибка доступа"}
+            )
+            await session.commit()
+            return {"status": "error", "error": error_msg}
+
+        # Determine send_as author
+        send_as_target = None
+        author_label = sender_account.custom_name or sender_account.username or f"Аккаунт #{sender_account.id}"
+
+        if channel.send_as_mode == "channel" and channel.send_as_channel_username:
+            clean_author_channel = channel.send_as_channel_username.replace("@", "").replace("https://t.me/", "").strip()
             try:
-                disc_msg = await client.get_discussion_message(ch_user, post_id)
-                if disc_msg and getattr(disc_msg, 'chat', None):
-                    target_chat_id = disc_msg.chat.id
-                    default_reply_to = disc_msg.id
-            except Exception as disc_err:
-                logger.warning(f"Notice getting discussion for {ch_user} post #{post_id}: {disc_err}")
+                author_chat = await client.get_chat(clean_author_channel)
+                send_as_target = author_chat.id
+                author_label = f"Канал: @{author_chat.username or clean_author_channel}"
+            except Exception as e:
+                logger.warning(f"Не удалось получить peer для send_as @{clean_author_channel}: {e}. Отправка от лица аккаунта.")
 
-            # Preflight permissions check
-            avail_ok, avail_err = await check_chat_availability(client, target_chat_id, requires_media=False)
-            if not avail_ok:
-                error_msg = f"Первый комментарий: доступ к чату обсуждения {target_chat_id} закрыт ({avail_err})"
-                logger.warning(error_msg)
-                session.add(TaskLog(account_id=sender_account.id, status="error", error_message=error_msg))
-                await log_action(
-                    session,
-                    action_type="first_comment_send",
-                    status="error",
-                    account_id=sender_account.id,
-                    target=ch_user,
-                    target_id=f"msg #{post_id}",
-                    details={"error": error_msg, "badge": "Ошибка доступа"}
-                )
-                await session.commit()
-                return {"status": "error", "error": error_msg}
+        # Send Message
+        sent_msg = None
+        send_kwargs = {}
+        if default_reply_to:
+            send_kwargs["reply_to_message_id"] = default_reply_to
+        if send_as_target:
+            send_kwargs["send_as"] = send_as_target
 
-            # Determine send_as author
-            send_as_target = None
-            author_label = sender_account.custom_name or sender_account.username or f"Аккаунт #{sender_account.id}"
-
-            if channel.send_as_mode == "channel" and channel.send_as_channel_username:
-                clean_author_channel = channel.send_as_channel_username.replace("@", "").replace("https://t.me/", "").strip()
-                try:
-                    author_chat = await client.get_chat(clean_author_channel)
-                    send_as_target = author_chat.id
-                    author_label = f"Канал: @{author_chat.username or clean_author_channel}"
-                except Exception as e:
-                    logger.warning(f"Не удалось получить peer для send_as @{clean_author_channel}: {e}. Отправка от лица аккаунта.")
-
-            # Send Message
-            sent_msg = None
-            send_kwargs = {}
-            if default_reply_to:
-                send_kwargs["reply_to_message_id"] = default_reply_to
+        try:
+            sent_msg = await client.send_message(
+                chat_id=target_chat_id,
+                text=comment_text,
+                **send_kwargs
+            )
+        except Exception as send_err:
             if send_as_target:
-                send_kwargs["send_as"] = send_as_target
-
-            try:
+                logger.warning(f"Ошибка отправки от лица канала ({send_err}). Пробуем отправить от аккаунта...")
+                send_kwargs.pop("send_as", None)
                 sent_msg = await client.send_message(
                     chat_id=target_chat_id,
                     text=comment_text,
                     **send_kwargs
                 )
-            except Exception as send_err:
-                if send_as_target:
-                    logger.warning(f"Ошибка отправки от лица канала ({send_err}). Пробуем отправить от аккаунта...")
-                    send_kwargs.pop("send_as", None)
-                    sent_msg = await client.send_message(
-                        chat_id=target_chat_id,
-                        text=comment_text,
-                        **send_kwargs
-                    )
-                    author_label = f"Профиль: {sender_account.username or sender_account.phone} (Fallback)"
-                else:
-                    raise send_err
+                author_label = f"Профиль: {sender_account.username or sender_account.phone} (Fallback)"
+            else:
+                raise send_err
 
-            latency_ms = int((time.time() - t_start) * 1000)
-            sent_msg_id = getattr(sent_msg, 'id', None)
+        latency_ms = int((time.time() - t_start) * 1000)
+        sent_msg_id = getattr(sent_msg, 'id', None)
 
-            log_msg = f"Первый комментарий от {author_label} -> {ch_user} (пост #{post_id}): '{comment_text}' ({latency_ms}мс)"
-            logger.info(log_msg)
+        log_msg = f"Первый комментарий от {author_label} -> {ch_user} (пост #{post_id}): '{comment_text}' ({latency_ms}мс)"
+        logger.info(log_msg)
 
-            session.add(TaskLog(
-                account_id=sender_account.id,
-                status="success",
-                error_message=f"Первый комментарий опубликован: msg #{sent_msg_id} ({latency_ms}мс)"
-            ))
-            
-            await log_action(
-                session,
-                action_type="first_comment_send",
-                status="ok",
-                account_id=sender_account.id,
-                target=ch_user,
-                target_id=f"msg #{post_id} -> comm #{sent_msg_id}",
-                details={
-                    "summary": f"Первый комментарий оставлен от {author_label}: «{comment_text}»",
-                    "badge": "1-й коммент",
-                    "post_id": post_id,
-                    "comment_id": sent_msg_id,
-                    "comment_text": comment_text,
-                    "author": author_label,
-                    "channel": ch_user,
-                    "latency_ms": latency_ms
-                }
-            )
-            await session.commit()
-
-            return {
-                "status": "ok",
+        session.add(TaskLog(
+            account_id=sender_account.id,
+            status="success",
+            error_message=f"Первый комментарий опубликован: msg #{sent_msg_id} ({latency_ms}мс)"
+        ))
+        
+        await log_action(
+            session,
+            action_type="first_comment_send",
+            status="ok",
+            account_id=sender_account.id,
+            target=ch_user,
+            target_id=f"msg #{post_id} -> comm #{sent_msg_id}",
+            details={
+                "summary": f"Первый комментарий оставлен от {author_label}: «{comment_text}»",
+                "badge": "1-й коммент",
+                "post_id": post_id,
                 "comment_id": sent_msg_id,
                 "comment_text": comment_text,
                 "author": author_label,
+                "channel": ch_user,
                 "latency_ms": latency_ms
             }
+        )
+        await session.commit()
+
+        return {
+            "status": "ok",
+            "comment_id": sent_msg_id,
+            "comment_text": comment_text,
+            "author": author_label,
+            "latency_ms": latency_ms
+        }
 
     except Exception as ex:
         diag = classify_telegram_error(ex)
         error_msg = f"Ошибка отправки первого комментария в {ch_user}: {ex} ({diag['badge']})"
         logger.error(error_msg)
-        session.add(TaskLog(account_id=sender_account.id, status="error", error_message=error_msg))
+        session.add(TaskLog(account_id=sender_account.id if sender_account else None, status="error", error_message=error_msg))
         await log_action(
             session,
             action_type="first_comment_send",
             status="error",
-            account_id=sender_account.id,
+            account_id=sender_account.id if sender_account else None,
             target=ch_user,
             target_id=f"msg #{post_id}",
             details={
@@ -351,7 +352,8 @@ async def send_first_comment(
         await session.commit()
         return {"status": "error", "error": error_msg}
     finally:
-        try:
-            await client.stop()
-        except Exception:
-            pass
+        if client:
+            try:
+                await client.stop()
+            except Exception:
+                pass

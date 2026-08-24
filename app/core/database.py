@@ -59,7 +59,9 @@ async def ensure_db_schema_sync():
                 "ALTER TABLE monitored_channels ADD COLUMN custom_prompt TEXT" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS custom_prompt TEXT",
                 "ALTER TABLE monitored_channels ADD COLUMN ai_model VARCHAR" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS ai_model VARCHAR",
                 "ALTER TABLE monitored_channels ADD COLUMN skip_ads BOOLEAN DEFAULT TRUE" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS skip_ads BOOLEAN DEFAULT TRUE",
-                "UPDATE prompt_templates SET title = 'Скепсис и рекомендация проверенного решения', prompt_text = 'Диалог в ветке комментариев про выбор проверенного решения. Первый сомневается и жалуется на риски. Второй советует надежный вариант без лишней воды. Третий подтверждает личным положительным опытом.' WHERE title LIKE '%ivanchik%' OR prompt_text LIKE '%ivanchik%'",
+                # Dedupe inbox messages before enforcing uniqueness
+                "DELETE FROM inbox_messages WHERE id NOT IN (SELECT MIN(id) FROM inbox_messages GROUP BY account_id, peer_id, message_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_inbox_msg ON inbox_messages (account_id, peer_id, message_id)",
             ]
             for stmt in common_migrations:
                 try:
