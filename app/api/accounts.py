@@ -130,8 +130,9 @@ async def test_account(account_id: int):
 
         proxy = account.proxy
 
-    client = get_hydrogram_client(account, proxy)
+    client = None
     try:
+        client = get_hydrogram_client(account, proxy)
         await client.start()
         me = await client.get_me()
         
@@ -166,10 +167,11 @@ async def test_account(account_id: int):
             "message": f"Ошибка соединения: {str(e)}"
         }
     finally:
-        try:
-            await client.stop()
-        except Exception:
-            pass
+        if client is not None:
+            try:
+                await client.stop()
+            except Exception:
+                pass
 
 @router.patch("/api/accounts/{account_id}/name")
 async def update_account_custom_name(account_id: int, payload: AccountCustomNameUpdate):
@@ -260,9 +262,10 @@ async def get_account_admin_channels(account_id: int):
 
         proxy = acc.proxy
 
-    client = get_hydrogram_client(acc, proxy)
+    client = None
     channels_list = []
     try:
+        client = get_hydrogram_client(acc, proxy)
         await client.start()
         async for dialog in client.get_dialogs(limit=100):
             chat = dialog.chat
@@ -281,9 +284,10 @@ async def get_account_admin_channels(account_id: int):
         import logging
         logging.getLogger(__name__).warning(f"Error fetching admin channels for account #{account_id}: {e}")
     finally:
-        try:
-            await client.stop()
-        except Exception:
-            pass
+        if client is not None:
+            try:
+                await client.stop()
+            except Exception:
+                pass
 
     return channels_list
