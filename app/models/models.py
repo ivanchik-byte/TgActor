@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from app.core.database import Base
 
 def get_utc_now():
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class Account(Base):
     __tablename__ = "accounts"

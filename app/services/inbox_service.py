@@ -260,7 +260,7 @@ async def send_inbox_message(
                 incoming=False,
                 text=text or (sent_msg.caption if hasattr(sent_msg, 'caption') else ""),
                 media_path=sent_media_path,
-                created_at=datetime.now(timezone.utc)
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None)
             )
             session.add(msg_obj)
             await session.commit()
