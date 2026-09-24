@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ======================================================
-   TgActor Design System — Bento Architecture & Tokens
+   TgActor Design System: Bento Architecture & Tokens
    ====================================================== */
 
 @theme {
@@ -274,7 +274,7 @@
   --border-color: #e2e8f0;
   --border-subtle: rgba(0, 0, 0, 0.05);
 
-  /* Light Theme Accent: Vibrant Indigo (#4f46e5 / #b91c3d compatible) */
+  /* Light Theme Accent: Indigo (#4f46e5 / #b91c3d compatible) */
   --accent: #b91c3d;
   --accent-hover: #9f1735;
   --accent-soft: rgba(185, 28, 61, 0.08);

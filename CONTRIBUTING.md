@@ -1,6 +1,6 @@
 # Contributing to TgActor
 
-Thank you for your interest in improving TgActor. We welcome contributions, including bug fixes, documentation updates, frontend enhancements, and new backend features.
+Thank you for your interest in improving TgActor. We welcome contributions, including bug fixes, documentation updates, frontend improvements, and new backend features.
 
 Please review this guide before getting started.
 

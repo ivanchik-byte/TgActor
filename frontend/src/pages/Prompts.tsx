@@ -146,7 +146,7 @@ const DRAMA_PRESETS = [
   {
     id: 'none',
     title: 'Без шаблона (Свой сценарий)',
-    desc: '«Отключить навязанный шаблон. Впишите сами детальные инструкции в поле выше — ИИ составит диалог строго по вашему описанию»',
+    desc: '«Отключить навязанный шаблон. Впишите сами детальные инструкции в поле выше: ИИ составит диалог строго по вашему описанию»',
     icon: SlidersHorizontal,
     color: '#94a3b8',
     badge: 'Свой формат'
@@ -317,19 +317,19 @@ export default function Prompts() {
         let promptInstr = '';
         let sampleText = '';
         if (i === 0) {
-          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Начни живое обсуждение под постом от первого лица по теме: "${template.title}". Задай открытый вопрос участникам, пиши на 'ты', 1-2 предложения, без эмодзи и без точки в конце.`;
+          promptInstr = `Ты: ${roleName} (Роль ${roleOrder}). Начни живое обсуждение под постом от первого лица по теме: "${template.title}". Задай открытый вопрос участникам, пиши на 'ты', 1-2 предложения, без эмодзи и без точки в конце.`;
           sampleText = roleObj.sample_text || 'Кто в курсе, как сейчас лучше решить этот вопрос';
         } else if (i === 1) {
-          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Ответь на сообщение из Шага #1. Посоветуй проверенное решение или поделись опытом. Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце.`;
+          promptInstr = `Ты: ${roleName} (Роль ${roleOrder}). Ответь на сообщение из Шага #1. Посоветуй проверенное решение или поделись опытом. Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце.`;
           sampleText = roleObj.sample_text || 'Тут главное не спешить и делать всё по проверенной схеме';
         } else if (i === 2) {
-          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Вклинись в тред (Шаг #2). Вырази легкое сомнение по затратам или сложности. Пиши лаконично на 'ты', без эмодзи и без точки в конце.`;
+          promptInstr = `Ты: ${roleName} (Роль ${roleOrder}). Вклинись в тред (Шаг #2). Вырази легкое сомнение по затратам или сложности. Пиши лаконично на 'ты', без эмодзи и без точки в конце.`;
           sampleText = 'А по затратам как выходит, окупается вообще';
         } else if (i === count - 1) {
-          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Подведи позитивный итог дискуссии (Шаг #${i}), поблагодари за полезный совет. Пиши лаконично, без эмодзи и без точки в конце.`;
+          promptInstr = `Ты: ${roleName} (Роль ${roleOrder}). Подведи позитивный итог дискуссии (Шаг #${i}), поблагодари за полезный совет. Пиши лаконично, без эмодзи и без точки в конце.`;
           sampleText = 'Понял, спасибо за наводку, попробую на днях';
         } else {
-          promptInstr = `Ты — ${roleName} (Роль ${roleOrder}). Ответь на реплику из Шага #${i}. Добавь важный практический нюанс или лайфхак. Пиши живо на 'ты', без эмодзи и без точки в конце.`;
+          promptInstr = `Ты: ${roleName} (Роль ${roleOrder}). Ответь на реплику из Шага #${i}. Добавь важный практический нюанс или лайфхак. Пиши живо на 'ты', без эмодзи и без точки в конце.`;
           sampleText = 'Да, там еще важно учитывать текущие комиссии';
         }
 
@@ -411,7 +411,7 @@ export default function Prompts() {
       role_name: roleObj?.role_name || `Бот ${roleId}`,
       text: roleObj?.sample_text || `Шаг ${count + 1}`,
       sample_text: roleObj?.sample_text || `Шаг ${count + 1}`,
-      ai_prompt: roleObj?.instruction ? `Ты — ${roleObj.role_name}. ${roleObj.instruction}. Ответь естественно на 'ты', без эмодзи и без точки в конце.` : `Инструкция для шага ${count + 1}`,
+      ai_prompt: roleObj?.instruction ? `Ты: ${roleObj.role_name}. ${roleObj.instruction}. Ответь естественно на 'ты', без эмодзи и без точки в конце.` : `Инструкция для шага ${count + 1}`,
       is_ai_dynamic: isDynamic,
       reply_to_step: count > 0 ? count : null,
       delay_before_min: 4.0,
@@ -448,7 +448,6 @@ export default function Prompts() {
   const [formPromptText, setFormPromptText] = useState('');
   const [formTags, setFormTags] = useState('');
 
-  // 1. Fetch categories
   const { data: categories = [] } = useQuery<CategoryItem[]>({
     queryKey: ['promptCategories'],
     queryFn: async () => {
@@ -457,7 +456,6 @@ export default function Prompts() {
     }
   });
 
-  // Fast category lookup map
   const categoryMap = useMemo(() => {
     const map: Record<string, CategoryItem> = {};
     for (const c of categories) {
@@ -466,7 +464,6 @@ export default function Prompts() {
     return map;
   }, [categories]);
 
-  // 2. Fetch templates
   const { data: templates = [], isLoading } = useQuery<PromptTemplateItem[]>({
     queryKey: ['promptTemplates', selectedCategory, selectedMode, searchTerm],
     queryFn: async () => {
@@ -479,7 +476,6 @@ export default function Prompts() {
     }
   });
 
-  // Statistics
   const stats = useMemo(() => {
     const total = templates.length;
     const dynamicCount = templates.filter((t) => t.mode === 'dynamic').length;
@@ -488,7 +484,6 @@ export default function Prompts() {
     return { total, dynamicCount, staticCount, builtInCount };
   }, [templates]);
 
-  // Copy helper
   const handleCopyText = (text: string, id?: number) => {
     navigator.clipboard.writeText(text);
     if (id !== undefined) {
@@ -501,7 +496,6 @@ export default function Prompts() {
     showToast('Промпт скопирован в буфер обмена', 'success');
   };
 
-  // Add new Category
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatLabel.trim()) return;
@@ -521,7 +515,6 @@ export default function Prompts() {
     }
   };
 
-  // Delete Category
   const handleDeleteCategory = async (catId: string, label: string) => {
     if (!window.confirm(`Удалить категорию "${label}"?`)) return;
     try {
@@ -535,7 +528,6 @@ export default function Prompts() {
     }
   };
 
-  // Toggle category inside multi-select form
   const toggleFormCategory = (catId: string) => {
     setFormCategories((prev) => {
       if (prev.includes(catId)) {
@@ -547,7 +539,6 @@ export default function Prompts() {
     });
   };
 
-  // AI Studio Generation trigger
   const handleGenerateStudio = async () => {
     if (!studioTopic.trim()) {
       showToast('Введите краткую тему или описание сцены', 'error');
@@ -574,7 +565,6 @@ export default function Prompts() {
     }
   };
 
-  // Save generated studio prompt to library
   const handleSaveStudioToLibrary = async () => {
     if (!studioResult) return;
     try {
@@ -604,7 +594,6 @@ export default function Prompts() {
     }
   };
 
-  // 1-Click Create Scenario from Studio Result or Template
   const handleCreateScenario = async (payload: { title: string; mode: string; prompt_text: string; steps: any[] }) => {
     try {
       const res = await axios.post('/api/prompts/create-scenario', {
@@ -625,7 +614,6 @@ export default function Prompts() {
     }
   };
 
-  // Delete custom template
   const handleDeleteTemplate = async (id: number) => {
     if (!window.confirm('Удалить этот шаблон из библиотеки?')) return;
     try {
@@ -637,7 +625,6 @@ export default function Prompts() {
     }
   };
 
-  // Open Edit Modal
   const handleOpenEdit = (template: PromptTemplateItem) => {
     setEditingTemplate(template);
     setFormTitle(template.title);
@@ -649,7 +636,6 @@ export default function Prompts() {
     setIsManualModalOpen(true);
   };
 
-  // Save manual/edited template
   const handleSaveManualForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim() || !formPromptText.trim()) {
@@ -1180,7 +1166,7 @@ export default function Prompts() {
                     Интерактивная AI Студия Промптов
                   </h2>
                   <p className="text-xs text-[var(--text-muted)]">
-                    Опишите задумку сцены своими словами — нейросеть создаст точечные роли и структурированные инструкции.
+                    Опишите задумку сцены своими словами: нейросеть создаст точечные роли и структурированные инструкции.
                   </p>
                 </div>
               </div>
@@ -2111,7 +2097,7 @@ export default function Prompts() {
                     Создание сценария из шаблона
                   </h2>
                   <p className="text-xs text-[var(--text-muted)]">
-                    Выберите количество сообщений (КОЛ смс) — цепочка ответов и роли настроятся автоматически.
+                    Выберите количество сообщений (КОЛ смс), цепочка ответов и роли настроятся автоматически.
                   </p>
                 </div>
               </div>

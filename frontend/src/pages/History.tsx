@@ -242,7 +242,7 @@ export const HistoryPage: React.FC = () => {
   };
 
   const formatJsonPretty = (rawDetails: string | null) => {
-    if (!rawDetails) return '—';
+    if (!rawDetails) return '-';
     try {
       const parsed = JSON.parse(rawDetails);
       return JSON.stringify(parsed, null, 2);
@@ -1187,11 +1187,11 @@ export const HistoryPage: React.FC = () => {
                         </td>
 
                         <td style={{ padding: '10px 14px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {log.target || '—'}
+                          {log.target || '-'}
                         </td>
 
                         <td style={{ padding: '10px 14px', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.78rem', color: log.status === 'error' ? '#f87171' : 'var(--text-muted)' }}>
-                          {log.details || '—'}
+                          {log.details || '-'}
                         </td>
 
                         <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -1302,7 +1302,7 @@ export const HistoryPage: React.FC = () => {
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '0.75rem' }}>Телефон:</span>
-                  <strong style={{ color: 'var(--text-main)' }}>{selectedLog.account_phone || '—'}</strong>
+                  <strong style={{ color: 'var(--text-main)' }}>{selectedLog.account_phone || '-'}</strong>
                 </div>
                 {selectedLog.target && (
                   <div style={{ gridColumn: 'span 2' }}>

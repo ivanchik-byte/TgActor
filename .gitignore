@@ -43,3 +43,8 @@ FRONTEND_CHANGES.md
 Plan.md
 reports/
 NotForLong/
+
+# IDE
+.idea/
+.vscode/
+

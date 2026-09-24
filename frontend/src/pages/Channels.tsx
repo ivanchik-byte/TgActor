@@ -1366,13 +1366,13 @@ export default function Channels() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
                   {(addMode === 'first_comment' ? [
-                    { label: '0–2 сек', min: 0, max: 2 },
-                    { label: '1–3 сек', min: 1, max: 3 },
-                    { label: '3–8 сек', min: 3, max: 8 }
+                    { label: '0-2 сек', min: 0, max: 2 },
+                    { label: '1-3 сек', min: 1, max: 3 },
+                    { label: '3-8 сек', min: 3, max: 8 }
                   ] : [
-                    { label: '5–15 сек', min: 5, max: 15 },
-                    { label: '10–30 сек', min: 10, max: 30 },
-                    { label: '30–60 сек', min: 30, max: 60 }
+                    { label: '5-15 сек', min: 5, max: 15 },
+                    { label: '10-30 сек', min: 10, max: 30 },
+                    { label: '30-60 сек', min: 30, max: 60 }
                   ]).map(preset => {
                     const isActive = minDelay === preset.min && maxDelay === preset.max;
                     return (
@@ -1688,7 +1688,7 @@ export default function Channels() {
                                 borderRadius: '6px', padding: '2px 4px', fontSize: '11px', color: 'var(--text-main)', textAlign: 'center', outline: 'none'
                               }}
                             />
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>–</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>-</span>
                             <input
                               type="number"
                               min={draft.min}

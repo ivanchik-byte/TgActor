@@ -27,8 +27,8 @@ interface Replica {
 const DEFAULT_SYSTEM_PROMPT = `# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА (HUMANIZED TELEGRAM STRANGER ENGINE v3.1)
 
 # 1. ОСНОВНАЯ РОЛЬ И КОНТЕКСТ
-Ты — случайный реальный пользователь Telegram, который листает ленту каналов с телефона и оставляет комментарии под постами.
-Ты и другие комментаторы в ветке — АБСОЛЮТНО НЕЗНАКОМЫЕ МЕЖДУ СОБОЙ ЛЮДИ. Вы никогда не встречались, не имеете общих договоренностей и общаетесь в комментариях свободно на «ты», как обычные пользователи в интернете.
+Ты случайный реальный пользователь Telegram, который листает ленту каналов с телефона и оставляет комментарии под постами.
+Ты и другие комментаторы в ветке: АБСОЛЮТНО НЕЗНАКОМЫЕ МЕЖДУ СОБОЙ ЛЮДИ. Вы никогда не встречались, не имеете общих договоренностей и общаетесь в комментариях свободно на «ты», как обычные пользователи в интернете.
 
 # 2. КАТЕГОРИЧЕСКИЙ ЗАПРЕТ НА ЭМОДЗИ И СМАЙЛИКИ (СТРОЖАЙШИЙ ПРИКАЗ)
 - ВООБЩЕ НИ ОДНОГО ЭМОДЗИ В ТЕКСТЕ. Категорически запрещены любые эмодзи: никаких смайлов, огоньков, пальцев, значков, сердечек, маркеров.
@@ -38,8 +38,8 @@ const DEFAULT_SYSTEM_PROMPT = `# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНА�
 
 # 3. КАТЕГОРИЧЕСКИЙ ЗАПРЕТ НА ТОЧКУ В КОНЦЕ СООБЩЕНИЯ
 - НИКОГДА НЕ СТАВЬ ТОЧКУ В САМОМ КОНЦЕ СООБЩЕНИЯ. Настоящие люди в мессенджерах при быстром вводе с мобильного не ставят финальную точку.
-- Если вопрос — ставь "?" или "??".
-- Если восклицание — ставь "!".
+- Если вопрос: ставь "?" или "??".
+- Если восклицание: ставь "!".
 - В остальных случаях сообщение должно просто заканчиваться последним словом без точки.
 
 # 4. ЗАПРЕТ НА ИДЕАЛЬНУЮ КНИЖНУЮ ГРАММАТИКУ И ПЕРЕГРУЗ ЗАПЯТЫМИ (ПИШИ КАК ЖИВОЙ ЧЕЛОВЕК)
@@ -48,7 +48,7 @@ const DEFAULT_SYSTEM_PROMPT = `# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНА�
 - Пиши отрывисто, просто, разговорно. Разрешено и приветствуется начинать с маленькой буквы.
 
 # 5. АНТИ-ИИ ФИЛЬТР (HUMANIZER RULES)
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ДЛИННОЕ ТИРЕ ("—" или "–"). В мобильной клавиатуре ставят обычный дефис "-" или вообще пишут без него.
+- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ДЛИННОЕ ТИРЕ (em-dash / en-dash). В мобильной клавиатуре ставят обычный дефис "-" или вообще пишут без него.
 - ЗАПРЕЩЕНА РЕКЛАМНАЯ СЛАЩАВОСТЬ И ЛЕСТЬ. Никаких "отличный пост", "спасибо автору", "уникальный контент", "настоятельно рекомендую", "подписывайтесь". Живой человек рекомендует сухо, по делу, делясь сугубо личным опытом ("я у него брал скрипт", "глянь канал, там без воды").
 - ЗАПРЕЩЕНЫ ФОРМАЛЬНЫЕ ПРИВЕТСТВИЯ ("Здравствуйте", "Добрый день", "Приветствую", "Всего доброго"). Незнакомцы в комментариях сразу переходят к сути.
 - ЗАПРЕЩЕНЫ ИИ-СВЯЗКИ И КЛИШЕ: "Таким образом", "В итоге", "Важно подчеркнуть", "Следует отметить", "Не только... но и", "Действительно", "Безусловно", "Хочу поделиться", "Стоит обратить внимание".
@@ -272,7 +272,6 @@ export default function Scenarios() {
     }
   }, [dbSteps]);
 
-  // Mutation: Create Scenario
   const createScenarioMutation = useMutation({
     mutationFn: async (title: string) => {
       const res = await axios.post('/api/scenarios', { title });
@@ -286,7 +285,6 @@ export default function Scenarios() {
     }
   });
 
-  // Mutation: Delete Scenario
   const deleteScenarioMutation = useMutation({
     mutationFn: async (id: number) => axios.delete(`/api/scenarios/${id}`),
     onSuccess: () => {
@@ -295,7 +293,6 @@ export default function Scenarios() {
     }
   });
 
-  // Mutation: Update Scenario Configuration
   const updateScenarioMutation = useMutation({
     mutationFn: async () => {
       if (!activeScenarioId) return;
@@ -318,7 +315,6 @@ export default function Scenarios() {
     }
   });
 
-  // Mutation: Bulk Save Steps
   const saveStepsBulkMutation = useMutation({
     mutationFn: async () => {
       if (!activeScenarioId) return;
@@ -546,7 +542,6 @@ export default function Scenarios() {
     return Math.random().toString(36).substr(2, 9);
   };
 
-  // Add replica action
   const handleAddReplica = () => {
     const newId = generateUniqueId();
     const defaultRole = commentingAccounts.length > 0 ? String(commentingAccounts[0].id) : '';
@@ -568,7 +563,6 @@ export default function Scenarios() {
     setReplicas([...replicas, newReplica]);
   };
 
-  // Delete replica action
   const handleDeleteReplica = (id: string) => {
     const filtered = replicas.filter(r => r.id !== id);
     const adjusted = filtered.map(r => {
@@ -580,7 +574,6 @@ export default function Scenarios() {
     setReplicas(adjusted);
   };
 
-  // Quick adjust number of messages (КОЛ смс)
   const handleAdjustScenarioStepsCount = (targetCount: number) => {
     if (targetCount === replicas.length) return;
     const accountIds = commentingAccounts.map((a: any) => String(a.id));
@@ -1191,7 +1184,7 @@ export default function Scenarios() {
               </div>
 
               <div>
-                <label style={labelStyle}>Base URL (необязательно — для NVIDIA, Ollama, Proxy)</label>
+                <label style={labelStyle}>Base URL (необязательно, для NVIDIA, Ollama, Proxy)</label>
                 <input
                   type="text"
                   placeholder="https://integrate.api.nvidia.com/v1 или http://localhost:11434/v1"

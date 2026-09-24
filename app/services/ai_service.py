@@ -39,7 +39,7 @@ def sanitize_telegram_comment(text: str) -> str:
 
     return cleaned
 
-def robust_json_loads(raw: str) -> Any:
+def parse_json_loose(raw: str) -> Any:
     if not raw or len(raw) > 100000:
         raise ValueError("Empty response from AI")
     
@@ -354,7 +354,7 @@ async def generate_scenario_from_prompt(
     )
 
     try:
-        data = robust_json_loads(raw_response)
+        data = parse_json_loose(raw_response)
         if isinstance(data, list):
             data = {"title": "Диалог в комментариях", "steps": data}
         elif isinstance(data, dict) and "scenario" in data and isinstance(data["scenario"], dict):
@@ -714,7 +714,7 @@ async def generate_studio_prompt(
         temperature=0.94
     )
 
-    data = robust_json_loads(raw_response)
+    data = parse_json_loose(raw_response)
     if not isinstance(data, dict):
         raise ValueError("Invalid structure received from AI Prompt Studio")
 

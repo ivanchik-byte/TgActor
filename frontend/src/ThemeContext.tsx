@@ -17,14 +17,14 @@ export const AVAILABLE_THEMES: ThemeOption[] = [
     label: 'Dark Crimson',
     accentColor: '#b91c3d',
     bgColor: '#110a0c',
-    description: 'Темно-красная тема — фирменный стиль по умолчанию',
+    description: 'Темно-красная тема: фирменный стиль по умолчанию',
   },
   {
     id: 'deep-indigo',
     label: 'Deep Indigo',
     accentColor: '#8b5cf6',
     bgColor: '#0f0d1a',
-    description: 'Глубокий индиго — фиолетовая темная тема',
+    description: 'Глубокий индиго, фиолетовая темная тема',
   },
   {
     id: 'dark-charcoal',

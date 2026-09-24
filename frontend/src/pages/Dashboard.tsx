@@ -2103,7 +2103,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Телефон:</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{selectedProfileAccount.phone || '—'}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{selectedProfileAccount.phone || '-'}</span>
                   {selectedProfileAccount.phone && (
                     <button
                       onClick={() => copyToClipboard(selectedProfileAccount.phone, 'phone')}
