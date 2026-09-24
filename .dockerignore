@@ -12,9 +12,14 @@ frontend/dist
 .git
 .gitignore
 
-# IDE
+# IDE & AI
 .vscode
 .idea
+.opencode
+.cursor
+.cline
+.windsurf
+.claude
 *.sw?
 
 # Env & docs

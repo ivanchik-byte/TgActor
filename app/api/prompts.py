@@ -304,7 +304,7 @@ async def delete_prompt_template(template_id: int):
 
 @router.post("/api/prompts/generate-studio")
 async def generate_studio_prompt_endpoint(req: StudioGenerateRequest):
-    """AI Studio generation endpoint: generates comprehensive scenario prompt and role breakdown."""
+    """Generates scenario prompt and role breakdown in AI Studio."""
     async with async_session() as session:
         try:
             result = await generate_studio_prompt(
@@ -346,7 +346,6 @@ async def create_scenario_from_studio(req: CreateScenarioFromStudioRequest):
         session.add(scenario)
         await session.flush()
 
-        # Add steps
         created_steps = []
         for idx, step_data in enumerate(req.steps):
             role_id = active_ids[idx % len(active_ids)]
@@ -383,7 +382,6 @@ async def create_scenario_from_studio(req: CreateScenarioFromStudioRequest):
 
         await session.flush()
 
-        # Link reply_to_step_id
         for idx, (step_obj, reply_target) in enumerate(created_steps):
             if reply_target is not None and isinstance(reply_target, int) and 1 <= reply_target <= len(created_steps):
                 target_step = created_steps[reply_target - 1][0]

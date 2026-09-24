@@ -43,3 +43,15 @@ FRONTEND_CHANGES.md
 Plan.md
 reports/
 NotForLong/
+
+# AI & IDE tooling
+.opencode/
+.opencode
+*.opencode*
+.cursor/
+.cline/
+.windsurf/
+.claude/
+.idea/
+.vscode/
+
