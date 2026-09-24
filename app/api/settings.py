@@ -7,7 +7,8 @@ from typing import Dict, Any
 from app.core.database import async_session
 from app.models.models import SystemConfig, AiPreset
 from app.models.schemas import AISettingsSchema, AiPresetCreate, AiPresetResponse
-from app.services.ai_service import get_ai_settings, call_ai_completion, DEFAULT_SYSTEM_PROMPT
+from app.services.ai_service import get_ai_settings, call_ai_completion
+from app.core.ai_defaults import DEFAULT_SYSTEM_PROMPT
 
 router = APIRouter()
 
@@ -15,9 +16,8 @@ router = APIRouter()
 async def get_ai_config():
     async with async_session() as session:
         settings = await get_ai_settings(session)
-        # Mask API key for security when returning to UI
-        key = settings.get("api_key")
-        masked_key = f"{key[:4]}...{key[-4:]}" if key and len(key) > 8 else (key or "")
+        key = settings.get("api_key") or ""
+        masked_key = f"{key[:4]}...{key[-4:]}" if len(key) > 8 else ""
         return AISettingsSchema(
             ai_provider=settings["provider"],
             ai_api_key=masked_key,
@@ -58,7 +58,6 @@ async def save_ai_config(cfg: AISettingsSchema):
 
 @router.post("/api/settings/ai/test")
 async def test_ai_connection(cfg: AISettingsSchema):
-    """Test AI API key connection by sending a tiny test prompt."""
     async with async_session() as session:
         stored = await get_ai_settings(session)
         api_key = cfg.ai_api_key
@@ -134,7 +133,6 @@ async def delete_ai_preset(preset_id: int):
 
 @router.get("/api/settings/ai/presets/{preset_id}")
 async def get_ai_preset(preset_id: int):
-    """Load full preset data including API key for applying."""
     async with async_session() as session:
         result = await session.execute(select(AiPreset).where(AiPreset.id == preset_id))
         preset = result.scalars().first()
@@ -143,7 +141,7 @@ async def get_ai_preset(preset_id: int):
         return {
             "id": preset.id,
             "name": preset.name,
-            "api_key": preset.api_key or "",
+            "has_key": bool(preset.api_key),
             "model": preset.model or "",
             "base_url": preset.base_url or "",
             "system_prompt": preset.system_prompt or ""

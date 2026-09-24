@@ -80,7 +80,7 @@ export const HistoryPage: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [loading, setLoading] = useState(true);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [autoScrollConsole, setAutoScrollConsole] = useState(true);
 
   // Dynamic filter state

@@ -82,7 +82,6 @@ async def execute_scenario(
     not_found_count = 0
     bot_banned_count = 0
 
-    # Probe client to inspect chat and resolve discussion target across candidate accounts
     for probe_account in commenting_pool:
         if is_banned_in_chat(str(chat_id), probe_account.id):
             bot_banned_count += 1
@@ -98,7 +97,6 @@ async def execute_scenario(
             continue
 
         try:
-            # Check if target is a channel and resolve its discussion group
             is_channel = False
             try:
                 chat_info = await probe_client.get_chat(chat_id)
@@ -146,7 +144,6 @@ async def execute_scenario(
                         diag = classify_telegram_error(ex)
                         last_diag = diag
                         last_ex = ex
-                        # If account is banned in channel/group or channel private for this bot, record ban and try next bot!
                         bot_banned_count += 1
                         record_banned_chat_member(str(chat_id), probe_account.id)
                         logger.warning(f"Аккаунт #{probe_account.id} (@{probe_account.username or probe_account.phone}) не имеет доступа к обсуждению канала {chat_id} ({diag['badge']}): {ex}. Пробуем следующий аккаунт...")
@@ -224,7 +221,6 @@ async def execute_scenario(
         await session.commit()
         return
 
-    # Filter available accounts that are NOT banned in this target chat
     unbanned_pool = [
         acc for acc in commenting_pool 
         if not is_banned_in_chat(str(target_chat_id), acc.id) and not is_banned_in_chat(str(chat_id), acc.id)
@@ -254,13 +250,11 @@ async def execute_scenario(
         await session.commit()
         return
 
-    # Prioritize accounts already known to be in group
     known_member_ids = get_known_chat_members(str(target_chat_id)) | get_known_chat_members(str(chat_id))
     in_group_accounts = [acc for acc in unbanned_pool if acc.id in known_member_ids]
     other_accounts = [acc for acc in unbanned_pool if acc.id not in known_member_ids]
     candidate_order = in_group_accounts + other_accounts
 
-    # Verify and join candidate bots to target chat
     verified_bots: List[Account] = []
     verified_clients: Dict[int, Any] = {}
 
@@ -270,7 +264,6 @@ async def execute_scenario(
         c = get_hydrogram_client(cand_acc, cand_acc.proxy)
         try:
             await c.start()
-            # If not yet member, try to join
             if cand_acc.id not in known_member_ids:
                 try:
                     await c.join_chat(target_chat_id)
@@ -359,12 +352,39 @@ async def execute_scenario(
         await session.commit()
         return
 
-    # Map roles to verified bots
     role_account_map: Dict[int, Account] = {}
     clients: Dict[int, Any] = {}
 
+    if len(verified_bots) < len(roles_needed):
+        error_msg = f"NOT_ENOUGH_UNBANNED_BOTS: ролей {len(roles_needed)}, ботов {len(verified_bots)}"
+        logger.error(error_msg)
+        log = TaskLog(scenario_id=scenario_id, status="error", error_message=error_msg)
+        session.add(log)
+        await log_action(
+            session,
+            action_type="comment_send",
+            status="error",
+            target=str(chat_id),
+            target_id=f"Не хватает ботов • {chat_id}",
+            details={
+                "summary": "Недостаточно незабаненных аккаунтов в пуле для выполнения всех ролей сценария",
+                "category": "not_enough_unbanned_bots",
+                "badge": "Не хватает ботов",
+                "error": error_msg,
+                "channel": str(chat_id)
+            },
+            scenario_id=scenario_id
+        )
+        await session.commit()
+        for c in verified_clients.values():
+            try:
+                await c.stop()
+            except Exception:
+                pass
+        return
+
     for idx, role_id in enumerate(roles_needed):
-        assigned_bot = verified_bots[idx % len(verified_bots)]
+        assigned_bot = verified_bots[idx]
         role_account_map[role_id] = assigned_bot
         clients[role_id] = verified_clients[assigned_bot.id]
 
@@ -372,12 +392,16 @@ async def execute_scenario(
 
     step_msg_map: Dict[int, int] = {}
     joined_roles: set[int] = set()
-    
-    for idx, step in enumerate(steps):
+    step_retries: Dict[int, int] = {}
+    completed_all = True
+
+    idx = 0
+    while idx < len(steps):
+        step = steps[idx]
         role_id = step.role_id
         client = clients[role_id]
         
-        # Lazy join chat right before this bot speaks (prevents all bots joining at the exact same second)
+        # Lazy join right before speaking avoids simultaneous join spikes
         if role_id not in joined_roles:
             try:
                 await client.join_chat(target_chat_id)
@@ -387,6 +411,10 @@ async def execute_scenario(
 
         delay_min = step.delay_before_min if step.delay_before_min is not None else scenario.min_delay
         delay_max = step.delay_before_max if step.delay_before_max is not None else scenario.max_delay
+        delay_min = delay_min if delay_min is not None else 0
+        delay_max = delay_max if delay_max is not None else delay_min
+        if delay_max < delay_min:
+            delay_min, delay_max = delay_max, delay_min
         
         reply_to = default_reply_to
         if step.reply_to_step_id and step.reply_to_step_id in step_msg_map:
@@ -439,11 +467,29 @@ async def execute_scenario(
                 text_to_send = random.choice(fallbacks)
                 logger.warning(f"Step {step.id} had empty text; applied fallback: '{text_to_send}'")
 
-            msg = await client.send_message(
-                chat_id=target_chat_id,
-                text=text_to_send,
-                reply_to_message_id=reply_to
-            )
+            msg = None
+            media_path = getattr(step, 'media_path', None)
+            if media_path:
+                if str(media_path).lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")):
+                    msg = await client.send_photo(
+                        chat_id=target_chat_id,
+                        photo=str(media_path),
+                        caption=text_to_send,
+                        reply_to_message_id=reply_to
+                    )
+                else:
+                    msg = await client.send_document(
+                        chat_id=target_chat_id,
+                        document=str(media_path),
+                        caption=text_to_send,
+                        reply_to_message_id=reply_to
+                    )
+            else:
+                msg = await client.send_message(
+                    chat_id=target_chat_id,
+                    text=text_to_send,
+                    reply_to_message_id=reply_to
+                )
             
             if msg:
                 msg_id = getattr(msg, 'id', None) or getattr(msg, 'message_id', 0)
@@ -477,11 +523,14 @@ async def execute_scenario(
                             logger.error(f"Ошибка парсинга reaction_roles: {e}")
                     
                     if not reactors and reaction_pool:
-                        count = step.reaction_count or 1
-                        reactors = random.sample(reaction_pool, min(count, len(reaction_pool)))
-                    
+                        count = step.reaction_count if step.reaction_count is not None else 1
+                        if count <= 0:
+                            reactors = []
+                        else:
+                            reactors = random.sample(reaction_pool, min(count, len(reaction_pool)))
+
                     reactions = step.reactions.split() if step.reactions else []
-                    if source == 'ai_smart' or not reactions:
+                    if source == 'ai_smart' and not reactions:
                         reactions = ["🔥", "👍", "❤️", "😍", "👏", "🎉", "🤝", "💯"]
 
                     for r_acc in reactors:
@@ -516,8 +565,29 @@ async def execute_scenario(
                     logger.info(f"Пауза {step_delay:.1f}с после шага #{step.id} перед следующим сообщением...")
                     await asyncio.sleep(step_delay)
 
+            idx += 1
+
         except Exception as e:
             diag = classify_telegram_error(e)
+            if diag["category"] in ["flood_wait", "slowmode"]:
+                import re as _re
+                wait = 5.0
+                found = _re.search(r'(\d+)\s*(?:seconds|s|сек)', str(e).lower())
+                if found:
+                    try:
+                        wait = min(float(found.group(1)) + 1.0, 120.0)
+                    except ValueError:
+                        pass
+                tries = step_retries.get(step.id, 0)
+                if tries < 2:
+                    step_retries[step.id] = tries + 1
+                    logger.warning(
+                        f"FloodWait/Slowmode на шаге {step.id} ({diag['badge']}), "
+                        f"повтор {tries + 1}/2 после паузы {wait:.0f}с..."
+                    )
+                    await asyncio.sleep(wait + random.uniform(0, 2.0))
+                    continue
+                logger.error(f"Шаг {step.id}: лимит повторов после FloodWait исчерпан")
             if diag["category"] in ["account_banned", "chat_closed", "peer_flood"]:
                 record_banned_chat_member(str(target_chat_id), role_account_map[role_id].id)
                 record_banned_chat_member(str(chat_id), role_account_map[role_id].id)
@@ -541,8 +611,9 @@ async def execute_scenario(
                 scenario_id=scenario_id
             )
             await session.commit()
+            completed_all = False
             break
-    else:
+    if completed_all:
         # All steps completed successfully
         await log_action(
             session,

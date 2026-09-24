@@ -4,26 +4,58 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, or_
+from sqlalchemy import select, func, delete, or_, case
 
 from app.models.models import ActionLog, Account
 
 logger = logging.getLogger("tgactor.actions")
 
 def classify_telegram_error(ex: Any) -> Dict[str, str]:
-    """
-    Classifies error into high-priority human readable diagnostics:
-    - 'account_banned': Аккаунт заблокирован или исключен из канала (ChannelForbidden / UserBanned)
-    - 'session_expired': Сессия аккаунта слетела / заблокирован
-    - 'no_accounts': Нет активных аккаунтов в пуле
-    - 'chat_closed': Чат закрыт / комментарии отключены
-    - 'flood_wait': Лимит Telegram (FloodWait)
-    - 'peer_flood': Спам-блок или ограничение (PeerFlood)
-    - 'slowmode': Медленный режим чата (Slowmode)
-    - 'no_posts': В канале нет постов для комментариев
-    - 'realtime_drift': Реальное время слетело / таймаут триггера
-    - 'error': Общая ошибка
-    """
+    name = type(ex).__name__.lower()
+    if name in ("floodwait", "flood_wait"):
+        wait = getattr(ex, "value", None) or getattr(ex, "seconds", None)
+        suffix = f" на {wait} сек" if wait else ""
+        return {
+            "category": "flood_wait",
+            "badge": "FloodWait лимит",
+            "summary": f"Временное ограничение Telegram по частоте (FloodWait{suffix})"
+        }
+    if name in ("peerflood", "peer_flood", "user restricted", "userrestricted"):
+        return {
+            "category": "peer_flood",
+            "badge": "Спам-блок аккаунта",
+            "summary": "Telegram временно ограничил отправку с этого аккаунта (PeerFlood / Спам-блок)"
+        }
+    if name in ("slowmodewait", "slowmode_wait", "slowmode"):
+        return {
+            "category": "slowmode",
+            "badge": "Slowmode ожидание",
+            "summary": "В группе включен медленный режим (Slowmode), нужно выждать паузу"
+        }
+    if name in ("channelprivate", "channel_private", "chatwriteforbidden", "chat_write_forbidden", "chatadminrequired", "msg_id_invalid", "msgidinvalid"):
+        return {
+            "category": "chat_closed",
+            "badge": "Чат закрыт",
+            "summary": "У канала отключены комментарии или закрыта группа для обсуждений"
+        }
+    if name in ("channelforbidden", "channel_forbidden", "userbannedinchannel", "user_banned_in_channel", "userdeactivatedban", "user_deactivated_ban", "userkicked", "chatadminrequired"):
+        return {
+            "category": "account_banned",
+            "badge": "Бан/Блок в канале",
+            "summary": "Аккаунт заблокирован Telegram или исключен/забанен в этом канале (ChannelForbidden)"
+        }
+    if name in ("authkeyunregistered", "auth_key_unregistered", "sessionrevoked", "session_revoked", "userdeactivated", "user_deactivated", "unauthorized", "sessionpasswordneeded"):
+        return {
+            "category": "session_expired",
+            "badge": "Сессия слетела",
+            "summary": "Сессия аккаунта недействительна или аккаунт был сброшен/заблокирован"
+        }
+    if name in ("usernameinvalid", "username_not_occupied", "username_invalid", "peeridinvalid", "peer_id_invalid", "chatinvalid", "chat_invalid", "invitehashinvalid"):
+        return {
+            "category": "chat_not_found",
+            "badge": "Чат не найден",
+            "summary": "Канал или группа не найдены в Telegram (неверный юзернейм или чат удален)"
+        }
     err_str = str(ex).lower()
 
     if any(k in err_str for k in ["все боты забанены", "все боты в чате забанены", "all_bots_banned", "all bots banned"]):
@@ -130,7 +162,6 @@ async def log_action(
     executed_at: Optional[datetime] = None,
     commit: bool = True
 ) -> ActionLog:
-    """Record detailed real backend action in bot_action_log table and print to terminal log."""
     if isinstance(details, (dict, list)):
         details_str = json.dumps(details, ensure_ascii=False)
     else:
@@ -158,7 +189,6 @@ async def log_action(
     )
     session.add(log_entry)
 
-    # Print clean formatted event to terminal
     acc_label = f"Account #{valid_acc_id}" if valid_acc_id else "System"
     tgt_label = f" -> {target}" if target else ""
     t_id_label = f" [{target_id}]" if target_id else ""
@@ -182,25 +212,22 @@ async def log_action(
     return log_entry
 
 async def get_action_log_stats(session: AsyncSession) -> Dict[str, Any]:
-    """Calculate KPI metrics for action logs."""
-    total_stmt = select(func.count(ActionLog.id))
-    total = (await session.execute(total_stmt)).scalar() or 0
-
-    ok_stmt = select(func.count(ActionLog.id)).where(ActionLog.status == 'ok')
-    ok_count = (await session.execute(ok_stmt)).scalar() or 0
-
-    err_stmt = select(func.count(ActionLog.id)).where(ActionLog.status == 'error')
-    error_count = (await session.execute(err_stmt)).scalar() or 0
-
-    warn_stmt = select(func.count(ActionLog.id)).where(ActionLog.status.in_(['warning', 'cooldown']))
-    warning_count = (await session.execute(warn_stmt)).scalar() or 0
-
-    unique_acc_stmt = select(func.count(func.distinct(ActionLog.account_id))).where(ActionLog.account_id.isnot(None))
-    active_accounts = (await session.execute(unique_acc_stmt)).scalar() or 0
-
     since_24h = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
-    h24_stmt = select(func.count(ActionLog.id)).where(ActionLog.executed_at >= since_24h)
-    count_24h = (await session.execute(h24_stmt)).scalar() or 0
+    stmt = select(
+        func.count(ActionLog.id),
+        func.sum(case((ActionLog.status == 'ok', 1), else_=0)),
+        func.sum(case((ActionLog.status == 'error', 1), else_=0)),
+        func.sum(case((ActionLog.status.in_(['warning', 'cooldown']), 1), else_=0)),
+        func.count(func.distinct(ActionLog.account_id)),
+        func.sum(case((ActionLog.executed_at >= since_24h, 1), else_=0)),
+    )
+    row = (await session.execute(stmt)).one()
+    total = row[0] or 0
+    ok_count = int(row[1] or 0)
+    error_count = int(row[2] or 0)
+    warning_count = int(row[3] or 0)
+    active_accounts = int(row[4] or 0)
+    count_24h = int(row[5] or 0)
 
     success_rate = round((ok_count / total * 100), 1) if total > 0 else 100.0
 

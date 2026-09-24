@@ -29,16 +29,10 @@ async_session = async_sessionmaker(
 redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
 
 async def ensure_db_schema_sync():
-    """
-    Ensures database tables are created and missing AI columns are added on startup.
-    """
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            
             is_postgres = engine.dialect.name == "postgresql"
-            
-            # Common migrations (ALTER TABLE ADD COLUMN, UPDATE)
             common_migrations = [
                 "ALTER TABLE scenarios ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 "ALTER TABLE scenarios ADD COLUMN mode VARCHAR DEFAULT 'manual'" if not is_postgres else "ALTER TABLE scenarios ADD COLUMN IF NOT EXISTS mode VARCHAR DEFAULT 'manual'",
@@ -59,9 +53,11 @@ async def ensure_db_schema_sync():
                 "ALTER TABLE monitored_channels ADD COLUMN custom_prompt TEXT" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS custom_prompt TEXT",
                 "ALTER TABLE monitored_channels ADD COLUMN ai_model VARCHAR" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS ai_model VARCHAR",
                 "ALTER TABLE monitored_channels ADD COLUMN skip_ads BOOLEAN DEFAULT TRUE" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS skip_ads BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE monitored_channels ADD COLUMN last_checked_msg_id BIGINT" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS last_checked_msg_id BIGINT",
+                "ALTER TABLE monitored_channels ADD COLUMN last_checked_at TIMESTAMP" if not is_postgres else "ALTER TABLE monitored_channels ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMP",
                 # Dedupe inbox messages before enforcing uniqueness
-                "DELETE FROM inbox_messages WHERE id NOT IN (SELECT MIN(id) FROM inbox_messages GROUP BY account_id, peer_id, message_id)",
-                "CREATE UNIQUE INDEX IF NOT EXISTS uq_inbox_msg ON inbox_messages (account_id, peer_id, message_id)",
+                "DELETE FROM inbox_messages WHERE message_id IS NOT NULL AND id NOT IN (SELECT MIN(id) FROM inbox_messages WHERE message_id IS NOT NULL GROUP BY account_id, peer_id, message_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_inbox_msg ON inbox_messages (account_id, peer_id, message_id) WHERE message_id IS NOT NULL",
             ]
             for stmt in common_migrations:
                 try:

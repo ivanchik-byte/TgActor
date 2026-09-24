@@ -29,6 +29,11 @@ from app.models.models import Base
 async def init_db_tables():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Bring pre-existing test DB files up to date with model columns
+    # (create_all alone does not ALTER stale tables).
+    from app.core.database import ensure_db_schema_sync
+
+    await ensure_db_schema_sync()
 
 async def get_token_headers(ac):
     resp = await ac.post("/api/auth/login", json={"password": "testpassword"})
@@ -82,8 +87,7 @@ async def test_accounts():
 async def test_channels_api():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         headers = await get_token_headers(ac)
-        
-        # Test creating channel with URL
+
         resp = await ac.post("/api/channels", json={
             "channel_identifier": "https://t.me/testchannel228",
             "min_delay_seconds": 5,
@@ -95,13 +99,11 @@ async def test_channels_api():
         assert len(resp.json()["added_ids"]) == 1
         ch_id = resp.json()["added_ids"][0]
 
-        # Test listing channels
         resp = await ac.get("/api/channels", headers=headers)
         assert resp.status_code == 200
         channels = resp.json()
         assert any(c["channel_username"] == "testchannel228" for c in channels)
 
-        # Test patching channel
         resp = await ac.patch(f"/api/channels/{ch_id}", json={
             "is_active": False,
             "min_delay_seconds": 8,
@@ -110,12 +112,10 @@ async def test_channels_api():
         }, headers=headers)
         assert resp.status_code == 200
 
-        # Test monitor status
         resp = await ac.get("/api/channels/monitor/status", headers=headers)
         assert resp.status_code == 200
         assert "running" in resp.json()
 
-        # Test deleting channel
         resp = await ac.delete(f"/api/channels/{ch_id}", headers=headers)
         assert resp.status_code == 200
 

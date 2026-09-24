@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Float, DateTime, ForeignKey, Text, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.core.database import Base
@@ -42,21 +42,29 @@ class Account(Base):
 
     @property
     def in_commenting_pool(self):
-        return self.pool_type == "commenting"
+        return (self.pool_type or "commenting").lower() in ["commenting", "both"]
 
     @in_commenting_pool.setter
     def in_commenting_pool(self, val):
+        curr = (self.pool_type or "commenting").lower()
+        in_react = curr in ["reactions", "reaction", "both"]
         if val:
-            self.pool_type = "commenting"
+            self.pool_type = "both" if in_react else "commenting"
+        else:
+            self.pool_type = "reactions" if in_react else "none"
 
     @property
     def in_reaction_pool(self):
-        return self.pool_type == "reactions"
+        return (self.pool_type or "").lower() in ["reactions", "reaction", "both"]
 
     @in_reaction_pool.setter
     def in_reaction_pool(self, val):
+        curr = (self.pool_type or "commenting").lower()
+        in_comment = curr in ["commenting", "both"]
         if val:
-            self.pool_type = "reactions"
+            self.pool_type = "both" if in_comment else "reactions"
+        else:
+            self.pool_type = "commenting" if in_comment else "none"
 
 class Proxy(Base):
     __tablename__ = "proxies"
@@ -133,7 +141,6 @@ class ScenarioStep(Base):
     reaction_source = Column(String, default="pool")
     reaction_roles = Column(String, nullable=True)
 
-    # AI dynamic step fields
     is_ai_dynamic = Column(Boolean, default=False)
     ai_prompt = Column(Text, nullable=True)
 
@@ -164,6 +171,8 @@ class MonitoredChannel(Base):
     custom_prompt = Column(Text, nullable=True)
     ai_model = Column(String, nullable=True)
     skip_ads = Column(Boolean, default=True, server_default="true")
+    last_checked_msg_id = Column(BigInteger, nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
 
     sender_account = relationship("Account", foreign_keys=[sender_account_id])
 
@@ -184,18 +193,20 @@ class InboxMessage(Base):
     __tablename__ = "inbox_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
     message_id = Column(BigInteger, nullable=True)
-    peer_id = Column(BigInteger, nullable=False)
+    peer_id = Column(BigInteger, nullable=False, index=True)
     peer_name = Column(String, nullable=True)
     peer_username = Column(String, nullable=True)
     incoming = Column(Boolean, default=True)
     text = Column(Text, nullable=True)
     media_path = Column(String, nullable=True)
-    created_at = Column(DateTime, default=get_utc_now)
+    created_at = Column(DateTime, default=get_utc_now, index=True)
 
     __table_args__ = (
         UniqueConstraint("account_id", "peer_id", "message_id", name="uq_inbox_msg"),
+        Index("ix_inbox_acc_peer_created", "account_id", "peer_id", "created_at"),
+        Index("ix_inbox_acc_peer_msg", "account_id", "peer_id", "message_id"),
     )
 
     account = relationship("Account", back_populates="inbox_messages")

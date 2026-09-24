@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, model_validator
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
+
+AiProvider = Literal["openai", "deepseek", "nvidia", "openrouter", "gemini", "custom"]
 
 class AccountBase(BaseModel):
     phone: str
@@ -60,14 +62,14 @@ class ScenarioResponse(ScenarioBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-from app.services.ai_service import DEFAULT_SYSTEM_PROMPT
+from app.core.ai_defaults import DEFAULT_SYSTEM_PROMPT
 
 class AISettingsSchema(BaseModel):
-    ai_provider: str = "openai" # 'openai', 'deepseek', 'nvidia', 'openrouter', 'gemini', 'custom'
-    ai_api_key: Optional[str] = None
-    ai_default_model: str = "gpt-4o-mini"
-    ai_system_prompt: Optional[str] = DEFAULT_SYSTEM_PROMPT
-    ai_base_url: Optional[str] = None
+    ai_provider: AiProvider = "openai"
+    ai_api_key: Optional[str] = Field(default=None, max_length=500)
+    ai_default_model: str = Field(default="gpt-4o-mini", max_length=200)
+    ai_system_prompt: Optional[str] = Field(default=DEFAULT_SYSTEM_PROMPT, max_length=20000)
+    ai_base_url: Optional[str] = Field(default=None, max_length=500)
 
 class AiPresetCreate(BaseModel):
     name: str
@@ -87,14 +89,14 @@ class AiPresetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class AIScenarioGenerateRequest(BaseModel):
-    prompt: str
-    accounts_count: Optional[int] = 3
-    steps_count: Optional[int] = None
+    prompt: str = Field(min_length=3, max_length=4000)
+    accounts_count: Optional[int] = Field(default=3, ge=1, le=10)
+    steps_count: Optional[int] = Field(default=None, ge=3, le=25)
     reactions_enabled: Optional[bool] = True
     is_dynamic: Optional[bool] = False
-    provider: Optional[str] = None
-    model: Optional[str] = None
-    system_prompt: Optional[str] = None
+    provider: Optional[AiProvider] = None
+    model: Optional[str] = Field(default=None, max_length=200)
+    system_prompt: Optional[str] = Field(default=None, max_length=20000)
 
 class ProxyBase(BaseModel):
     host: str
@@ -185,7 +187,7 @@ class PromptTemplateBase(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = "software"
     categories: Optional[List[str]] = None
-    mode: str = "dynamic" # 'static' or 'dynamic'
+    mode: str = "dynamic"
     prompt_text: str
     system_instruction: Optional[str] = None
     roles_breakdown: Optional[str] = None
@@ -218,9 +220,9 @@ class PromptTemplateResponse(PromptTemplateBase):
 
 class StudioGenerateRequest(BaseModel):
     topic: str
-    mode: str = "dynamic" # 'static' or 'dynamic'
-    drama_type: str = "skepticism_proof" # 'skepticism_proof', 'warmup_interest', 'expert_qa', 'friendly_dispute'
-    tone: str = "telegram_slang" # 'telegram_slang', 'tech_slang', 'concise_casual'
+    mode: str = "dynamic"
+    drama_type: str = "skepticism_proof"
+    tone: str = "telegram_slang"
     roles_count: int = 3
     steps_count: Optional[int] = None
     provider: Optional[str] = None

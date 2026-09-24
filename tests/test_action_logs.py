@@ -14,10 +14,8 @@ async def test_action_log_creation_and_stats():
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
-        # Seed demo logs
         await seed_demo_action_logs(session)
 
-        # Log a new action
         log = await log_action(
             session=session,
             action_type="comment_send",
@@ -32,7 +30,6 @@ async def test_action_log_creation_and_stats():
         assert log.status == "ok"
         assert log.target == "@test_channel"
 
-        # Check stats
         stats = await get_action_log_stats(session)
         assert stats["total"] > 0
         assert stats["ok_count"] > 0

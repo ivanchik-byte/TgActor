@@ -37,7 +37,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://tgactor:tgactor_password@db:5432/tgactor_db}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - SECRET_KEY=${SECRET_KEY:-${ENCRYPTION_KEY}}
     depends_on:

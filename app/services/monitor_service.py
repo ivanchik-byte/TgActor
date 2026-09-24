@@ -29,8 +29,6 @@ async def pick_random_scenario(session: AsyncSession, channel: MonitoredChannel)
         return None
 
     no_repeat = bool(channel.no_repeat_scenarios)
-
-    # Filter out scenarios in recent history
     if no_repeat and len(scenarios) > 1:
         candidates = [s for s in scenarios if s.id not in history]
     else:
@@ -41,8 +39,8 @@ async def pick_random_scenario(session: AsyncSession, channel: MonitoredChannel)
         candidates = list(scenarios)
         history = []
 
-    total_weight = sum(max(1, getattr(s, 'weight', 1)) for s in candidates)
-    weights = [max(1, getattr(s, 'weight', 1)) / total_weight for s in candidates]
+    total_weight = sum(max(1, getattr(s, 'weight', 1) or 1) for s in candidates)
+    weights = [max(1, getattr(s, 'weight', 1) or 1) / total_weight for s in candidates]
 
     chosen = random.choices(candidates, weights=weights, k=1)[0]
 

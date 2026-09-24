@@ -65,16 +65,16 @@ async def create_scenario(sc: ScenarioCreate):
         return {"status": "ok", "id": scenario.id}
 
 @router.put("/api/scenarios/{scenario_id}")
-async def update_scenario(scenario_id: int, sc: ScenarioCreate):
+async def update_scenario(scenario_id: int, sc: ScenarioUpdate):
     async with async_session() as session:
         scenario = await session.get(Scenario, scenario_id)
         if not scenario:
             raise HTTPException(404, "Scenario not found")
-        scenario.title = sc.title
-        scenario.is_active = sc.is_active
-        scenario.min_delay = sc.min_delay
-        scenario.max_delay = sc.max_delay
-        scenario.weight = sc.weight
+        updated = sc.model_dump(exclude_unset=True)
+        for field in ("title", "is_active", "min_delay", "max_delay", "weight",
+                      "mode", "ai_prompt", "ai_provider", "ai_model", "system_instruction"):
+            if field in updated:
+                setattr(scenario, field, updated[field])
         await session.commit()
         return {"status": "ok"}
 
@@ -107,7 +107,6 @@ class AIPromptGenerateRequest(BaseModel):
 
 @router.post("/api/scenarios/generate-prompt")
 async def generate_scenario_prompt_endpoint(req: AIPromptGenerateRequest):
-    """Generate a high-converting natural prompt idea using AI."""
     async with async_session() as session:
         try:
             from app.services.ai_service import generate_prompt_idea
@@ -124,7 +123,6 @@ async def generate_scenario_prompt_endpoint(req: AIPromptGenerateRequest):
 
 @router.post("/api/scenarios/generate-ai")
 async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
-    """Generate scenario steps structure from AI prompt."""
     async with async_session() as session:
         try:
             generated = await generate_scenario_from_prompt(
@@ -143,34 +141,58 @@ async def generate_scenario_ai_endpoint(req: AIScenarioGenerateRequest):
             logger.error(f"AI Scenario Generation failed: {e}", exc_info=True)
             raise HTTPException(400, detail=f"AI Scenario Generation failed: {str(e)}")
 
+def _build_step(scenario_id: int, item: "ScenarioStepBulkItem") -> ScenarioStep:
+    return ScenarioStep(
+        scenario_id=scenario_id,
+        step_order=item.step_order,
+        role_id=item.role_id,
+        message_type=item.message_type,
+        text=item.text,
+        media_path=item.media_path,
+        delay_before_min=item.delay_before_min,
+        delay_before_max=item.delay_before_max,
+        reactions=item.reactions,
+        reaction_count=item.reaction_count,
+        reaction_source=item.reaction_source or 'pool',
+        reaction_roles=item.reaction_roles,
+        is_ai_dynamic=item.is_ai_dynamic or False,
+        ai_prompt=item.ai_prompt
+    )
+
+
+def _link_replies(db_steps: list, items: list) -> None:
+    for idx, item in enumerate(items):
+        if item.reply_to_index is not None and 0 <= item.reply_to_index < len(db_steps):
+            db_steps[idx].reply_to_step_id = db_steps[item.reply_to_index].id
+
+
+def _export_step(step, reply_idx):
+    return {
+        "step_order": step.step_order,
+        "role_id": step.role_id,
+        "message_type": step.message_type,
+        "text": step.text,
+        "media_path": step.media_path,
+        "delay_before_min": step.delay_before_min,
+        "delay_before_max": step.delay_before_max,
+        "reactions": step.reactions,
+        "reaction_count": step.reaction_count,
+        "reply_to_index": reply_idx,
+        "reaction_source": step.reaction_source,
+        "reaction_roles": step.reaction_roles,
+        "is_ai_dynamic": step.is_ai_dynamic,
+        "ai_prompt": step.ai_prompt
+    }
+
 @router.post("/api/scenarios/{scenario_id}/steps/bulk")
 async def save_scenario_steps_bulk(scenario_id: int, req: ScenarioStepsBulkRequest):
     async with async_session() as session:
         await session.execute(delete(ScenarioStep).where(ScenarioStep.scenario_id == scenario_id))
-        db_steps = []
-        for item in req.steps:
-            db_step = ScenarioStep(
-                scenario_id=scenario_id,
-                step_order=item.step_order,
-                role_id=item.role_id,
-                message_type=item.message_type,
-                text=item.text,
-                media_path=item.media_path,
-                delay_before_min=item.delay_before_min,
-                delay_before_max=item.delay_before_max,
-                reactions=item.reactions,
-                reaction_count=item.reaction_count,
-                reaction_source=item.reaction_source or 'pool',
-                reaction_roles=item.reaction_roles,
-                is_ai_dynamic=item.is_ai_dynamic or False,
-                ai_prompt=item.ai_prompt
-            )
-            session.add(db_step)
-            db_steps.append(db_step)
+        db_steps = [_build_step(scenario_id, item) for item in req.steps]
+        for step in db_steps:
+            session.add(step)
         await session.flush()
-        for idx, item in enumerate(req.steps):
-            if item.reply_to_index is not None and 0 <= item.reply_to_index < len(db_steps):
-                db_steps[idx].reply_to_step_id = db_steps[item.reply_to_index].id
+        _link_replies(db_steps, req.steps)
         await session.commit()
         return {"status": "ok", "count": len(db_steps)}
 
@@ -186,20 +208,7 @@ async def export_scenario(scenario_id: int):
         exported_steps = []
         for step in steps:
             reply_idx = step_id_to_index.get(step.reply_to_step_id) if step.reply_to_step_id else None
-            exported_steps.append({
-                "step_order": step.step_order,
-                "role_id": step.role_id,
-                "message_type": step.message_type,
-                "text": step.text,
-                "media_path": step.media_path,
-                "delay_before_min": step.delay_before_min,
-                "delay_before_max": step.delay_before_max,
-                "reactions": step.reactions,
-                "reaction_count": step.reaction_count,
-                "reply_to_index": reply_idx,
-                "reaction_source": step.reaction_source,
-                "reaction_roles": step.reaction_roles
-            })
+            exported_steps.append(_export_step(step, reply_idx))
         return {
             "version": 1,
             "title": scenario.title,
@@ -222,50 +231,48 @@ async def import_scenario(data: ScenarioImportRequest):
         )
         session.add(scenario)
         await session.flush()
-        db_steps = []
-        for item in data.steps:
-            db_step = ScenarioStep(
-                scenario_id=scenario.id,
-                step_order=item.step_order,
-                role_id=item.role_id,
-                message_type=item.message_type,
-                text=item.text,
-                media_path=item.media_path,
-                delay_before_min=item.delay_before_min,
-                delay_before_max=item.delay_before_max,
-                reactions=item.reactions,
-                reaction_count=item.reaction_count,
-                reaction_source=item.reaction_source or 'pool',
-                reaction_roles=item.reaction_roles
-            )
-            session.add(db_step)
-            db_steps.append(db_step)
+        db_steps = [_build_step(scenario.id, item) for item in data.steps]
+        for step in db_steps:
+            session.add(step)
         await session.flush()
-        for idx, item in enumerate(data.steps):
-            if item.reply_to_index is not None and 0 <= item.reply_to_index < len(db_steps):
-                db_steps[idx].reply_to_step_id = db_steps[item.reply_to_index].id
+        _link_replies(db_steps, data.steps)
         await session.commit()
         return {"status": "ok", "id": scenario.id, "steps_count": len(db_steps)}
 
-@router.post("/api/scenarios/{scenario_id}/execute")
-async def run_scenario_endpoint(scenario_id: int, req: ScenarioExecuteRequest):
-    target = req.target.strip()
-    post_id = req.post_id
-    if "t.me/" in target:
-        match = re.search(r"t\.me/([^/]+)/?(\d+)?", target)
+def _parse_target(target: str, post_id: Optional[int]):
+    raw = target.strip()
+    if raw.startswith("https://t.me/+") or raw.startswith("t.me/+"):
+        return raw.split("t.me/")[-1], post_id
+    if "t.me/c/" in raw:
+        match = re.search(r"t\.me/c/(\d+)/(\d+)?", raw)
+        if match:
+            chat_id = f"-100{match.group(1)}"
+            pid = int(match.group(2)) if match.group(2) and not post_id else post_id
+            return chat_id, pid
+    if "t.me/" in raw:
+        match = re.search(r"t\.me/([^/]+)/?(\d+)?", raw)
         if match:
             channel_part = match.group(1)
             parsed_post_id = match.group(2)
-            if channel_part != "c":
-                target = f"@{channel_part}" if not channel_part.startswith("@") else channel_part
+            if channel_part not in ("c",):
+                raw = f"@{channel_part}" if not channel_part.startswith("@") else channel_part
             if parsed_post_id and not post_id:
                 post_id = int(parsed_post_id)
-    if not target.startswith("@") and not target.startswith("-") and not target.lstrip('-').isdigit():
-        target = f"@{target}"
+            return raw, post_id
+    if not raw.startswith("@") and not raw.startswith("-") and not raw.lstrip('-').isdigit():
+        raw = f"@{raw}"
+    return raw, post_id
+
+@router.post("/api/scenarios/{scenario_id}/execute")
+async def run_scenario_endpoint(scenario_id: int, req: ScenarioExecuteRequest):
+    target, post_id = _parse_target(req.target, req.post_id)
     async with async_session() as session:
         scenario = await session.get(Scenario, scenario_id)
         if not scenario:
             raise HTTPException(404, detail="Сценарий не найден.")
+    for running in list(_running_executions):
+        if getattr(running, "_tgactor_key", None) == (scenario_id, target, post_id):
+            return {"status": "already_running", "target": target, "post_id": post_id}
     async def _runner():
         async with async_session() as s:
             try:
@@ -273,6 +280,7 @@ async def run_scenario_endpoint(scenario_id: int, req: ScenarioExecuteRequest):
             except Exception as e:
                 logger.error(f"Scenario #{scenario_id} execution failed: {e}", exc_info=True)
     task = asyncio.create_task(_runner())
+    task._tgactor_key = (scenario_id, target, post_id)
     _running_executions.add(task)
     task.add_done_callback(_running_executions.discard)
     return {"status": "started", "target": target, "post_id": post_id}

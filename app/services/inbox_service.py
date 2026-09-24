@@ -1,6 +1,8 @@
 import os
 import tempfile
 import logging
+import uuid
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from fastapi import UploadFile
@@ -14,15 +16,16 @@ from app.telegram.client import get_hydrogram_client
 
 logger = logging.getLogger(__name__)
 
+MEDIA_DIR = Path("media/inbox")
+ALLOWED_MEDIA_EXTS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov",
+    ".mp3", ".ogg", ".wav", ".pdf", ".zip",
+}
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
 async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, max_messages: int = 50) -> int:
-    """
-    Sync dialogs and recent messages from Telegram for a given account.
-    Imports private DMs and bot chats (skipping public broadcast channels).
-    Returns the number of new messages imported.
-    """
     acc_id = account_input.id if isinstance(account_input, Account) else account_input
 
-    # Eagerly fetch Account with Proxy in active session to avoid DetachedInstanceError
     async with async_session() as session:
         stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == acc_id)
         account = (await session.execute(stmt)).scalars().first()
@@ -42,7 +45,6 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
                 if not chat:
                     continue
 
-                # Filter out broadcast channels and groups if desired (keep private DMs & bot chats)
                 chat_type_str = str(getattr(chat, 'type', '')).lower()
                 if "channel" in chat_type_str and "supergroup" not in chat_type_str:
                     continue
@@ -54,7 +56,6 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
 
                 peer_id = chat.id
                 
-                # Format peer display name
                 if chat.first_name:
                     peer_name = f"{chat.first_name} {chat.last_name}".strip() if chat.last_name else chat.first_name
                 elif chat.title:
@@ -62,7 +63,23 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
                 else:
                     peer_name = f"ID {peer_id}"
 
+                history = []
                 async for msg in client.get_chat_history(chat_id=peer_id, limit=max_messages):
+                    history.append(msg)
+                if not history:
+                    continue
+                known_ids = set()
+                tg_ids = [getattr(m, 'id', None) for m in history if getattr(m, 'id', None)]
+                if tg_ids:
+                    rows = await session.execute(
+                        select(InboxMessage.message_id).where(
+                            InboxMessage.account_id == account.id,
+                            InboxMessage.peer_id == peer_id,
+                            InboxMessage.message_id.in_(tg_ids)
+                        )
+                    )
+                    known_ids = set(rows.scalars().all())
+                for msg in history:
                     msg_text = msg.text or msg.caption or ("📷 Фото/Медиа" if msg.media else "")
                     if not msg_text and not msg.media:
                         continue
@@ -71,14 +88,11 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
                     raw_date = msg.date if msg.date else datetime.now(timezone.utc)
                     msg_date = raw_date.replace(tzinfo=None) if hasattr(raw_date, 'tzinfo') and raw_date.tzinfo else raw_date
 
-                    # Check if message already exists
                     tg_msg_id = getattr(msg, 'id', None)
+                    if tg_msg_id and tg_msg_id in known_ids:
+                        continue
                     if tg_msg_id:
-                        stmt = select(InboxMessage).where(
-                            InboxMessage.account_id == account.id,
-                            InboxMessage.peer_id == peer_id,
-                            InboxMessage.message_id == tg_msg_id
-                        )
+                        existing = None
                     else:
                         stmt = select(InboxMessage).where(
                             InboxMessage.account_id == account.id,
@@ -86,8 +100,8 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
                             InboxMessage.text == msg_text,
                             InboxMessage.incoming == is_incoming
                         )
-                    existing = (await session.execute(stmt)).scalars().first()
-                    if not existing:
+                        existing = (await session.execute(stmt)).scalars().first()
+                    if tg_msg_id or not existing:
                         inbox_msg = InboxMessage(
                             account_id=account.id,
                             message_id=tg_msg_id,
@@ -117,7 +131,6 @@ async def sync_dialogs_for_account(account_input: Any, max_dialogs: int = 25, ma
     return new_messages_count
 
 async def sync_all_accounts_dialogs() -> Dict[str, Any]:
-    """Sync dialogs for all active accounts with session strings."""
     async with async_session() as session:
         stmt = select(Account).where(
             Account.is_active == True,
@@ -144,7 +157,6 @@ async def sync_all_accounts_dialogs() -> Dict[str, Any]:
     }
 
 async def clear_inbox_sync(account_id: Optional[int] = None) -> Dict[str, Any]:
-    """Clear cached inbox messages from DB."""
     async with async_session() as session:
         if account_id is not None:
             stmt = delete(InboxMessage).where(InboxMessage.account_id == account_id)
@@ -154,9 +166,8 @@ async def clear_inbox_sync(account_id: Optional[int] = None) -> Dict[str, Any]:
         result = await session.execute(stmt)
         await session.commit()
         
-        # Notify WebSocket
         try:
-            from app.workers.inbox_ws import broadcast_inbox_event
+            from app.core.events import publish_inbox_event as broadcast_inbox_event
             await broadcast_inbox_event({"event": "sync_cleared", "account_id": account_id})
         except Exception:
             pass
@@ -183,25 +194,39 @@ async def send_inbox_message(
         sent_media_path = None
 
         if file:
-            os.makedirs("media/inbox", exist_ok=True)
-            safe_filename = f"out_{int(datetime.now(timezone.utc).timestamp())}_{file.filename}"
-            save_path = os.path.join("media", "inbox", safe_filename)
-            contents = await file.read()
-            with open(save_path, "wb") as f:
-                f.write(contents)
+            MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+            ext = Path(file.filename or "").suffix.lower()
+            if ext not in ALLOWED_MEDIA_EXTS:
+                raise ValueError("unsupported attachment type")
+            safe_filename = f"out_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex}{ext}"
+            save_path = (MEDIA_DIR / safe_filename).resolve()
+            if save_path.parent != MEDIA_DIR.resolve():
+                raise ValueError("bad attachment name")
+            seen = 0
+            with open(save_path, "wb") as out:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    seen += len(chunk)
+                    if seen > MAX_UPLOAD_BYTES:
+                        out.close()
+                        os.remove(save_path)
+                        raise ValueError("attachment too large")
+                    out.write(chunk)
 
             is_photo = file.content_type and "image" in file.content_type
             if is_photo:
                 sent_msg = await client.send_photo(
-                    chat_id=peer_id, 
-                    photo=save_path, 
+                    chat_id=peer_id,
+                    photo=str(save_path),
                     caption=text,
                     reply_to_message_id=reply_to_msg_id
                 )
             else:
                 sent_msg = await client.send_document(
-                    chat_id=peer_id, 
-                    document=save_path, 
+                    chat_id=peer_id,
+                    document=str(save_path),
                     caption=text,
                     reply_to_message_id=reply_to_msg_id
                 )
@@ -213,7 +238,6 @@ async def send_inbox_message(
                 reply_to_message_id=reply_to_msg_id
             )
 
-        # Retrieve peer information if possible
         peer_name = f"ID {peer_id}"
         peer_username = None
         try:
@@ -226,7 +250,6 @@ async def send_inbox_message(
         except Exception:
             pass
 
-        # Save outgoing message to DB
         async with async_session() as session:
             msg_obj = InboxMessage(
                 account_id=account.id,
@@ -243,9 +266,8 @@ async def send_inbox_message(
             await session.commit()
             await session.refresh(msg_obj)
 
-        # Broadcast event
         try:
-            from app.workers.inbox_ws import broadcast_inbox_event
+            from app.core.events import publish_inbox_event as broadcast_inbox_event
             await broadcast_inbox_event({
                 "event": "message_sent",
                 "account_id": account_id,
@@ -269,7 +291,6 @@ async def edit_inbox_message(
     message_id: int,
     new_text: str
 ) -> Dict[str, Any]:
-    """Edit text of an already sent message in Telegram and update in DB."""
     async with async_session() as session:
         result = await session.execute(
             select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
@@ -279,24 +300,31 @@ async def edit_inbox_message(
             raise ValueError(f"Account #{account_id} not found")
 
         db_msg = await session.get(InboxMessage, message_id)
+        if not db_msg or db_msg.account_id != account_id:
+            raise ValueError("Message not found")
+        tg_msg_id = db_msg.message_id
+        if not tg_msg_id:
+            raise ValueError("Message has no Telegram id")
+        session.expunge(account)
+        if account.proxy is not None:
+            try:
+                session.expunge(account.proxy)
+            except Exception:
+                pass
 
     client = get_hydrogram_client(account, account.proxy)
     try:
         await client.start()
-        tg_msg_id = getattr(db_msg, 'message_id', None) or message_id
         await client.edit_message_text(chat_id=peer_id, message_id=tg_msg_id, text=new_text)
 
-        # Update in DB
         async with async_session() as session:
-            if db_msg:
-                m = await session.get(InboxMessage, db_msg.id)
-                if m:
-                    m.text = new_text
-                    await session.commit()
+            m = await session.get(InboxMessage, message_id)
+            if m:
+                m.text = new_text
+                await session.commit()
 
-        # Broadcast edit
         try:
-            from app.workers.inbox_ws import broadcast_inbox_event
+            from app.core.events import publish_inbox_event as broadcast_inbox_event
             await broadcast_inbox_event({
                 "event": "message_edited",
                 "account_id": account_id,
@@ -319,7 +347,6 @@ async def delete_inbox_message(
     peer_id: int,
     message_id: int
 ) -> Dict[str, Any]:
-    """Delete a message from Telegram (both sides) and from DB."""
     async with async_session() as session:
         result = await session.execute(
             select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
@@ -329,24 +356,31 @@ async def delete_inbox_message(
             raise ValueError(f"Account #{account_id} not found")
 
         db_msg = await session.get(InboxMessage, message_id)
+        if not db_msg or db_msg.account_id != account_id:
+            raise ValueError("Message not found")
+        tg_msg_id = db_msg.message_id
+        if not tg_msg_id:
+            raise ValueError("Message has no Telegram id")
+        session.expunge(account)
+        if account.proxy is not None:
+            try:
+                session.expunge(account.proxy)
+            except Exception:
+                pass
 
     client = get_hydrogram_client(account, account.proxy)
     try:
         await client.start()
-        tg_msg_id = getattr(db_msg, 'message_id', None) or message_id
         await client.delete_messages(chat_id=peer_id, message_ids=[tg_msg_id], revoke=True)
 
-        # Remove from DB
         async with async_session() as session:
-            if db_msg:
-                m = await session.get(InboxMessage, db_msg.id)
-                if m:
-                    await session.delete(m)
-                    await session.commit()
+            m = await session.get(InboxMessage, message_id)
+            if m:
+                await session.delete(m)
+                await session.commit()
 
-        # Broadcast delete
         try:
-            from app.workers.inbox_ws import broadcast_inbox_event
+            from app.core.events import publish_inbox_event as broadcast_inbox_event
             await broadcast_inbox_event({
                 "event": "message_deleted",
                 "account_id": account_id,
@@ -364,16 +398,11 @@ async def delete_inbox_message(
             pass
 
 async def download_media_for_message(message_id: int) -> Optional[str]:
-    """
-    Download Telegram media (photo, document, voice, video) for an InboxMessage on demand,
-    saving to /media/inbox/ folder on disk and updating msg.media_path.
-    """
     async with async_session() as session:
         msg = await session.get(InboxMessage, message_id)
         if not msg:
             raise ValueError("Сообщение не найдено")
 
-        # If already downloaded on disk and valid
         if msg.media_path:
             disk_file = msg.media_path.lstrip("/")
             if os.path.exists(disk_file):
@@ -409,9 +438,8 @@ async def download_media_for_message(message_id: int) -> Optional[str]:
                 msg.media_path = rel_path
                 await session.commit()
 
-                # Broadcast update so UI instantly displays the image
                 try:
-                    from app.workers.inbox_ws import broadcast_inbox_event
+                    from app.core.events import publish_inbox_event as broadcast_inbox_event
                     await broadcast_inbox_event({
                         "event": "media_downloaded",
                         "message_id": message_id,

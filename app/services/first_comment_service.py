@@ -15,9 +15,9 @@ from app.telegram.preflight import check_chat_availability
 
 logger = logging.getLogger("tgactor.first_comment")
 
-DEFAULT_FIRST_COMMENT_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ДЛЯ ПЕРВОГО КОММЕНТАРИЯ (FAST FIRST COMMENT ENGINE v1.0)
+DEFAULT_FIRST_COMMENT_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ДЛЯ ПЕРВОГО КОММЕНТАРИЯ
 
-Ты — внимательный и сообразительный читатель Telegram-канала, который первым увидел свежий пост и оставил меткий, ценный или остроумный комментарий.
+Ты внимательный читатель Telegram-канала, который первым увидел свежий пост и оставил меткий, ценный или остроумный комментарий.
 
 # ПРАВИЛА:
 1. Пиши 1 (максимум 2) коротких, ёмких предложения строго по сути темы поста.
@@ -51,7 +51,6 @@ AD_PATTERNS = [
 ]
 
 def is_ad_post(post_text: str) -> Tuple[bool, str]:
-    """Check if post is an advertisement or sponsored content."""
     if not post_text:
         return False, ""
     
@@ -69,7 +68,6 @@ async def generate_first_comment(
     ai_model: Optional[str] = None,
     channel_username: Optional[str] = None
 ) -> str:
-    """Generate a sharp, contextual first comment using AI."""
     ai_cfg = await get_ai_settings(session)
     provider = ai_cfg.get("provider") or "openai"
     model = ai_model or ai_cfg.get("default_model") or "gpt-4o-mini"
@@ -110,9 +108,6 @@ async def generate_first_comment(
         return random.choice(fallbacks)
 
 async def check_channel_send_as_permission(account: Account, channel_username: str) -> Dict[str, Any]:
-    """
-    Verify whether the given account can post messages as the specified channel.
-    """
     clean_user = channel_username.replace("@", "").replace("https://t.me/", "").strip()
     if not clean_user:
         return {"ok": False, "error": "Не указан юзернейм канала"}
@@ -148,20 +143,12 @@ async def send_first_comment(
     post_id: int,
     post_text: str
 ) -> Dict[str, Any]:
-    """
-    Executes First Comment Sniping:
-    1. Checks ad filters.
-    2. Generates humanized contextual comment.
-    3. Resolves discussion thread and sends message (as channel or as account).
-    4. Logs metrics and action results.
-    """
     t_start = time.time()
     ch_user = channel.channel_username
     sender_account = None
     client = None
 
     try:
-        # 1. Ad Filtering
         if channel.skip_ads:
             is_ad, ad_marker = is_ad_post(post_text)
             if is_ad:
@@ -182,7 +169,6 @@ async def send_first_comment(
                 )
                 return {"status": "skipped", "reason": f"Ad detected: {ad_marker}"}
 
-        # 2. Select Sender Account
         sender_account = None
         if channel.sender_account_id:
             stmt_sender = (
@@ -193,17 +179,31 @@ async def send_first_comment(
             sender_account = (await session.execute(stmt_sender)).scalars().first()
 
         if not sender_account:
-            stmt = select(Account).where(Account.is_active == True).options(selectinload(Account.proxy))
-            active_accs = list((await session.execute(stmt)).scalars().all())
-            if not active_accs:
+            from sqlalchemy import func as _func
+            from app.models.models import ActionLog as _ActionLog
+            last_use = (
+                select(_ActionLog.account_id, _func.max(_ActionLog.executed_at).label("last_at"))
+                .where(_ActionLog.action_type == "first_comment_send")
+                .group_by(_ActionLog.account_id)
+                .subquery()
+            )
+            stmt = (
+                select(Account, last_use.c.last_at)
+                .where(Account.is_active == True)
+                .outerjoin(last_use, last_use.c.account_id == Account.id)
+                .options(selectinload(Account.proxy))
+                .order_by(last_use.c.last_at.asc().nulls_first(), Account.id.asc())
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).first()
+            sender_account = row[0] if row else None
+            if not sender_account:
                 error_msg = f"Первый комментарий: нет доступных активных аккаунтов для {ch_user}"
                 logger.error(error_msg)
                 session.add(TaskLog(status="error", error_message=error_msg))
                 await session.commit()
                 return {"status": "error", "error": error_msg}
-            sender_account = active_accs[0]
 
-        # 3. Generate AI Comment
         comment_text = await generate_first_comment(
             session=session,
             post_text=post_text,
@@ -215,11 +215,9 @@ async def send_first_comment(
         if not comment_text:
             comment_text = "годная тема"
 
-        # 4. Resolve discussion & Send
         client = get_hydrogram_client(sender_account, sender_account.proxy)
         await client.start()
         
-        # Check target discussion
         target_chat_id = ch_user
         default_reply_to = None
         
@@ -231,7 +229,6 @@ async def send_first_comment(
         except Exception as disc_err:
             logger.warning(f"Notice getting discussion for {ch_user} post #{post_id}: {disc_err}")
 
-        # Preflight permissions check
         avail_ok, avail_err = await check_chat_availability(client, target_chat_id, requires_media=False)
         if not avail_ok:
             error_msg = f"Первый комментарий: доступ к чату обсуждения {target_chat_id} закрыт ({avail_err})"
@@ -249,7 +246,6 @@ async def send_first_comment(
             await session.commit()
             return {"status": "error", "error": error_msg}
 
-        # Determine send_as author
         send_as_target = None
         author_label = sender_account.custom_name or sender_account.username or f"Аккаунт #{sender_account.id}"
 
@@ -262,7 +258,6 @@ async def send_first_comment(
             except Exception as e:
                 logger.warning(f"Не удалось получить peer для send_as @{clean_author_channel}: {e}. Отправка от лица аккаунта.")
 
-        # Send Message
         sent_msg = None
         send_kwargs = {}
         if default_reply_to:

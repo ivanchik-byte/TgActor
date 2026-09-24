@@ -13,6 +13,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _to_int(value: Any, default: int, field_name: str) -> int:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(400, f"Некорректное значение '{field_name}': ожидается целое число")
+
 @router.get("/api/channels", response_model=List[MonitoredChannelResponse])
 async def get_channels():
     async with async_session() as session:
@@ -21,10 +30,9 @@ async def get_channels():
 
 @router.post("/api/channels")
 async def create_channel(payload: Dict[str, Any] = Body(...)):
-    """Add new monitored channels with sanitized username parsing."""
     raw_input = str(payload.get("channel_identifier") or payload.get("channel_username") or "").strip()
-    min_delay = int(payload.get("min_delay_seconds") or 5)
-    max_delay = int(payload.get("max_delay_seconds") or 10)
+    min_delay = _to_int(payload.get("min_delay_seconds"), 5, "min_delay_seconds")
+    max_delay = _to_int(payload.get("max_delay_seconds"), 10, "max_delay_seconds")
     if max_delay < min_delay:
         raise HTTPException(400, "Максимальная задержка не может быть меньше минимальной")
     no_repeat = bool(payload.get("no_repeat_scenarios", True))
@@ -40,13 +48,11 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
     if not raw_input:
         raise HTTPException(400, "Укажите имя канала или ссылку t.me")
 
-    # Split by lines or commas
     lines = [item.strip() for item in raw_input.replace(",", "\n").split("\n") if item.strip()]
     added_ids = []
 
     async with async_session() as session:
         for line in lines:
-            # Clean link: https://t.me/ivanchik_byte -> ivanchik_byte
             clean_username = line.split("t.me/")[-1].replace("@", "").strip().split("/")[0]
             if not clean_username:
                 continue
@@ -77,9 +83,8 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
 
         await session.commit()
 
-        # If auto-join is requested, trigger background smooth join for these channels
         auto_join_bots = bool(payload.get("auto_join_bots", False))
-        auto_join_count = int(payload.get("auto_join_count") or 3)
+        auto_join_count = _to_int(payload.get("auto_join_count"), 3, "auto_join_count")
         if auto_join_bots and lines:
             try:
                 from app.services.join_service import start_smooth_join
@@ -105,7 +110,6 @@ async def create_channel(payload: Dict[str, Any] = Body(...)):
 
 @router.patch("/api/channels/{channel_id}")
 async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
-    """Update settings or toggle channel active state."""
     async with async_session() as session:
         ch = await session.get(MonitoredChannel, channel_id)
         if not ch:
@@ -114,9 +118,9 @@ async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
         if "is_active" in payload:
             ch.is_active = bool(payload["is_active"])
         if "min_delay_seconds" in payload:
-            ch.min_delay_seconds = int(payload["min_delay_seconds"])
+            ch.min_delay_seconds = _to_int(payload["min_delay_seconds"], ch.min_delay_seconds or 0, "min_delay_seconds")
         if "max_delay_seconds" in payload:
-            ch.max_delay_seconds = int(payload["max_delay_seconds"])
+            ch.max_delay_seconds = _to_int(payload["max_delay_seconds"], ch.max_delay_seconds or 0, "max_delay_seconds")
         if ch.max_delay_seconds < ch.min_delay_seconds:
             raise HTTPException(400, "Максимальная задержка не может быть меньше минимальной")
         if "no_repeat_scenarios" in payload:
@@ -141,7 +145,6 @@ async def update_channel(channel_id: int, payload: Dict[str, Any] = Body(...)):
 
 @router.post("/api/channels/verify-send-as")
 async def verify_send_as_channel(payload: Dict[str, Any] = Body(...)):
-    """Verify if a specific account can post as a given channel."""
     account_id = payload.get("account_id")
     channel_username = str(payload.get("channel_username") or "").strip()
 
@@ -162,7 +165,6 @@ async def verify_send_as_channel(payload: Dict[str, Any] = Body(...)):
 
 @router.delete("/api/channels/{channel_id}")
 async def delete_channel(channel_id: int):
-    """Remove channel from monitoring."""
     async with async_session() as session:
         ch = await session.get(MonitoredChannel, channel_id)
         if not ch:
@@ -171,7 +173,6 @@ async def delete_channel(channel_id: int):
         await session.commit()
         return {"status": "ok"}
 
-# Channel Monitor Daemon Status Endpoints
 @router.get("/api/channels/monitor/status")
 @router.get("/api/monitor/status")
 async def get_monitor_status():
@@ -187,7 +188,6 @@ async def stop_monitor():
     await stop_channel_monitor()
     return {"running": is_monitor_running()}
 
-# Smooth Fleet Joiner Endpoints
 @router.get("/api/channels/smooth-join/status")
 async def get_smooth_join_status_endpoint():
     from app.services.join_service import get_join_status
@@ -201,9 +201,9 @@ async def start_smooth_join_endpoint(payload: Dict[str, Any] = Body(...)):
 
     raw_links = str(payload.get("chat_links") or payload.get("chat_link") or "").strip()
     account_ids = payload.get("account_ids")
-    account_count = int(payload.get("account_count") or 0)
-    min_delay = int(payload.get("min_delay") or 30)
-    max_delay = int(payload.get("max_delay") or 90)
+    account_count = _to_int(payload.get("account_count"), 0, "account_count")
+    min_delay = _to_int(payload.get("min_delay"), 30, "min_delay")
+    max_delay = _to_int(payload.get("max_delay"), 90, "max_delay")
 
     if not raw_links:
         raise HTTPException(400, "Укажите ссылку на канал или группу (например, t.me/example)")
@@ -212,10 +212,8 @@ async def start_smooth_join_endpoint(payload: Dict[str, Any] = Body(...)):
 
     async with async_session() as session:
         if not account_ids:
-            # Query active commenting accounts
             accounts = await get_commenting_pool(session)
             if not accounts:
-                # Fallback to any active accounts
                 stmt_all = select(Account).where(Account.is_active == True)
                 res_all = await session.execute(stmt_all)
                 accounts = res_all.scalars().all()

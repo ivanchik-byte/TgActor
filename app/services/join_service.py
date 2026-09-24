@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import async_session
 from app.telegram.client import get_hydrogram_client
+from app.telegram.helpers import chat_key
 from app.models.models import Account
 from app.services.log_service import log_action, classify_telegram_error
 
@@ -31,7 +32,7 @@ _join_state: Dict[str, Any] = {
 
 def record_chat_member(chat_target: str, account_id: int):
     global _known_chat_members, _banned_chat_members
-    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
+    key = chat_key(chat_target)
     if key not in _known_chat_members:
         _known_chat_members[key] = set()
     _known_chat_members[key].add(account_id)
@@ -40,7 +41,7 @@ def record_chat_member(chat_target: str, account_id: int):
 
 def record_banned_chat_member(chat_target: str, account_id: int):
     global _banned_chat_members, _known_chat_members
-    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
+    key = chat_key(chat_target)
     if key not in _banned_chat_members:
         _banned_chat_members[key] = set()
     _banned_chat_members[key].add(account_id)
@@ -48,16 +49,13 @@ def record_banned_chat_member(chat_target: str, account_id: int):
         _known_chat_members[key].discard(account_id)
 
 def get_known_chat_members(chat_target: str) -> set:
-    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
-    return _known_chat_members.get(key, set())
+    return _known_chat_members.get(chat_key(chat_target), set())
 
 def get_banned_chat_members(chat_target: str) -> set:
-    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
-    return _banned_chat_members.get(key, set())
+    return _banned_chat_members.get(chat_key(chat_target), set())
 
 def is_banned_in_chat(chat_target: str, account_id: int) -> bool:
-    key = str(chat_target).strip().lower().replace('@', '').split('/')[-1]
-    return account_id in _banned_chat_members.get(key, set())
+    return account_id in _banned_chat_members.get(chat_key(chat_target), set())
 
 def get_join_status() -> Dict[str, Any]:
     return _join_state
@@ -122,10 +120,9 @@ async def _smooth_join_worker(
                         except Exception:
                             pass
                         
-                        # 1. Join main chat / channel / invite link
                         target_to_join = clean_target
                         if "t.me/+" in target_to_join or "joinchat/" in target_to_join:
-                            pass # keep full invite link
+                            pass
                         elif "t.me/" in target_to_join:
                             target_to_join = target_to_join.split("t.me/")[-1].replace("@", "").strip().split("/")[0]
 
@@ -144,7 +141,7 @@ async def _smooth_join_worker(
                         if joined_chat and getattr(joined_chat, 'id', None):
                             record_chat_member(str(joined_chat.id), acc.id)
 
-                        # 2. If target is a broadcast channel, also join its linked discussion group
+                        # Broadcast channels require joining their linked discussion group to comment
                         if joined_chat and getattr(joined_chat, 'type', None) and (
                             str(joined_chat.type).lower().endswith('channel') or getattr(joined_chat.type, 'value', '') == 'channel'
                         ):
@@ -204,10 +201,9 @@ async def _smooth_join_worker(
                     current_op += 1
                     _join_state["progress_percent"] = int((current_op / total_ops) * 100)
 
-                    # Pause between account joins ONLY if a bot freshly joined (no pause needed if already a participant)
+                    # Pause between account joins only if a bot freshly joined
                     if current_op < total_ops and _join_state["status"] == "running":
                         if was_already_member:
-                            # Instant transition for existing members
                             await asyncio.sleep(0.5)
                         else:
                             delay = random.randint(max(1, min_delay), max(min_delay, max_delay))

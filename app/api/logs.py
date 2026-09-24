@@ -1,9 +1,9 @@
 import csv
 import io
-import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from fastapi import APIRouter, Response, Query
+from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, delete, func, or_
 from sqlalchemy.orm import selectinload
 
@@ -69,13 +69,12 @@ async def get_action_logs(
             elif period == '30d':
                 stmt = stmt.where(ActionLog.executed_at >= now - timedelta(days=30))
 
-        if search:
-            term = f"%{search}%"
+        if search and len(search) >= 3:
+            term = f"%{search.replace('%', '').replace('_', '')}%"
             stmt = stmt.outerjoin(Account).where(
                 or_(
                     ActionLog.target.ilike(term),
                     ActionLog.target_id.ilike(term),
-                    ActionLog.details.ilike(term),
                     ActionLog.action_type.ilike(term),
                     Account.phone.ilike(term),
                     Account.username.ilike(term),
@@ -115,15 +114,12 @@ async def get_logs_stats():
 @router.get("/api/logs/filters")
 async def get_log_filters():
     async with async_session() as session:
-        # Get unique action types
         action_stmt = select(func.distinct(ActionLog.action_type))
         action_types = [a for a in (await session.execute(action_stmt)).scalars().all() if a]
 
-        # Get unique statuses
         status_stmt = select(func.distinct(ActionLog.status))
         statuses = [s for s in (await session.execute(status_stmt)).scalars().all() if s]
 
-        # Get accounts that have logs
         acc_stmt = select(Account).order_by(Account.id)
         accounts = (await session.execute(acc_stmt)).scalars().all()
         account_options = [
@@ -160,38 +156,42 @@ async def export_action_logs(
     action_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None)
 ):
-    async with async_session() as session:
-        stmt = select(ActionLog).options(selectinload(ActionLog.account)).order_by(ActionLog.executed_at.desc()).limit(1000)
-        if account_id is not None:
-            stmt = stmt.where(ActionLog.account_id == account_id)
-        if action_type and action_type != "all":
-            stmt = stmt.where(ActionLog.action_type == action_type)
-        if status and status != "all":
-            stmt = stmt.where(ActionLog.status == status)
+    async def batches():
+        yield "ID,Date Time (UTC),Account ID,Phone,Action Type,Status,Target,Target ID,Details\n"
+        offset = 0
+        while True:
+            async with async_session() as session:
+                stmt = select(ActionLog).options(selectinload(ActionLog.account)).order_by(ActionLog.executed_at.desc()).offset(offset).limit(500)
+                if account_id is not None:
+                    stmt = stmt.where(ActionLog.account_id == account_id)
+                if action_type and action_type != "all":
+                    stmt = stmt.where(ActionLog.action_type == action_type)
+                if status and status != "all":
+                    stmt = stmt.where(ActionLog.status == status)
+                logs = (await session.execute(stmt)).scalars().all()
+            if not logs:
+                break
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            for l in logs:
+                writer.writerow([
+                    l.id,
+                    l.executed_at.strftime("%Y-%m-%d %H:%M:%S") if l.executed_at else "",
+                    l.account_id or "",
+                    l.account.phone if l.account else "",
+                    l.action_type,
+                    l.status,
+                    l.target or "",
+                    l.target_id or "",
+                    (l.details or "").replace("\n", " "),
+                ])
+            yield buf.getvalue()
+            offset += len(logs)
+            if len(logs) < 500:
+                break
 
-        res = await session.execute(stmt)
-        logs = res.scalars().all()
-
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["ID", "Date Time (UTC)", "Account ID", "Phone", "Action Type", "Status", "Target", "Target ID", "Details"])
-
-        for l in logs:
-            writer.writerow([
-                l.id,
-                l.executed_at.strftime("%Y-%m-%d %H:%M:%S") if l.executed_at else "",
-                l.account_id or "",
-                l.account.phone if l.account else "",
-                l.action_type,
-                l.status,
-                l.target or "",
-                l.target_id or "",
-                l.details or ""
-            ])
-
-        output.seek(0)
-        return Response(
-            content=output.getvalue(),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=bot_action_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
-        )
+    return StreamingResponse(
+        batches(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=bot_action_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+    )

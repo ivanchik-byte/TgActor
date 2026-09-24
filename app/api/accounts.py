@@ -18,6 +18,8 @@ from app.services.inbox_service import sync_dialogs_for_account
 
 router = APIRouter()
 
+MAX_TDATA_BYTES = 25 * 1024 * 1024
+
 @router.get("/api/accounts")
 async def get_accounts():
     async with async_session() as session:
@@ -59,15 +61,24 @@ async def upload_tdata(
     phone: Optional[str] = Form(None),
     password: Optional[str] = Form(None)
 ):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+            tmp_path = tmp.name
+            seen = 0
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                seen += len(chunk)
+                if seen > MAX_TDATA_BYTES:
+                    raise HTTPException(413, detail="Archive too large")
+                tmp.write(chunk)
 
-    success, session_or_error, user_info = await convert_tdata_zip_to_encrypted_session(tmp_path, password)
-    
-    if os.path.exists(tmp_path):
-        os.remove(tmp_path)
+        success, session_or_error, user_info = await convert_tdata_zip_to_encrypted_session(tmp_path, password)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
     if not success or not user_info:
         raise HTTPException(400, detail=session_or_error)
@@ -77,7 +88,6 @@ async def upload_tdata(
         raise HTTPException(400, detail="Could not determine phone number from tdata.")
 
     async with async_session() as session:
-        # Check if account already exists with this phone
         existing_acc = await session.execute(select(Account).where(Account.phone == acc_phone))
         existing = existing_acc.scalars().first()
         if existing:
@@ -112,10 +122,6 @@ async def upload_tdata(
 
 @router.api_route("/api/accounts/{account_id}/test", methods=["GET", "POST"])
 async def test_account(account_id: int):
-    """
-    Test Telegram connection for a specific account.
-    Connects via Hydrogram client, calls get_me(), updates status and info, returns status result.
-    """
     async with async_session() as session:
         stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
         account = (await session.execute(stmt)).scalars().first()
@@ -167,7 +173,6 @@ async def test_account(account_id: int):
 
 @router.patch("/api/accounts/{account_id}/name")
 async def update_account_custom_name(account_id: int, payload: AccountCustomNameUpdate):
-    """Update custom alias / name for an account."""
     async with async_session() as session:
         acc = await session.get(Account, account_id)
         if not acc:
@@ -178,7 +183,6 @@ async def update_account_custom_name(account_id: int, payload: AccountCustomName
 
 @router.post("/api/accounts/reorder")
 async def reorder_accounts(payload: AccountReorderRequest):
-    """Update account order positions."""
     async with async_session() as session:
         for idx, acc_id in enumerate(payload.ids):
             acc = await session.get(Account, acc_id)
@@ -189,7 +193,6 @@ async def reorder_accounts(payload: AccountReorderRequest):
 
 @router.patch("/api/accounts/{account_id}/proxy")
 async def update_account_proxy(account_id: int, payload: AccountProxyUpdate):
-    """Bind or unbind proxy to an account."""
     async with async_session() as session:
         acc = await session.get(Account, account_id)
         if not acc:
@@ -200,7 +203,6 @@ async def update_account_proxy(account_id: int, payload: AccountProxyUpdate):
 
 @router.patch("/api/accounts/{account_id}/pools")
 async def update_account_pools(account_id: int, payload: AccountPoolsUpdate):
-    """Update account pool type (commenting / reaction)."""
     async with async_session() as session:
         acc = await session.get(Account, account_id)
         if not acc:
@@ -240,18 +242,16 @@ async def delete_account(account_id: int):
         if not acc:
             raise HTTPException(404, detail="Account not found")
         # Clean up dependent rows first (FKs may lack ON DELETE on existing tables)
-        from app.models.models import InboxMessage, TaskLog, ActionLog, ScenarioStep
+        from app.models.models import InboxMessage, TaskLog, ActionLog
         await session.execute(delete(InboxMessage).where(InboxMessage.account_id == account_id))
         await session.execute(delete(TaskLog).where(TaskLog.account_id == account_id))
         await session.execute(delete(ActionLog).where(ActionLog.account_id == account_id))
-        await session.execute(delete(ScenarioStep).where(ScenarioStep.role_id == account_id))
         await session.delete(acc)
         await session.commit()
         return {"status": "ok"}
 
 @router.get("/api/accounts/{account_id}/admin-channels")
 async def get_account_admin_channels(account_id: int):
-    """Retrieve channels where the account is creator or administrator with permission to post."""
     async with async_session() as session:
         stmt = select(Account).options(selectinload(Account.proxy)).where(Account.id == account_id)
         acc = (await session.execute(stmt)).scalars().first()
@@ -269,7 +269,6 @@ async def get_account_admin_channels(account_id: int):
             chat_type = str(getattr(chat, "type", "")).lower()
             is_creator = getattr(chat, "is_creator", False)
             
-            # Check if it is a channel or supergroup
             if "channel" in chat_type or is_creator:
                 channels_list.append({
                     "id": chat.id,

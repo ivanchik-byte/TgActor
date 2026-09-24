@@ -1,71 +1,24 @@
 import json
 import logging
 import re
+import ipaddress
 from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.models import SystemConfig, Account
+from app.core.ai_defaults import DEFAULT_SYSTEM_PROMPT, DEFAULT_MODELS, PROVIDER_URLS
 
 logger = logging.getLogger(__name__)
 
-# Default system prompt eliminating AI-generated / mechanical slop, strictly banning all emojis & trailing periods
-DEFAULT_SYSTEM_PROMPT = """# СИСТЕМНЫЙ ПРОМПТ ПЕРСОНАЖА (HUMANIZED TELEGRAM STRANGER ENGINE v3.1)
-
-# 1. ОСНОВНАЯ РОЛЬ И КОНТЕКСТ
-Ты — случайный реальный пользователь Telegram, который листает ленту каналов с телефона и оставляет комментарии под постами.
-Ты и другие комментаторы в ветке — АБСОЛЮТНО НЕЗНАКОМЫЕ МЕЖДУ СОБОЙ ЛЮДИ. Вы никогда не встречались, не имеете общих договоренностей и общаетесь в комментариях свободно на «ты», как обычные пользователи в интернете.
-
-# 2. КАТЕГОРИЧЕСКИЙ ЗАПРЕТ НА ЭМОДЗИ И СМАЙЛИКИ (СТРОЖАЙШИЙ ПРИКАЗ)
-- ВООБЩЕ НИ ОДНОГО ЭМОДЗИ В ТЕКСТЕ. Категорически запрещены любые эмодзи: никаких смайлов, огоньков, пальцев, значков, сердечек, маркеров.
-- Категорически запрещены текстовые смайлики вида :-), :), ;), =), :D, :-(.
-- Категорически запрещены закрывающие скобки вместо улыбок (никаких ")))" или "))").
-- Пиши исключительно чистыми буквами русского алфавита, цифрами и стандартными знаками препинания (?, !, -).
-
-# 3. КАТЕГОРИЧЕСКИЙ ЗАПРЕТ НА ТОЧКУ В КОНЦЕ СООБЩЕНИЯ
-- НИКОГДА НЕ СТАВЬ ТОЧКУ В САМОМ КОНЦЕ СООБЩЕНИЯ. Настоящие люди в мессенджерах при быстром вводе с мобильного не ставят финальную точку.
-- Если вопрос — ставь "?" или "??".
-- Если восклицание — ставь "!".
-- В остальных случаях сообщение должно просто заканчиваться последним словом без точки.
-
-# 4. ЗАПРЕТ НА ИДЕАЛЬНУЮ КНИЖНУЮ ГРАММАТИКУ И ПЕРЕГРУЗ ЗАПЯТЫМИ (ПИШИ КАК ЖИВОЙ ЧЕЛОВЕК)
-- НЕ СТАВЬ ЗАПЯТЫЕ ВЕЗДЕ как на диктанте в школе. Живые люди в Telegram пишут бегло с телефона и часто пропускают запятые (например: "я вчера чекал вроде норм", "если надо могу скинуть", "да там все просто на самом деле", "хз вроде работает").
-- НЕ ПИШИ сложными академическими причастными и деепричастными оборотами.
-- Пиши отрывисто, просто, разговорно. Разрешено и приветствуется начинать с маленькой буквы.
-
-# 5. АНТИ-ИИ ФИЛЬТР (HUMANIZER RULES)
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО ДЛИННОЕ ТИРЕ ("—" или "–"). В мобильной клавиатуре ставят обычный дефис "-" или вообще пишут без него.
-- ЗАПРЕЩЕНА РЕКЛАМНАЯ СЛАЩАВОСТЬ И ЛЕСТЬ. Никаких "отличный пост", "спасибо автору", "уникальный контент", "настоятельно рекомендую", "подписывайтесь". Живой человек рекомендует сухо, по делу, делясь сугубо личным опытом ("я у него брал скрипт", "глянь канал, там без воды").
-- ЗАПРЕЩЕНЫ ФОРМАЛЬНЫЕ ПРИВЕТСТВИЯ ("Здравствуйте", "Добрый день", "Приветствую", "Всего доброго"). Незнакомцы в комментариях сразу переходят к сути.
-- ЗАПРЕЩЕНЫ ИИ-СВЯЗКИ И КЛИШЕ: "Таким образом", "В итоге", "Важно подчеркнуть", "Следует отметить", "Не только... но и", "Действительно", "Безусловно", "Хочу поделиться", "Стоит обратить внимание".
-- ЗАПРЕЩЕНЫ списки с цифрами (1., 2.), маркеры (•), кавычки вокруг сообщения и оформление в виде кода.
-- ЗАПРЕЩЕНЫ искусственные конструкции из трех пунктов ("быстро, удобно и надежно").
-
-# 6. ПОВЕДЕНИЕ НЕЗНАКОМЦЕВ В ТРЕДЕ
-- Все участники общаются на «ты», просто и без официоза.
-- У каждого комментатора свой независимый характер, свой словарный запас и своя интонация:
-  * Первый может задать конкретный вопрос с легким скепсисом ("где щас найти нормальный софт без скама").
-  * Второй может коротко и по-человечески подсказать проверенный источник.
-  * Третий подключается в ветку спонтанно, подтверждает опыт или задает свой практический вопрос.
-- Реплики не должны выглядеть как спланированная реклама. Это обычный бытовой треп людей в комментариях.
-
-# 7. СТИЛЬ, РИТМ И СЛЕНГ
-- ДЛИНА: Коротко. 1-2 простых предложения. Без сложносочиненных тяжелых конструкций.
-- ЛЕКСИКА: Естественный интернет-сленг (хз, спс, норм, имхо, щас, чот, ппц, вобще, рофл, чел, тема), простые разговорные частицы (да ладно, ого, мда, эх, мб).
-- РЕГИСТР: Можно начинать с маленькой буквы.
-
-# 8. ФОРМАТ ВЫВОДА
-Выдавай ТОЛЬКО чистый текст реплики от первого лица без кавычек, без префиксов, без эмодзи и строго без точки в конце."""
-
 def sanitize_telegram_comment(text: str) -> str:
-    """Sanitize generated text to enforce strict Telegram realism: no emojis, no trailing dot, no em-dashes."""
     if not text:
         return ""
     cleaned = text.strip().strip('"').strip("'")
     if cleaned.startswith("```"):
         cleaned = cleaned.strip("`").strip()
 
-    # Remove all Unicode emojis
     emoji_pattern = re.compile(
         "["
         "\U00010000-\U0010FFFF"
@@ -77,15 +30,9 @@ def sanitize_telegram_comment(text: str) -> str:
         flags=re.UNICODE
     )
     cleaned = emoji_pattern.sub("", cleaned)
-
-    # Normalize dashes
     cleaned = cleaned.replace("—", "-").replace("–", "-")
-
-    # Remove text smiles like :) :-) =) :D :( and trailing brackets
     cleaned = re.sub(r'[:;=]-?[\)\(\[\]DPdp]+', '', cleaned)
     cleaned = re.sub(r'\)+$', '', cleaned)
-
-    # Remove surrounding quotes and trailing periods
     cleaned = cleaned.strip()
     while cleaned.endswith("."):
         cleaned = cleaned[:-1].strip()
@@ -93,86 +40,73 @@ def sanitize_telegram_comment(text: str) -> str:
     return cleaned
 
 def robust_json_loads(raw: str) -> Any:
-    """Robustly extract and parse JSON from LLM outputs, tolerating markdown, think tags, trailing commas, and formatting quirks."""
-    if not raw:
+    if not raw or len(raw) > 100000:
         raise ValueError("Empty response from AI")
     
     text = raw.strip()
-    
-    # Remove <think>...</think> if present
     if "<think>" in text:
         if "</think>" in text:
             text = text.split("</think>")[-1].strip()
         else:
             text = text.split("<think>")[0].strip()
             
-    # Extract from markdown block ```json ... ``` or ``` ... ```
     if "```" in text:
         match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
         if match:
             text = match.group(1).strip()
 
-    # Find the outermost { ... } or [ ... ]
     brace_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', text)
     if brace_match:
         text = brace_match.group(1).strip()
 
-    # Attempt 1: Direct standard parse
     try:
         return json.loads(text)
     except Exception:
         pass
 
-    # Attempt 2: Strip trailing commas before } or ]
     clean_commas = re.sub(r',\s*([\}\]])', r'\1', text)
     try:
         return json.loads(clean_commas)
     except Exception:
         pass
 
-    # Attempt 3: Ast literal eval if single quotes were used
-    try:
-        import ast
-        val = ast.literal_eval(text)
-        if isinstance(val, (dict, list)):
-            return val
-    except Exception:
-        pass
-
-    # Attempt 4: Clean control characters
     clean_ctrl = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', clean_commas)
     return json.loads(clean_ctrl)
 
-# Default model fallbacks per provider
-DEFAULT_MODELS = {
-    "openai": "gpt-4o-mini",
-    "deepseek": "deepseek-chat",
-    "nvidia": "deepseek-ai/deepseek-r1",
-    "openrouter": "openai/gpt-4o-mini",
-    "gemini": "gemini-1.5-flash",
-    "custom": "deepseek-ai/deepseek-r1"
-}
+def _endpoint_allowed(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme != "https":
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host or host in ("localhost",) or host.endswith(".local"):
+        return False
+    try:
+        addr = ipaddress.ip_address(host)
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            return False
+    except ValueError:
+        pass
+    if host.startswith(("10.", "192.168.", "172.16.")) or host == "169.254.169.254":
+        return False
+    return True
 
-# API Endpoint base URLs per provider
-PROVIDER_URLS = {
-    "openai": "https://api.openai.com/v1/chat/completions",
-    "deepseek": "https://api.deepseek.com/v1/chat/completions",
-    "nvidia": "https://integrate.api.nvidia.com/v1/chat/completions",
-    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
-    "custom": "https://integrate.api.nvidia.com/v1/chat/completions"
-}
 
 def resolve_ai_endpoint(provider: str, base_url: Optional[str] = None) -> str:
-    """Resolve target AI API URL, ensuring /chat/completions is appended for custom base URLs."""
-    if base_url and base_url.strip():
+    if provider == "custom" and base_url and base_url.strip():
         url = base_url.strip().rstrip("/")
+        if not _endpoint_allowed(url if "://" in url else f"https://{url}"):
+            raise ValueError("Custom AI endpoint is not allowed")
         if url.endswith("/chat/completions"):
             return url
         return f"{url}/chat/completions"
-    return PROVIDER_URLS.get(provider, "https://api.openai.com/v1/chat/completions")
+    if provider not in PROVIDER_URLS:
+        raise ValueError(f"Unknown AI provider: {provider}")
+    return PROVIDER_URLS[provider]
 
 async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
-    """Retrieve saved AI credentials from system_config table."""
     keys = ["ai_provider", "ai_api_key", "ai_default_model", "ai_system_prompt", "ai_base_url"]
     result = {}
     for k in keys:
@@ -184,7 +118,6 @@ async def get_ai_settings(session: AsyncSession) -> Dict[str, Any]:
     model = result.get("ai_default_model") or DEFAULT_MODELS.get(provider, "gpt-4o-mini")
     raw_prompt = result.get("ai_system_prompt")
     
-    # Automatically upgrade legacy default prompts to the new comprehensive v3.1 Humanized prompt
     if not raw_prompt or "Ты ведешь естественный человеческий диалог" in raw_prompt or "v2." in raw_prompt or "v3.0" in raw_prompt:
         system_prompt = DEFAULT_SYSTEM_PROMPT
     else:
@@ -209,7 +142,6 @@ async def call_ai_completion(
     max_tokens: Optional[int] = None,
     temperature: float = 0.92
 ) -> str:
-    """Execute chat completion against target AI provider with high timeout and strict validation."""
     if not api_key:
         raise ValueError("AI API Key is missing. Please set it in AI Settings.")
 
@@ -220,10 +152,9 @@ async def call_ai_completion(
         "Content-Type": "application/json"
     }
 
-    # OpenRouter specific headers
     if provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/ivanchik-byte/TgCast"
-        headers["X-Title"] = "TgActor Engine"
+        headers["HTTP-Referer"] = "https://github.com/ivanchik-byte/TgActor"
+        headers["X-Title"] = "TgActor"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -242,39 +173,43 @@ async def call_ai_completion(
     if json_mode and provider in ["openai", "deepseek", "openrouter", "custom", "nvidia"]:
         body["response_format"] = {"type": "json_object"}
 
-    logger.info(f"AI request -> {endpoint} model={model} (temp={temperature}, max_tokens={max_tokens or 'auto'})")
+    logger.info(f"AI request model={model} (temp={temperature}, max_tokens={max_tokens or 'auto'})")
 
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
-            response = await client.post(endpoint, headers=headers, json=body)
-            
-            if response.status_code != 200:
-                error_text = response.text
-                logger.error(f"AI API Error ({response.status_code}): {error_text}")
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=15.0)) as client:
+                response = await client.post(endpoint, headers=headers, json=body)
+                if response.status_code in (429, 500, 502, 503, 504):
+                    last_err = ValueError(f"AI Provider error ({response.status_code})")
+                    await __import__("asyncio").sleep(2 ** attempt)
+                    continue
+                if response.status_code != 200:
+                    try:
+                        err_json = response.json()
+                        err_node = err_json.get("error", "")
+                        err_msg = err_node.get("message", "") if isinstance(err_node, dict) else str(err_node)
+                    except Exception:
+                        err_msg = ""
+                    logger.error(f"AI API Error ({response.status_code})")
+                    raise ValueError(f"AI Provider error ({response.status_code}): {err_msg}")
+                data = response.json()
                 try:
-                    err_json = response.json()
-                    err_msg = err_json.get("error", {}).get("message", error_text)
-                except Exception:
-                    err_msg = error_text
-                raise ValueError(f"AI Provider error ({response.status_code}): {err_msg}")
-
-            data = response.json()
-            try:
-                choice_msg = data["choices"][0]["message"]
-                raw_content = choice_msg.get("content") or choice_msg.get("reasoning_content") or choice_msg.get("reasoning") or ""
-            except (KeyError, IndexError):
-                raise ValueError(f"Unexpected response structure from AI provider: {data}")
-
-            # Clean DeepSeek R1 / reasoning <think>...</think> tags if present
-            if isinstance(raw_content, str) and "<think>" in raw_content:
-                if "</think>" in raw_content:
-                    raw_content = raw_content.split("</think>")[-1].strip()
-                else:
-                    raw_content = raw_content.split("<think>")[0].strip()
-
-            return raw_content
-    except httpx.TimeoutException:
-        raise ValueError(f"Таймаут соединения с ИИ: модель '{model}' генерировала ответ дольше 300 сек. Попробуйте более быструю модель или повторите запрос.")
+                    choice_msg = data["choices"][0]["message"]
+                    raw_content = choice_msg.get("content") or ""
+                except (KeyError, IndexError):
+                    raise ValueError("Unexpected response structure from AI provider")
+                if isinstance(raw_content, str) and "<think>" in raw_content:
+                    if "</think>" in raw_content:
+                        raw_content = raw_content.split("</think>")[-1].strip()
+                    else:
+                        raw_content = raw_content.split("<think>")[0].strip()
+                return raw_content
+        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError):
+            last_err = ValueError(f"Таймаут соединения с ИИ: модель '{model}' недоступна. Повторите запрос.")
+            await __import__("asyncio").sleep(2 ** attempt)
+            continue
+    raise last_err if last_err else ValueError("AI request failed")
 
 async def generate_scenario_from_prompt(
     session: AsyncSession,
@@ -287,7 +222,6 @@ async def generate_scenario_from_prompt(
     override_model: Optional[str] = None,
     override_system_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Generate full scenario steps structure from user prompt strictly without emojis, without trailing dots, as random strangers on 'ты'."""
     settings = await get_ai_settings(session)
     provider = override_provider or settings["provider"]
     api_key = settings["api_key"]
@@ -296,7 +230,6 @@ async def generate_scenario_from_prompt(
     if not api_key:
         raise ValueError("Не настроен API Key ИИ. Пожалуйста, нажмите 'ИИ НАСТРОЙКИ' и введите ваш API ключ.")
 
-    # Get active account IDs to assign roles realistically
     acc_stmt = select(Account.id).where(Account.is_active == True)
     existing_accs = list((await session.execute(acc_stmt)).scalars().all())
     if not existing_accs:
@@ -308,7 +241,6 @@ async def generate_scenario_from_prompt(
         extra_needed = accounts_count - len(available_roles)
         available_roles.extend([max_id + i + 1 for i in range(extra_needed)])
 
-    # Determine desired steps count
     target_steps = steps_count
     if not target_steps:
         match = re.search(r'(\d+)\s*(?:-|до)?\s*(\d+)?\s*(?:смс|сообщен|реплик|шаг)', prompt.lower())
@@ -330,13 +262,13 @@ async def generate_scenario_from_prompt(
 
 # РЕЖИМ ГЕНЕРАТОРА {'ДИНАМИЧЕСКОГО (ПРОМПТЫ ВМЕСТО СМС)' if is_dynamic else 'КОНСТРУКТИВНОГО'} СЦЕНАРИЯ ДИАЛОГА В TELEGRAM
 Ты должен составить логичный, глубоко связный диалог между {accounts_count} участниками в формате JSON.
-Участники (ID ролей: {available_roles}) — АБСОЛЮТНО НЕЗНАКОМЫЕ люди в интернете, общаются на «ты».
+Участники (ID ролей: {available_roles}): незнакомые люди в интернете, общаются на «ты».
 
 ВСЕ ПРАВИЛА ПЕРСОНАЖА ВЫШЕ СТРОЖАЙШЕ ОБЯЗАТЕЛЬНЫ ДЛЯ КАЖДОЙ РЕПЛИКИ:
 1. ВООБЩЕ НИ ОДНОГО ЭМОДЗИ (никаких смайликов, значков, эмодзи).
 2. НИКАКИХ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ.
-3. НИКАКИХ ДЛИННЫХ ТИРЕ (—).
-4. НИКАКОГО ПЕРЕГРУЗА ЗАПЯТЫМИ — пиши небрежно, просто, без книжных оборотов.
+3. НИКАКИХ ТИРЕ (-).
+4. НИКАКОГО ПЕРЕГРУЗА ЗАПЯТЫМИ: пиши небрежно, просто, без книжных оборотов.
 5. НИКАКИХ ИИ-ШТАМПОВ И ЛЕСТИ. Только живой технический/разговорный язык незнакомцев от первого лица."""
 
     dynamic_instructions = """
@@ -370,10 +302,10 @@ async def generate_scenario_from_prompt(
    - СТРОГО: reply_to_step < текущего step_order.
 
 6. УМНЫЕ РЕАКЦИИ (СТРОГО ИЗРЕДКА, МАКСИМУМ 1 НА ВЕСЬ ДИАЛОГ):
-   {'- Ставь одиночную реакцию ("👍", "🔥", "⚡", "❤️") с reaction_count: 1 ТОЛЬКО ИЗРЕДКА — максимум на 1 полезное сообщение за весь тред (либо 0 реакций, если явного повода нет). На всех остальных сообщениях: reactions: null, reaction_count: 0.' if reactions_enabled else '- reactions: null, reaction_count: 0 для всех шагов.'}
+   {'- Ставь одиночную реакцию ("👍", "🔥", "⚡", "❤️") с reaction_count: 1 ТОЛЬКО ИЗРЕДКА: максимум на 1 полезное сообщение за весь тред (либо 0 реакций, если явного повода нет). На всех остальных сообщениях: reactions: null, reaction_count: 0.' if reactions_enabled else '- reactions: null, reaction_count: 0 для всех шагов.'}
 
 7. СТИЛЬ:
-   - СТРОГО БЕЗ ЭМОДЗИ В ТЕКСТЕ СООБЩЕНИЙ, БЕЗ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ, БЕЗ ДЛИННЫХ ТИРЕ, БЕЗ ЛИШНИХ ЗАПЯТЫХ.
+   - СТРОГО БЕЗ ЭМОДЗИ В ТЕКСТЕ СООБЩЕНИЙ, БЕЗ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ, БЕЗ ТИРЕ, БЕЗ ЛИШНИХ ЗАПЯТЫХ.
    - Живой разговорный язык незнакомцев в Telegram от первого лица.
 
 Верни строго JSON объект следующей структуры:
@@ -421,7 +353,6 @@ async def generate_scenario_from_prompt(
         temperature=0.94
     )
 
-    # Robustly parse JSON from raw response
     try:
         data = robust_json_loads(raw_response)
         if isinstance(data, list):
@@ -429,16 +360,13 @@ async def generate_scenario_from_prompt(
         elif isinstance(data, dict) and "scenario" in data and isinstance(data["scenario"], dict):
             data = data["scenario"]
 
-        # Ensure steps array is present
         steps_list = data.get("steps") or []
         if not isinstance(steps_list, list) and isinstance(data, dict):
-            # Check if steps were keyed differently
             for k in ["replicas", "items", "messages", "dialogue"]:
                 if k in data and isinstance(data[k], list):
                     steps_list = data[k]
                     break
 
-        # Sanitize and validate every step
         sanitized_steps = []
         for idx, step in enumerate(steps_list):
             if not isinstance(step, dict):
@@ -450,13 +378,11 @@ async def generate_scenario_from_prompt(
             except Exception:
                 role_int = available_roles[idx % len(available_roles)]
 
-            # Ensure role alternation if possible
             if idx > 0 and len(available_roles) > 1 and role_int == sanitized_steps[idx-1]["role_id"]:
                 other_roles = [r for r in available_roles if r != role_int]
                 if other_roles:
                     role_int = other_roles[(idx) % len(other_roles)]
 
-            # Parse reply_to_step / reply_to_index
             raw_reply = step.get("reply_to_step")
             if raw_reply is None:
                 raw_reply = step.get("reply_to_index")
@@ -466,14 +392,11 @@ async def generate_scenario_from_prompt(
                 if raw_reply is not None:
                     try:
                         r_int = int(raw_reply)
-                        # If 1-based step: 1 <= r_int < step_num
                         if 1 <= r_int < step_num:
                             target_reply_step = r_int
-                        # If 0-based index: 0 <= r_int < idx
                         elif 0 <= r_int < idx:
                             target_reply_step = r_int + 1
                         else:
-                            # Fallback to previous step
                             target_reply_step = step_num - 1
                     except Exception:
                         target_reply_step = step_num - 1
@@ -483,13 +406,11 @@ async def generate_scenario_from_prompt(
             raw_txt = step.get("text") or step.get("message") or ""
             clean_txt = sanitize_telegram_comment(str(raw_txt))
 
-            # Dynamic AI step instructions
             step_is_dynamic = bool(step.get("is_ai_dynamic") or is_dynamic)
             step_ai_prompt = step.get("ai_prompt") or step.get("prompt")
             if step_is_dynamic and not step_ai_prompt:
                 step_ai_prompt = clean_txt or "Напиши уместный живой комментарий по теме поста"
 
-            # Reaction filter
             step_reactions = None
             step_reaction_count = 0
             if reactions_enabled and step.get("reactions"):
@@ -533,7 +454,6 @@ async def generate_dynamic_step_text(
     override_provider: Optional[str] = None,
     override_model: Optional[str] = None
 ) -> str:
-    """Generate dynamic context-aware reply for a bot during real Telegram scenario execution without emojis and trailing periods."""
     settings = await get_ai_settings(session)
     provider = override_provider or settings["provider"]
     api_key = settings["api_key"]
@@ -586,18 +506,17 @@ async def generate_prompt_idea(
     override_provider: Optional[str] = None,
     override_model: Optional[str] = None
 ) -> str:
-    """Generate a flexible, varied, natural prompt idea for scenario generation."""
     settings = await get_ai_settings(session)
     provider = override_provider or settings.get("provider") or "deepseek"
     api_key = settings.get("api_key")
     model = override_model or settings.get("default_model") or settings.get("model") or "deepseek-chat"
 
-    system_prompt = """Ты — эксперт по созданию сценариев для естественного комментирования в Telegram.
-Твоя задача — составить ёмкую, гибкую и живую инструкцию (промпт) для сценария между незнакомыми людьми в комментариях.
+    system_prompt = """Ты эксперт по созданию сценариев для естественного комментирования в Telegram.
+Твоя задача: составить ёмкую, гибкую и живую инструкцию (промпт) для сценария между незнакомыми людьми в комментариях.
 Промпт должен задавать общую канву и контекст (какую тему обсуждают, какую мысль высказать, какой опыт подтвердить), но НЕ должен содержать заученных дословных цитат в кавычках.
 Текст должен быть лаконичным (2-4 предложения) на русском языке."""
 
-    user_prompt = f"""Сгенерируй идеальный вариативный промпт для диалога в Telegram.
+    user_prompt = f"""Сгенерируй вариативный промпт для диалога в Telegram.
 Тема/пожелание: {topic if topic and topic.strip() else 'Случайная актуальная жизненная тема: обсуждение новости, реальный опыт использования продукта/услуги, практический совет или обмен мнениями в комментариях'}.
 
 Структура промпта:
@@ -628,7 +547,6 @@ async def enhance_prompt_description(
     override_provider: Optional[str] = None,
     override_model: Optional[str] = None
 ) -> str:
-    """Enhance, expand, or generate a rich natural scene description with AI for Prompt Studio."""
     settings = await get_ai_settings(session)
     provider = override_provider or settings.get("provider") or "deepseek"
     api_key = settings.get("api_key")
@@ -637,8 +555,8 @@ async def enhance_prompt_description(
     if not api_key:
         raise ValueError("Не настроен API Key ИИ. Пожалуйста, откройте 'ИИ НАСТРОЙКИ' и введите ваш ключ.")
 
-    system_prompt = """Ты — ведущий промпт-инженер для сценариев комментирования в Telegram.
-Твоя задача — взять краткий черновой набросок или тему от пользователя и превратить его в глубокое, чёткое, живое описание сцены (2-3 предложения на русском языке).
+    system_prompt = """Ты сценарист сценариев комментирования в Telegram.
+Твоя задача: взять краткий черновой набросок или тему от пользователя и превратить его в четкое, живое описание сцены (2-3 предложения на русском языке).
 Описание должно содержать:
 1. Конкретную тему и проблему/интригу обсуждения строго по заданной пользователем сфере.
 2. Мотивацию и распределение позиций участников (кто задает вопрос, кто советует или спорит, кто подтверждает опыт).
@@ -681,7 +599,6 @@ async def generate_studio_prompt(
     override_model: Optional[str] = None,
     override_system_prompt: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Generate high-converting structured scenario prompt, role breakdown, and steps payload in Prompt Studio."""
     settings = await get_ai_settings(session)
     provider = override_provider or settings.get("provider") or "deepseek"
     api_key = settings.get("api_key")
@@ -715,25 +632,25 @@ async def generate_studio_prompt(
     }
     tone_desc = tone_descriptions.get(tone, tone_descriptions["telegram_slang"])
 
-    system_prompt = f"""Ты — элитный сценарист и архитектор промптов для комментирования в Telegram (Prompt Studio Engine v4.0).
-Твоя цель — создавать ультра-реалистичные, живые диалоги между реальными пользователями интернета, которые невозможно отличить от настоящих людей.
+    system_prompt = f"""Ты сценарист диалогов для комментирования в Telegram.
+Твоя цель: создавать живые, естественные диалоги между реальными пользователями интернета.
 
 СТРОЖАЙШЕЕ ПРАВИЛО ТЕМЫ:
 - Сценарий, роли, ai_prompt и тексты ОБЯЗАНЫ быть СТРОГО на тему, которую указал пользователь!
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО навязывать темы про софт, автоматизацию, каналы или скрипты, если пользователь НЕ просил об этом явно! Если тема про авто, еду, фитнес, путешествия, ремонт или крипту — сценарий должен быть строго про это.
+- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО навязывать темы про софт, автоматизацию, каналы или скрипты, если пользователь НЕ просил об этом явно! Если тема про авто, еду, фитнес, путешествия, ремонт или крипту: сценарий должен быть строго про это.
 
 ГЛАВНЫЕ ПРАВИЛА И СТИЛЬ:
 1. КАТЕГОРИЧЕСКИ БЕЗ ЭМОДЗИ И СМАЙЛИКОВ в текстах реплик и примерах.
 2. НИКАКИХ ТОЧЕК В КОНЦЕ СООБЩЕНИЙ.
-3. НИКАКИХ ДЛИННЫХ ТИРЕ (—).
-4. Общение на «ты», как на живом форуме или в комментариях Telegram. Никакой канцелярщины, рекламы в лоб и роботоподобных фраз!
+3. НИКАКИХ ТИРЕ (-).
+4. Общение на «ты», как на живом форуме или в комментариях Telegram. Никакой канцелярщины, рекламы в лоб и шаблонов.
 5. Режим: {'ДИНАМИЧЕСКИЙ (боты генерируют фразы на лету по точечным промптам)' if mode == 'dynamic' else 'СТАТИЧЕСКИЙ (готовые фиксированные реплики)'}.
 
 КРИТИЧЕСКИ ВАЖНЫЕ ТРЕБОВАНИЯ К ПОЛЮ "ai_prompt":
 1. ЗАПРЕЩЕНО писать сухие инфинитивы типа "Начать разговор...", "Ответить скептически...".
 2. КАЖДЫЙ "ai_prompt" должен быть ПОЛНОЦЕННОЙ ДИРЕКТИВНОЙ РОЛЕВОЙ ИНСТРУКЦИЕЙ ДЛЯ НЕЙРОСЕТИ, привязанной к теме пользователя.
 Пример формата ai_prompt:
-"Ты — {{Название роли}} (Роль {{Номер роли}}). {{Конкретная директива: начни тред по теме / ответь на шаг X / выскажи мнение по теме...}}. Пиши живо, на 'ты', 1-2 предложения, без эмодзи и без точки в конце."
+"Роль: {{Название роли}} (Роль {{Номер роли}}). {{Конкретная директива: начни тред по теме / ответь на шаг X / выскажи мнение по теме...}}. Пиши живо, на 'ты', 1-2 предложения, без эмодзи и без точки в конце."
 
 ТРЕБОВАНИЕ К КОЛИЧЕСТВУ СООБЩЕНИЙ:
 Массив "steps_payload" ОБЯЗАН содержать РОВНО {actual_steps_count} элементов (шагов)!
@@ -763,7 +680,7 @@ async def generate_studio_prompt(
       "role_order": 1,
       "role_name": "Новичок / Зачинщик",
       "goal": "Задать боль или вопрос в комментариях",
-      "instruction": "Ты — Новичок. Начинаешь тред под постом, задаешь вопрос по теме...",
+      "instruction": "Роль: Новичок. Начинаешь тред под постом, задаешь вопрос по теме...",
       "sample_text": "Пример фразы без точки на конце и без эмодзи"
     }}
   ],
@@ -774,7 +691,7 @@ async def generate_studio_prompt(
       "role_id": 1,
       "role_name": "Новичок / Зачинщик",
       "text": "Пример реалистичной живой реплики без точки на конце",
-      "ai_prompt": "Ты — Новичок (Роль 1). Начни тред в комментариях под постом от первого лица... Пиши на 'ты', без эмодзи и без точки в конце",
+      "ai_prompt": "Роль: Новичок (Роль 1). Начни тред в комментариях под постом от первого лица... Пиши на 'ты', без эмодзи и без точки в конце",
       "is_ai_dynamic": {str(mode == 'dynamic').lower()},
       "reply_to_step": null,
       "delay_before_min": 4.0,
@@ -801,7 +718,6 @@ async def generate_studio_prompt(
     if not isinstance(data, dict):
         raise ValueError("Invalid structure received from AI Prompt Studio")
 
-    # Ensure roles list is valid
     roles = data.get("roles")
     if not isinstance(roles, list) or len(roles) == 0:
         roles = [
@@ -809,19 +725,17 @@ async def generate_studio_prompt(
                 "role_order": i + 1,
                 "role_name": f"Участник #{i + 1}",
                 "goal": "Поддержать живой диалог",
-                "instruction": f"Ты — Участник #{i + 1}. Веди естественную беседу на 'ты' без эмодзи.",
+                "instruction": f"Роль: Участник #{i + 1}. Веди естественную беседу на 'ты' без эмодзи.",
                 "sample_text": f"Интересно, как сейчас это устроено"
             }
             for i in range(roles_count)
         ]
         data["roles"] = roles
 
-    # Sanitize roles
     for role in roles:
         if isinstance(role, dict) and "sample_text" in role:
             role["sample_text"] = sanitize_telegram_comment(role["sample_text"])
 
-    # Ensure steps_payload has EXACTLY actual_steps_count steps
     raw_steps = data.get("steps_payload")
     if not isinstance(raw_steps, list):
         raw_steps = []
@@ -842,7 +756,7 @@ async def generate_studio_prompt(
             if mode == "dynamic":
                 step["is_ai_dynamic"] = True
                 if not step.get("ai_prompt") or len(str(step.get("ai_prompt")).strip()) < 10:
-                    step["ai_prompt"] = f"Ты — {role_name} (Роль {role_order}). Ответь на предыдущую реплику (Шаг #{idx}). Развей мысль по теме, пиши на 'ты' живо, без эмодзи и без точки в конце."
+                    step["ai_prompt"] = f"Роль: {role_name} (Роль {role_order}). Ответь на предыдущую реплику (Шаг #{idx}). Развей мысль по теме, пиши на 'ты' живо, без эмодзи и без точки в конце."
             else:
                 step["is_ai_dynamic"] = False
                 step["ai_prompt"] = None
@@ -854,26 +768,25 @@ async def generate_studio_prompt(
                 step["sample_text"] = sanitize_telegram_comment(str(step["sample_text"]))
             steps_payload.append(step)
         else:
-            # Generate missing step algorithmically
             prev_step_num = idx
             if idx == 0:
-                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Начни живое обсуждение под постом от первого лица: задай открытый вопрос по теме. Пиши просто на 'ты', 1-2 предложения, без эмодзи и без точки в конце."
+                ai_prompt_text = f"Роль: {role_name} (Роль {role_order}). Начни живое обсуждение под постом от первого лица: задай открытый вопрос по теме. Пиши просто на 'ты', 1-2 предложения, без эмодзи и без точки в конце."
                 sample = role_obj.get("sample_text") or "Кто в курсе, как сейчас лучше это делать"
                 reply_target = None
             elif idx == 1:
-                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Ответь на сообщение из Шага #1. Посоветуй проверенное решение или поделись опытом. Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце."
+                ai_prompt_text = f"Роль: {role_name} (Роль {role_order}). Ответь на сообщение из Шага #1. Посоветуй проверенное решение или поделись опытом. Пиши уверенно и просто на 'ты', без рекламы, без эмодзи и без точки в конце."
                 sample = role_obj.get("sample_text") or "Тут главное не спешить и делать всё по шагам"
                 reply_target = 1
             elif idx == 2:
-                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Вклинись в тред (Шаг #2). Вырази легкое сомнение или задай уточняющий вопрос по рискам и затратам. Пиши лаконично на 'ты', без эмодзи и без точки в конце."
+                ai_prompt_text = f"Роль: {role_name} (Роль {role_order}). Вклинись в тред (Шаг #2). Вырази легкое сомнение или задай уточняющий вопрос по рискам и затратам. Пиши лаконично на 'ты', без эмодзи и без точки в конце."
                 sample = "А по затратам как выходит, окупается вообще"
                 reply_target = 2
             elif idx == actual_steps_count - 1:
-                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Подведи позитивный итог дискуссии (Шаг #{prev_step_num}), поблагодари за совет. Пиши лаконично, без эмодзи и без точки в конце."
+                ai_prompt_text = f"Роль: {role_name} (Роль {role_order}). Подведи позитивный итог дискуссии (Шаг #{prev_step_num}), поблагодари за совет. Пиши лаконично, без эмодзи и без точки в конце."
                 sample = "Понял, спасибо за наводку, попробую на днях"
                 reply_target = prev_step_num
             else:
-                ai_prompt_text = f"Ты — {role_name} (Роль {role_order}). Ответь на реплику из Шага #{prev_step_num}. Добавь важный нюанс или аргумент из практики. Пиши живо на 'ты', без эмодзи и без точки в конце."
+                ai_prompt_text = f"Роль: {role_name} (Роль {role_order}). Ответь на реплику из Шага #{prev_step_num}. Добавь важный нюанс или аргумент из практики. Пиши живо на 'ты', без эмодзи и без точки в конце."
                 sample = "Да, там еще важно учитывать текущие комиссии"
                 reply_target = prev_step_num
 

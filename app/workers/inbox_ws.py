@@ -29,7 +29,7 @@ async def broadcast_inbox_event(event_dict: dict):
 async def lifespan(app):
     port = os.getenv("PORT", "8000")
     logger.info("==================================================")
-    logger.info(f"TgActor Backend v3.3.0 — Successfully started!")
+    logger.info(f"TgActor Backend v3.3.0: Successfully started!")
     logger.info(f"Dashboard available at: http://localhost:{port}")
     logger.info("==================================================")
 
@@ -62,14 +62,13 @@ async def lifespan(app):
 
 @router.websocket("/ws/inbox")
 async def inbox_websocket_endpoint(websocket: WebSocket, token: str = ""):
-    # Reject unauthenticated sockets before accepting
     if not verify_auth_token(token):
         await websocket.close(code=4401)
         return
     await websocket.accept()
     active_websockets.add(websocket)
+    pubsub = redis_client.pubsub()
     try:
-        pubsub = redis_client.pubsub()
         await pubsub.subscribe("inbox_events")
         async for message in pubsub.listen():
             if message["type"] == "message":
@@ -78,7 +77,13 @@ async def inbox_websocket_endpoint(websocket: WebSocket, token: str = ""):
                     data = data.decode("utf-8")
                 await websocket.send_text(data)
     except WebSocketDisconnect:
-        active_websockets.discard(websocket)
+        pass
     except Exception as e:
         logger.debug(f"WebSocket client disconnected or error: {e}")
+    finally:
         active_websockets.discard(websocket)
+        try:
+            await pubsub.unsubscribe("inbox_events")
+            await pubsub.close()
+        except Exception:
+            pass

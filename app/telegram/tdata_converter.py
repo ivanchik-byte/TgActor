@@ -10,12 +10,43 @@ from app.core.security import encrypt_session
 
 logger = logging.getLogger(__name__)
 
+MAX_ZIP_ENTRIES = 2000
+MAX_ZIP_TOTAL_BYTES = 100 * 1024 * 1024
+
+
+def _safe_extract(zip_path: str, dest: str) -> None:
+    base = os.path.realpath(dest)
+    total = 0
+    with zipfile.ZipFile(zip_path, 'r') as archive:
+        members = archive.infolist()
+        if len(members) > MAX_ZIP_ENTRIES:
+            raise zipfile.BadZipFile("too many entries")
+        for member in members:
+            total += member.file_size
+            if total > MAX_ZIP_TOTAL_BYTES:
+                raise zipfile.BadZipFile("archive too large")
+            name = member.filename
+            if not name or name.startswith("/") or name.startswith("\\"):
+                raise zipfile.BadZipFile("bad entry path")
+            target = os.path.realpath(os.path.join(base, name))
+            if target != base and not target.startswith(base + os.sep):
+                raise zipfile.BadZipFile("entry outside destination")
+            if member.is_dir():
+                os.makedirs(target, exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(target) or base, exist_ok=True)
+                with archive.open(member) as source, open(target, "wb") as out:
+                    while True:
+                        chunk = source.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+
 async def convert_tdata_zip_to_encrypted_session(zip_path: str, password: str = None) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(temp_dir)
+                await asyncio.to_thread(_safe_extract, zip_path, temp_dir)
             except zipfile.BadZipFile:
                 logger.error("Failed to extract tdata: Bad zip file.")
                 return False, "failed_invalid_tdata", None

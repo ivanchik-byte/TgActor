@@ -17,14 +17,9 @@ _listeners_running = False
 _listener_task: asyncio.Task = None
 
 async def _run_inbox_live_sync():
-    """
-    Continuous real-time background sync loop.
-    Iteratively checks active accounts for new incoming Telegram messages
-    and broadcasts updates via WebSocket.
-    """
     logger.info("Live real-time Inbox sync background daemon started")
     # Lazy import to avoid circular dependencies
-    from app.workers.inbox_ws import broadcast_inbox_event
+    from app.core.events import publish_inbox_event as broadcast_inbox_event
 
     while _listeners_running:
         try:

@@ -271,7 +271,8 @@ export default function Inbox() {
       const res = await axios.get('/api/accounts');
       return Array.isArray(res.data) ? res.data : [];
     },
-    refetchInterval: 10000,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
   const accounts = Array.isArray(rawAccounts) ? rawAccounts : [];
 
@@ -286,7 +287,8 @@ export default function Inbox() {
       const res = await axios.get(url);
       return Array.isArray(res.data) ? res.data : [];
     },
-    refetchInterval: 4000,
+    refetchInterval: false,
+    staleTime: 5000,
   });
   const chats = Array.isArray(rawChats) ? rawChats : [];
 
@@ -301,7 +303,8 @@ export default function Inbox() {
       return Array.isArray(res.data) ? res.data : [];
     },
     enabled: !!selectedChat,
-    refetchInterval: 2500,
+    refetchInterval: false,
+    staleTime: 5000,
   });
   const messages = Array.isArray(rawMessages) ? rawMessages : [];
 

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.telegram.patch import apply_hydrogram_patch
 apply_hydrogram_patch()
 
-from app.core.config import ADMIN_PASSWORD, SECRET_KEY
+from app.core.config import ADMIN_PASSWORD, SECRET_KEY, FRONTEND_URL
 from app.core.database import engine, Base
 from app.api.router import router as api_router
 from app.workers.inbox_ws import router as ws_router, lifespan
@@ -21,10 +21,10 @@ app = FastAPI(title="TgActor API", version="3.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[FRONTEND_URL] if FRONTEND_URL else [],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 PUBLIC_PATHS = ("/api/auth/login",)

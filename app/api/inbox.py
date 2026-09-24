@@ -30,39 +30,44 @@ class DeleteMessageRequest(BaseModel):
     message_id: int
 
 @router.get("/api/inbox/chats")
-async def get_inbox_chats(account_id: Optional[int] = None):
-    """
-    Get grouped chat dialog list enriched with account details and latest message timestamp.
-    Optionally filter by account_id.
-    """
+async def get_inbox_chats(account_id: Optional[int] = None, limit: int = 200):
     async with async_session() as session:
-        # Select distinct account_id and peer_id pairs with latest message details
         subq = (
             select(
                 InboxMessage.account_id,
                 InboxMessage.peer_id,
                 func.max(InboxMessage.id).label("max_id")
             )
+            .where(InboxMessage.peer_id.notin_([777000, 42777]))
             .group_by(InboxMessage.account_id, InboxMessage.peer_id)
             .subquery()
         )
+        if account_id is not None:
+            subq = (
+                select(
+                    InboxMessage.account_id,
+                    InboxMessage.peer_id,
+                    func.max(InboxMessage.id).label("max_id")
+                )
+                .where(InboxMessage.account_id == account_id)
+                .where(InboxMessage.peer_id.notin_([777000, 42777]))
+                .group_by(InboxMessage.account_id, InboxMessage.peer_id)
+                .subquery()
+            )
 
         query = (
             select(InboxMessage, Account)
             .join(subq, (InboxMessage.account_id == subq.c.account_id) & (InboxMessage.peer_id == subq.c.peer_id) & (InboxMessage.id == subq.c.max_id))
             .join(Account, InboxMessage.account_id == Account.id)
             .order_by(desc(InboxMessage.created_at))
+            .limit(min(limit, 500))
         )
-        
-        if account_id is not None:
-            query = query.where(InboxMessage.account_id == account_id)
 
         result = await session.execute(query)
         chats = []
         for msg, acc in result.all():
             u_name = (msg.peer_username or "").lower()
-            p_name = (msg.peer_name or "").lower()
-            if u_name in ["telegram", "wallet"] or msg.peer_id in [777000, 42777]:
+            if u_name in ["telegram", "wallet"]:
                 continue
 
             chats.append({
@@ -83,36 +88,35 @@ async def get_inbox_chats(account_id: Optional[int] = None):
 
 @router.api_route("/api/inbox/sync", methods=["GET", "POST"])
 async def sync_inbox_chats():
-    """Manual sync trigger to fetch latest Telegram chats and messages across all accounts."""
     res = await sync_all_accounts_dialogs()
     return res
 
 @router.post("/api/inbox/sync/{account_id}")
 async def sync_inbox_for_single_account(account_id: int):
-    """Sync chats for a single account."""
     count = await sync_dialogs_for_account(account_id)
     return {"status": "ok", "account_id": account_id, "imported_messages": count}
 
 @router.delete("/api/inbox/sync")
 async def clear_all_inbox_sync():
-    """Clear all synced inbox messages from DB across all accounts."""
     return await clear_inbox_sync(account_id=None)
 
 @router.delete("/api/inbox/sync/{account_id}")
 async def clear_account_inbox_sync(account_id: int):
-    """Clear synced inbox messages from DB for a specific account."""
     return await clear_inbox_sync(account_id=account_id)
 
 @router.get("/api/inbox/messages/{account_id}/{peer_id}")
-async def get_inbox_messages_path(account_id: int, peer_id: int):
-    """Get chat message history for specific account and peer."""
+async def get_inbox_messages_path(account_id: int, peer_id: int, limit: int = 100, before_id: Optional[int] = None):
     async with async_session() as session:
         stmt = select(InboxMessage).where(
             InboxMessage.account_id == account_id,
             InboxMessage.peer_id == peer_id
-        ).order_by(InboxMessage.created_at.asc())
+        )
+        if before_id is not None:
+            stmt = stmt.where(InboxMessage.id < before_id)
+        stmt = stmt.order_by(InboxMessage.id.desc()).limit(min(limit, 200))
         result = await session.execute(stmt)
-        messages = result.scalars().all()
+        messages = list(result.scalars().all())
+        messages.reverse()
         return [
             {
                 "id": m.id,
@@ -131,9 +135,8 @@ async def get_inbox_messages_path(account_id: int, peer_id: int):
         ]
 
 @router.get("/api/inbox/messages")
-async def get_inbox_messages_query(account_id: int, peer_id: int):
-    """Fallback query endpoint for message history."""
-    return await get_inbox_messages_path(account_id, peer_id)
+async def get_inbox_messages_query(account_id: int, peer_id: int, limit: int = 100, before_id: Optional[int] = None):
+    return await get_inbox_messages_path(account_id, peer_id, limit, before_id)
 
 @router.post("/api/inbox/send")
 async def send_inbox_message_endpoint(
@@ -143,7 +146,6 @@ async def send_inbox_message_endpoint(
     file: Optional[UploadFile] = File(None),
     reply_to_msg_id: Optional[int] = Form(None)
 ):
-    """Send outgoing DM or file to a chat from specified account."""
     try:
         res = await send_inbox_message(
             account_id=account_id, 
@@ -158,7 +160,6 @@ async def send_inbox_message_endpoint(
 
 @router.post("/api/inbox/edit")
 async def edit_inbox_message_endpoint(req: EditMessageRequest):
-    """Edit text of a sent message."""
     try:
         res = await edit_inbox_message(
             account_id=req.account_id,
@@ -172,7 +173,6 @@ async def edit_inbox_message_endpoint(req: EditMessageRequest):
 
 @router.post("/api/inbox/delete")
 async def delete_inbox_message_endpoint(req: DeleteMessageRequest):
-    """Delete a message from Telegram and DB."""
     try:
         res = await delete_inbox_message(
             account_id=req.account_id,
@@ -185,7 +185,6 @@ async def delete_inbox_message_endpoint(req: DeleteMessageRequest):
 
 @router.post("/api/inbox/download-media/{message_id}")
 async def download_inbox_media(message_id: int):
-    """Media download endpoint on button click."""
     try:
         media_url = await download_media_for_message(message_id)
         return {"status": "ok", "media_path": media_url}

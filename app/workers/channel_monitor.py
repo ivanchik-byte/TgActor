@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import random
-from typing import Dict, Any, Optional
+from datetime import datetime, timezone
+from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -16,14 +17,16 @@ logger = logging.getLogger(__name__)
 
 _monitor_running = False
 _monitor_task = None
-_last_checked_msg_id: Dict[str, int] = {}
 
-# Keep strong references to spawned jobs so GC cannot reap them
+_job_sem = asyncio.Semaphore(3)
 _background_executions: set = set()
 
 
 def _spawn_execution(coro) -> None:
-    task = asyncio.create_task(coro)
+    async def _guarded():
+        async with _job_sem:
+            await coro
+    task = asyncio.create_task(_guarded())
     _background_executions.add(task)
     task.add_done_callback(_background_executions.discard)
 
@@ -35,15 +38,13 @@ async def run_first_comment_job(
     post_text: str,
     delay: int
 ):
-    """Execute first comment sniping in its own session after the delay."""
     if delay > 0:
         await asyncio.sleep(delay)
     from app.services.first_comment_service import send_first_comment
     try:
         async with async_session() as session:
             channel = await session.get(MonitoredChannel, channel_id)
-            if not channel:
-                logger.warning(f"First comment job skipped: channel {ch_user} was deleted")
+            if not channel or not channel.is_active:
                 return
             await send_first_comment(
                 session=session,
@@ -59,13 +60,17 @@ async def run_scenario_job(
     scenario_id: int,
     chat_id: Any,
     discussion_message_id: Optional[int],
-    delay: int
+    delay: int,
+    channel_id: Optional[int] = None,
 ):
-    """Execute a scenario in its own session after the delay."""
     if delay > 0:
         await asyncio.sleep(delay)
     try:
         async with async_session() as session:
+            if channel_id is not None:
+                channel = await session.get(MonitoredChannel, channel_id)
+                if not channel or not channel.is_active:
+                    return
             await execute_scenario(session, scenario_id, chat_id, discussion_message_id=discussion_message_id)
     except Exception as e:
         logger.warning(f"Scenario job #{scenario_id} failed: {e}")
@@ -86,152 +91,160 @@ async def stop_channel_monitor():
     _monitor_running = False
     if _monitor_task:
         _monitor_task.cancel()
+        try:
+            await _monitor_task
+        except asyncio.CancelledError:
+            pass
         _monitor_task = None
+    for task in list(_background_executions):
+        task.cancel()
     logger.info("Channel monitor daemon stopped")
+
+
+
+
+async def _recent_posts(client, ch_user: str, limit: int = 10):
+    posts = []
+    async for msg in client.get_chat_history(ch_user, limit=limit):
+        posts.append((msg.id, msg.text or msg.caption or ""))
+    posts.sort(key=lambda p: p[0])
+    return posts
 
 async def run_channel_monitor():
     while _monitor_running:
         try:
             async with async_session() as session:
-                channels_stmt = select(MonitoredChannel).where(MonitoredChannel.is_active == True)
-                channels = list((await session.execute(channels_stmt)).scalars().all())
-
-                accounts_stmt = (
+                channels = list((await session.execute(
+                    select(MonitoredChannel).where(MonitoredChannel.is_active == True)
+                )).scalars().all())
+                accounts = list((await session.execute(
                     select(Account)
                     .where(Account.is_active == True)
                     .options(selectinload(Account.proxy))
-                )
-                accounts = list((await session.execute(accounts_stmt)).scalars().all())
-
-                if channels and accounts:
-                    client = None
-                    sample_account = None
-                    for candidate_acc in accounts:
-                        c = get_hydrogram_client(candidate_acc, candidate_acc.proxy)
+                )).scalars().all())
+                for acc in accounts:
+                    session.expunge(acc)
+                    if acc.proxy is not None:
                         try:
-                            await c.start()
-                            client = c
-                            sample_account = candidate_acc
-                            break
-                        except Exception as e:
-                            logger.warning(f"Аккаунт #{candidate_acc.id} (@{candidate_acc.username or candidate_acc.phone}) недоступен для мониторинга: {e}")
-                            continue
+                            session.expunge(acc.proxy)
+                        except Exception:
+                            pass
+                channel_rows = [
+                    (c.id, c.channel_username, c.last_checked_msg_id,
+                     c.execution_mode, c.min_delay_seconds, c.max_delay_seconds)
+                    for c in channels
+                ]
 
-                    if not client:
-                        logger.warning("Мониторинг каналов: нет рабочих аккаунтов (все аккаунты заблокированы или сессии недействительны)")
-                        await asyncio.sleep(15)
+            if channel_rows and accounts:
+                client = None
+                for candidate_acc in accounts:
+                    c = get_hydrogram_client(candidate_acc, candidate_acc.proxy)
+                    try:
+                        await c.start()
+                        client = c
+                        break
+                    except Exception as e:
+                        logger.warning(f"Аккаунт #{candidate_acc.id} недоступен для мониторинга: {e}")
                         continue
 
-                    try:
-                        for channel in channels:
-                            ch_user = channel.channel_username
+                if not client:
+                    logger.warning("Мониторинг каналов: нет рабочих аккаунтов")
+                    await asyncio.sleep(15)
+                    continue
+
+                try:
+                    for channel_id, ch_user, stored, mode, lo, hi in channel_rows:
+                        try:
                             try:
-                                # Fetch latest post to avoid re-triggering on unchanged channels
-                                latest_msg_id = None
-                                latest_post_text = ""
-                                try:
-                                    async for msg in client.get_chat_history(ch_user, limit=1):
-                                        latest_msg_id = msg.id
-                                        latest_post_text = msg.text or msg.caption or ""
-                                        break
-                                except Exception:
-                                    latest_msg_id = None
-
-                                # Check if already processed or establishing initial baseline
-                                if latest_msg_id is not None:
-                                    if ch_user not in _last_checked_msg_id:
-                                        # First run after start/restart: record baseline post ID without spamming
-                                        _last_checked_msg_id[ch_user] = latest_msg_id
-                                        logger.info(f"Channel monitor: initialized baseline for {ch_user} at msg #{latest_msg_id}")
-                                        continue
-
-                                    if latest_msg_id <= _last_checked_msg_id[ch_user]:
-                                        # No genuinely new post, skip to avoid spamming
-                                        continue
-
-                                    # Genuinely new post detected!
-                                    _last_checked_msg_id[ch_user] = latest_msg_id
-
-                                mode = getattr(channel, 'execution_mode', 'scenario') or 'scenario'
-                                lo = channel.min_delay_seconds or 0
-                                hi = max(channel.max_delay_seconds or 0, lo)
-                                if mode == 'first_comment':
-                                    delay = random.randint(lo, hi)
-                                    logger.info(f"First comment sniper triggered for {ch_user} (msg #{latest_msg_id}) in {delay}s...")
-                                    # Run in background with its own session so the
-                                    # monitor loop keeps checking other channels
+                                posts = await _recent_posts(client, ch_user)
+                            except Exception:
+                                continue
+                            if not posts:
+                                continue
+                            latest_id, latest_text = posts[-1]
+                            if stored is None:
+                                async with async_session() as session:
+                                    channel = await session.get(MonitoredChannel, channel_id)
+                                    if channel:
+                                        channel.last_checked_msg_id = latest_id
+                                        channel.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                                        await session.commit()
+                                continue
+                            pending = [(pid, text) for pid, text in posts if pid > stored]
+                            if not pending:
+                                continue
+                            async with async_session() as session:
+                                channel = await session.get(MonitoredChannel, channel_id)
+                                if channel:
+                                    channel.last_checked_msg_id = latest_id
+                                    channel.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                                    await session.commit()
+                            lo_v = lo or 0
+                            hi_v = max(hi or 0, lo_v)
+                            for pid, text in pending[-3:]:
+                                delay = random.randint(lo_v, hi_v)
+                                if (mode or 'scenario') == 'first_comment':
                                     _spawn_execution(run_first_comment_job(
-                                        channel.id,
-                                        ch_user,
-                                        latest_msg_id or 0,
-                                        latest_post_text,
-                                        delay
+                                        channel_id, ch_user, pid, text, delay
                                     ))
                                 else:
-                                    scenario = await pick_random_scenario(session, channel)
-                                    if scenario:
-                                        delay = random.randint(lo, hi)
-                                        logger.info(f"New post detected in {ch_user} (msg #{latest_msg_id}). Triggering scenario '{scenario.title}' in {delay}s...")
-                                        await log_action(
-                                            session,
-                                            action_type="channel_monitor",
-                                            status="ok",
-                                            target=ch_user,
-                                            target_id=f"msg #{latest_msg_id or 'new'} -> sc #{scenario.id}",
-                                            details={
-                                                "summary": f"Замечен новый пост #{latest_msg_id} в {ch_user}. Боты готовятся к сценарию '{scenario.title}' (задержка {delay}с)",
-                                                "scenario_title": scenario.title,
-                                                "delay_seconds": delay,
-                                                "msg_id": latest_msg_id,
-                                                "post_preview": latest_post_text[:250],
-                                                "badge": "Новый пост"
-                                            },
-                                            scenario_id=scenario.id
-                                        )
+                                    async with async_session() as session:
+                                        channel = await session.get(MonitoredChannel, channel_id)
+                                        scenario = await pick_random_scenario(session, channel) if channel else None
+                                        scenario_id = scenario.id if scenario else None
+                                        scenario_title = scenario.title if scenario else ""
+                                    if scenario_id:
+                                        await _log_trigger(ch_user, pid, text, scenario_id, scenario_title, delay)
                                         _spawn_execution(run_scenario_job(
-                                            scenario.id,
-                                            ch_user,
-                                            latest_msg_id,
-                                            delay
+                                            scenario_id, ch_user, pid, delay, channel_id
                                         ))
                                     else:
-                                        warning_msg = f"В канале {ch_user} вышел новый пост (msg #{latest_msg_id}), но нет активных сценариев с сообщениями для ответа."
-                                        logger.warning(warning_msg)
-                                        await log_action(
-                                            session,
-                                            action_type="channel_monitor",
-                                            status="error",
-                                            target=ch_user,
-                                            target_id=f"Нет сценариев • {ch_user}",
-                                            details={
-                                                "summary": "Нет активных сценариев с шагами",
-                                                "category": "no_scenarios",
-                                                "badge": "Нет сценария",
-                                                "error": warning_msg,
-                                                "msg_id": latest_msg_id
-                                            }
-                                        )
-                            except Exception as ex:
-                                diag = classify_telegram_error(ex)
-                                logger.warning(f"Error monitoring channel {ch_user} ({diag['badge']}): {ex}")
-                                await log_action(
-                                    session,
-                                    action_type="channel_monitor",
-                                    status="error",
-                                    target=ch_user,
-                                    target_id=f"{diag['badge']} • {ch_user}",
-                                    details={
-                                        "summary": diag["summary"],
-                                        "category": diag["category"],
-                                        "badge": diag["badge"],
-                                        "error": str(ex)
-                                    }
-                                )
-                    finally:
-                        await client.stop()
+                                        await _log_empty(ch_user, pid)
+                        except Exception as ex:
+                            diag = classify_telegram_error(ex)
+                            logger.warning(f"Error monitoring channel {ch_user} ({diag['badge']}): {ex}")
+                finally:
+                    await client.stop()
         except asyncio.CancelledError:
             break
         except Exception as e:
             logger.warning(f"Channel monitor status notice: {e}")
 
         await asyncio.sleep(15)
+
+
+async def _log_trigger(ch_user, msg_id, text, scenario_id, title, delay):
+    async with async_session() as session:
+        await log_action(
+            session,
+            action_type="channel_monitor",
+            status="ok",
+            target=ch_user,
+            target_id=f"msg #{msg_id} -> sc #{scenario_id}",
+            details={
+                "summary": f"Замечен новый пост #{msg_id} в {ch_user}. Сценарий '{title}' (задержка {delay}с)",
+                "scenario_title": title,
+                "delay_seconds": delay,
+                "msg_id": msg_id,
+                "post_preview": (text or "")[:250],
+                "badge": "Новый пост"
+            },
+            scenario_id=scenario_id
+        )
+
+
+async def _log_empty(ch_user, msg_id):
+    async with async_session() as session:
+        await log_action(
+            session,
+            action_type="channel_monitor",
+            status="error",
+            target=ch_user,
+            target_id=f"Нет сценариев • {ch_user}",
+            details={
+                "summary": "Нет активных сценариев с шагами",
+                "category": "no_scenarios",
+                "badge": "Нет сценария",
+                "msg_id": msg_id
+            }
+        )
