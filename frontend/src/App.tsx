@@ -225,90 +225,92 @@ function Layout({ children }: { children: React.ReactNode }) {
         role={mobileDrawerOpen ? 'dialog' : undefined}
         aria-modal={mobileDrawerOpen || undefined}
       >
-        <div className="sidebar-brand">
-          <Brand compact={collapsed} />
-          <button
-            className="sidebar-collapse desktop-only"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label={
-              collapsed ? 'Развернуть навигацию' : 'Свернуть навигацию'
-            }
-          >
-            <SidebarSimple size={18} />
-          </button>
-          <button
-            className="sidebar-collapse mobile-only"
-            onClick={() => setMobileDrawerOpen(false)}
-            aria-label="Закрыть навигацию"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        {!collapsed && (
-          <div className="workspace-label">
-            <span className="workspace-avatar">T</span>
-            <div>
-              <strong>Моя панель</strong>
-              <span>Open source · Telegram</span>
-            </div>
-            <span className="workspace-label-dot" />
-          </div>
-        )}
-        <nav className="sidebar-navigation">
-          {navigation.map((item) => {
-            const active = location.pathname === item.path;
-            const Icon = item.icon;
-            return (
-              <React.Fragment key={item.path}>
-                {item.section && (
-                  <div className="nav-section">
-                    {collapsed ? <span /> : item.section}
-                  </div>
-                )}
-                <Link
-                  to={item.path}
-                  className={`nav-link ${active ? 'is-active' : ''}`}
-                  aria-current={active ? 'page' : undefined}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon size={20} weight={active ? 'duotone' : 'regular'} />
-                  <span>{item.label}</span>
-                  {active && <span className="nav-active-dot" />}
-                </Link>
-              </React.Fragment>
-            );
-          })}
-        </nav>
-        <div className="sidebar-footer">
-          {!collapsed && (
-            <a
-              className="creator-link"
-              href="https://github.com/ivanchik-byte/TgActor"
-              target="_blank"
-              rel="noopener noreferrer"
+        <div className="sidebar-content">
+          <div className="sidebar-brand">
+            <Brand compact={collapsed} />
+            <button
+              className="sidebar-collapse desktop-only"
+              onClick={() => setCollapsed(!collapsed)}
+              aria-label={
+                collapsed ? 'Развернуть навигацию' : 'Свернуть навигацию'
+              }
             >
-              <GithubLogo size={19} />
-              <div>
-                <strong>Исходный код</strong>
-                <span>GitHub · TgActor</span>
-              </div>
-              <ArrowUpRight size={16} />
-            </a>
-          )}
-          <button
-            className="logout-button"
-            onClick={handleLogout}
-            title="Выйти"
-          >
-            <SignOut size={18} />
-            {!collapsed && <span>Выйти из аккаунта</span>}
-          </button>
+              <SidebarSimple size={18} />
+            </button>
+            <button
+              className="sidebar-collapse mobile-only"
+              onClick={() => setMobileDrawerOpen(false)}
+              aria-label="Закрыть навигацию"
+            >
+              <X size={20} />
+            </button>
+          </div>
           {!collapsed && (
-            <div className="sidebar-version">
-              <span>TGACTOR</span>
-              <span>OPEN SOURCE / 3.3</span>
+            <div className="workspace-label">
+              <span className="workspace-avatar">T</span>
+              <div>
+                <strong>Моя панель</strong>
+                <span>Open source · Telegram</span>
+              </div>
+              <span className="workspace-label-dot" />
             </div>
           )}
+          <nav className="sidebar-navigation">
+            {navigation.map((item) => {
+              const active = location.pathname === item.path;
+              const Icon = item.icon;
+              return (
+                <React.Fragment key={item.path}>
+                  {item.section && (
+                    <div className="nav-section">
+                      {collapsed ? <span /> : item.section}
+                    </div>
+                  )}
+                  <Link
+                    to={item.path}
+                    className={`nav-link ${active ? 'is-active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <Icon size={20} weight={active ? 'duotone' : 'regular'} />
+                    <span>{item.label}</span>
+                    {active && <span className="nav-active-dot" />}
+                  </Link>
+                </React.Fragment>
+              );
+            })}
+          </nav>
+          <div className="sidebar-footer">
+            {!collapsed && (
+              <a
+                className="creator-link"
+                href="https://github.com/ivanchik-byte/TgActor"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <GithubLogo size={19} />
+                <div>
+                  <strong>Исходный код</strong>
+                  <span>GitHub · TgActor</span>
+                </div>
+                <ArrowUpRight size={16} />
+              </a>
+            )}
+            <button
+              className="logout-button"
+              onClick={handleLogout}
+              title="Выйти"
+            >
+              <SignOut size={18} />
+              {!collapsed && <span>Выйти из аккаунта</span>}
+            </button>
+            {!collapsed && (
+              <div className="sidebar-version">
+                <span>TGACTOR</span>
+                <span>OPEN SOURCE / 3.3</span>
+              </div>
+            )}
+          </div>
         </div>
       </aside>
       <div className="workspace-body">

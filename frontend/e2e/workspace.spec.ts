@@ -532,3 +532,47 @@ test('prompt deletion uses a styled confirmation and preserves cancellation', as
   await request;
   await expect(dialog).toHaveCount(0);
 });
+
+test('navigation covers long pages and remains visible while scrolling', async ({
+  page,
+  isMobile,
+}) => {
+  await authenticate(page);
+  await page.goto('/');
+  await expect(
+    page.getByText('Диалоги · Основной', { exact: true }),
+  ).toBeVisible();
+  if (isMobile) {
+    await page.getByRole('button', { name: 'Открыть навигацию' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Навигация' });
+    await expect(drawer).toBeVisible();
+    const height = await drawer.evaluate(
+      (element) => element.getBoundingClientRect().height,
+    );
+    expect(height).toBeCloseTo(page.viewportSize()!.height, 0);
+    await expect(
+      drawer.getByRole('button', { name: 'Выйти из аккаунта' }),
+    ).toBeInViewport();
+    return;
+  }
+
+  const sidebar = page.getByRole('complementary', { name: 'Навигация' });
+  const pageHeight = await page.evaluate(
+    () => document.documentElement.scrollHeight,
+  );
+  expect(pageHeight).toBeGreaterThan(page.viewportSize()!.height);
+  await expect
+    .poll(() =>
+      sidebar.evaluate((element) => element.getBoundingClientRect().height),
+    )
+    .toBeGreaterThanOrEqual(pageHeight - 1);
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  await expect(
+    sidebar.getByRole('link', { name: 'Аккаунты', exact: true }),
+  ).toBeInViewport();
+  await expect(
+    sidebar.getByRole('button', { name: 'Выйти из аккаунта' }),
+  ).toBeInViewport();
+});

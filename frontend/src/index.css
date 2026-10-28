@@ -162,9 +162,10 @@ input[type=number] { appearance: textfield; }
 .skip-link:focus { top: 12px; }
 
 /* The dark navigation is the visual anchor in every theme. */
-.workspace { --sidebar-width: 244px; --sidebar-bg: #18221e; --sidebar-text: #a4b5a9; --sidebar-line: #2c3a31; min-height: 100dvh; }
+.workspace { --sidebar-width: 244px; --sidebar-bg: #18221e; --sidebar-text: #a4b5a9; --sidebar-line: #2c3a31; min-height: 100dvh; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); }
 .workspace-collapsed { --sidebar-width: 80px; }
-.workspace-sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar-width); display: flex; flex-direction: column; background: var(--sidebar-bg); color: var(--sidebar-text); padding: 30px 18px 18px; z-index: 40; }
+.workspace-sidebar { min-width: 0; background: var(--sidebar-bg); color: var(--sidebar-text); z-index: 40; }
+.sidebar-content { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; padding: 30px 18px 18px; }
 .brand { display: flex; align-items: center; gap: 10px; color: #f0f4ef; font-size: 25px; font-weight: 800; letter-spacing: -1.2px; white-space: nowrap; }
 .brand-mark { width: 35px; height: 35px; display: grid; place-items: center; color: #c1d8ae; }
 .brand-period { color: #a9c791; }
@@ -197,7 +198,7 @@ input[type=number] { appearance: textfield; }
 .workspace-collapsed .sidebar-brand { flex-direction: column; gap: 12px; padding-bottom: 6px; }
 .workspace-collapsed .nav-section { height: 34px; }
 .workspace-collapsed .logout-button { justify-content: center; padding-inline: 0; }
-.workspace-body { margin-left: var(--sidebar-width); min-width: 0; min-height: 100dvh; display: flex; flex-direction: column; }
+.workspace-body { min-width: 0; min-height: 100dvh; display: flex; flex-direction: column; }
 .workspace-topbar { height: 76px; padding: 0 38px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--bg-card); }
 .topbar-breadcrumb { display: flex; align-items: center; gap: 17px; font-size: 11px; }
 .breadcrumb-root, .breadcrumb-divider { color: var(--text-muted); }
@@ -309,7 +310,7 @@ input[type=number] { appearance: textfield; }
 @media (max-width: 1200px) {
   .workspace { --sidebar-width: 216px; }
   .workspace-collapsed { --sidebar-width: 76px; }
-  .workspace-sidebar { padding-inline: 12px; }
+  .sidebar-content { padding-inline: 12px; }
   .workspace-main { padding: 30px 24px; }
   .workspace-topbar { padding-inline: 24px; }
   .metric { padding: 20px 16px; }
@@ -320,8 +321,9 @@ input[type=number] { appearance: textfield; }
 @media (max-width: 767px) {
   .mobile-only { display: inline-flex !important; }
   .desktop-only { display: none !important; }
-  .workspace, .workspace-collapsed { --sidebar-width: 0px; }
-  .workspace-sidebar { width: 270px; transform: translateX(-100%); padding: 24px 18px; transition: transform 260ms cubic-bezier(.16,1,.3,1); visibility: hidden; }
+  .workspace, .workspace-collapsed { --sidebar-width: 0px; display: block; }
+  .workspace-sidebar { position: fixed; inset: 0 auto 0 0; width: 270px; transform: translateX(-100%); transition: transform 260ms cubic-bezier(.16,1,.3,1); visibility: hidden; }
+  .sidebar-content { position: static; padding: 24px 18px; }
   .workspace-sidebar.is-open { transform: translateX(0); visibility: visible; }
   .workspace-collapsed .nav-link { justify-content: flex-start; padding-inline: 13px; }
   .workspace-collapsed .nav-link > span { display: inline; }
