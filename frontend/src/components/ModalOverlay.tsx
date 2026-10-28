@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import {
+  X
+} from '@phosphor-icons/react';
 
 export interface ModalOverlayProps {
   isOpen: boolean;

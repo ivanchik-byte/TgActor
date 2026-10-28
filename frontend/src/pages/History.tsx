@@ -1,39 +1,40 @@
+import Select from '../components/Select';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import {
   Clock,
-  RefreshCw,
-  Search,
-  AlertTriangle,
+  ArrowsClockwise as RefreshCw,
+  MagnifyingGlass as Search,
+  Warning as AlertTriangle,
   CheckCircle,
-  Bot,
+  Robot as Bot,
   Eye,
   X,
-  Download,
-  Trash2,
-  Activity,
+  DownloadSimple as Download,
+  Trash as Trash2,
+  Pulse as Activity,
   Copy,
   Check,
-  MessageSquare,
+  ChatCircleText as MessageSquare,
   Heart,
-  Send,
+  PaperPlaneTilt as Send,
   UserMinus,
   UserPlus,
-  Zap,
-  RotateCcw,
+  Lightning as Zap,
+  ArrowCounterClockwise as RotateCcw,
   Terminal,
-  LayoutList,
-  ChevronRight,
-  ChevronDown,
-  Sparkles,
-  Layers,
+  Rows as LayoutList,
+  CaretRight as ChevronRight,
+  CaretDown as ChevronDown,
+  Sparkle as Sparkles,
+  Stack as Layers,
   User,
   Tag,
   ShieldCheck,
-  ShieldAlert,
-  Radio,
+  ShieldWarning as ShieldAlert,
+  Broadcast as Radio,
   Calendar
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import { useToast } from '../components/ToastContext';
 
 interface ActionLogItem {
@@ -257,11 +258,11 @@ export const HistoryPage: React.FC = () => {
       case 'comment':
         return { label: 'Комментирование', icon: MessageSquare, color: '#60a5fa', bg: 'rgba(96, 165, 250, 0.15)' };
       case 'channel_monitor':
-    return { label: 'Радар постов', icon: Radio, color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' };
+    return { label: 'Радар постов', icon: Radio, color: 'var(--success)', bg: 'rgba(16, 185, 129, 0.15)' };
       case 'bot_banned':
-    return { label: 'Бан бота', icon: ShieldAlert, color: '#f87171', bg: 'rgba(248, 113, 113, 0.15)' };
+    return { label: 'Бан бота', icon: ShieldAlert, color: 'var(--danger-text)', bg: 'rgba(248, 113, 113, 0.15)' };
       case 'all_bots_banned':
-    return { label: 'Все боты забанены', icon: AlertTriangle, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.25)' };
+    return { label: 'Все боты забанены', icon: AlertTriangle, color: 'var(--danger)', bg: 'rgba(239, 68, 68, 0.25)' };
       case 'scenario_complete':
     return { label: 'Сценарий завершен', icon: CheckCircle, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
       case 'ai_dynamic_gen':
@@ -273,15 +274,15 @@ export const HistoryPage: React.FC = () => {
       case 'dm':
         return { label: 'ЛС Сообщение', icon: Send, color: '#c084fc', bg: 'rgba(192, 132, 252, 0.15)' };
       case 'dm_cooldown':
-        return { label: 'Пауза (Flood)', icon: Clock, color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.15)' };
+        return { label: 'Пауза (Flood)', icon: Clock, color: 'var(--warning-text)', bg: 'rgba(251, 191, 36, 0.15)' };
       case 'unsubscribe':
-        return { label: 'Отписка от чата', icon: UserMinus, color: '#f87171', bg: 'rgba(248, 113, 113, 0.15)' };
+        return { label: 'Отписка от чата', icon: UserMinus, color: 'var(--danger-text)', bg: 'rgba(248, 113, 113, 0.15)' };
       case 'subscribe':
-        return { label: 'Подписка', icon: UserPlus, color: '#4ade80', bg: 'rgba(74, 222, 128, 0.15)' };
+        return { label: 'Подписка', icon: UserPlus, color: 'var(--success-text)', bg: 'rgba(74, 222, 128, 0.15)' };
       case 'banter_send':
         return { label: 'Бао Диалог', icon: Bot, color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)' };
       case 'health_check':
-        return { label: 'Мониторинг системы', icon: Zap, color: '#34d399', bg: 'rgba(52, 211, 153, 0.15)' };
+        return { label: 'Мониторинг системы', icon: Zap, color: 'var(--success-text)', bg: 'rgba(52, 211, 153, 0.15)' };
       case 'preflight_check':
       case 'preflight':
         return { label: 'Проверка чата', icon: Eye, color: '#facc15', bg: 'rgba(250, 204, 21, 0.15)' };
@@ -294,12 +295,12 @@ export const HistoryPage: React.FC = () => {
     switch (status) {
       case 'ok':
       case 'success':
-        return { color: '#4ade80', border: '#22c55e', label: 'Успешно' };
+        return { color: 'var(--success-text)', border: 'var(--success)', label: 'Успешно' };
       case 'error':
-        return { color: '#f87171', border: '#ef4444', label: 'Ошибка' };
+        return { color: 'var(--danger-text)', border: 'var(--danger)', label: 'Ошибка' };
       case 'warning':
       case 'cooldown':
-        return { color: '#fbbf24', border: '#f59e0b', label: 'Пауза' };
+        return { color: 'var(--warning-text)', border: 'var(--warning)', label: 'Пауза' };
       default:
         return { color: 'var(--accent-text)', border: 'var(--accent)', label: status };
     }
@@ -326,10 +327,10 @@ export const HistoryPage: React.FC = () => {
   const hasActiveFilters = selectedAccount !== 'all' || selectedAction !== 'all' || selectedStatus !== 'all' || selectedPeriod !== 'all' || searchQuery.trim() !== '';
 
   return (
-    <div style={{ padding: '4px 0', width: '100%', color: 'var(--text-main)', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: '4px 0', width: '100%', color: 'var(--text-main)', fontFamily: 'inherit' }}>
 
       {/* DYNAMIC THEMED HEADER BANNER (PHOTO 2 DESIGN WITH FULL THEME COMPATIBILITY) */}
-      <div style={{
+      <div className="history-heading" data-page-header style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -356,17 +357,17 @@ export const HistoryPage: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--accent-text)',
-              transition: 'all 0.3s ease'
+              transition: 'background-color 240ms, border-color 240ms, color 240ms, transform 240ms'
             }}>
               <Activity size={22} />
             </div>
 
-            <div>
+            <div><span className="eyebrow">АКТИВНОСТЬ / ИСТОРИЯ</span>
               <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>
-                Журнал активности аккаунтов
+                История действий
               </h1>
               <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                События в реальном времени • Таблица <code>bot_action_log</code>
+                События аккаунтов и результаты выполнения задач в реальном времени
               </span>
             </div>
           </div>
@@ -374,14 +375,14 @@ export const HistoryPage: React.FC = () => {
 
         {/* Header Right Actions & View Switcher (Uses Theme Colors) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Theme-aware Mode Switcher */}
-          <div style={{
+          {/* View mode */}
+          <div className="history-view-switch" style={{
             display: 'flex',
             backgroundColor: 'var(--bg-main)',
             padding: '3px',
             borderRadius: '10px',
             border: '1px solid var(--border-color)',
-            transition: 'all 0.3s ease'
+            transition: 'background-color 240ms, border-color 240ms, color 240ms, transform 240ms'
           }}>
             <button
               onClick={() => setViewMode('timeline')}
@@ -397,7 +398,7 @@ export const HistoryPage: React.FC = () => {
                 fontSize: '0.82rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                 boxShadow: viewMode === 'timeline' ? '0 4px 12px var(--accent-soft)' : 'none'
               }}
             >
@@ -418,7 +419,7 @@ export const HistoryPage: React.FC = () => {
                 fontSize: '0.82rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                 boxShadow: viewMode === 'console' ? '0 4px 12px var(--accent-soft)' : 'none'
               }}
             >
@@ -439,7 +440,7 @@ export const HistoryPage: React.FC = () => {
                 fontSize: '0.82rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                 boxShadow: viewMode === 'table' ? '0 4px 12px var(--accent-soft)' : 'none'
               }}
             >
@@ -488,7 +489,7 @@ export const HistoryPage: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
               }}
             >
               <RefreshCw size={14} className={loading ? 'spin' : ''} />
@@ -509,7 +510,7 @@ export const HistoryPage: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
               }}
             >
               <Download size={14} /> CSV
@@ -522,8 +523,8 @@ export const HistoryPage: React.FC = () => {
                 padding: '8px 12px',
                 borderRadius: '8px',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                color: '#f87171',
+                backgroundColor: 'var(--danger-soft)',
+                color: 'var(--danger-text)',
                 fontSize: '0.82rem',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -576,12 +577,12 @@ export const HistoryPage: React.FC = () => {
               gap: '12px',
               transition: 'background-color 0.3s ease, border-color 0.3s ease'
             }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(34, 197, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4ade80' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(34, 197, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success-text)' }}>
                 <CheckCircle size={18} />
               </div>
               <div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Успешность</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4ade80' }}>{stats.success_rate}%</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success-text)' }}>{stats.success_rate}%</div>
               </div>
             </div>
 
@@ -595,12 +596,12 @@ export const HistoryPage: React.FC = () => {
               gap: '12px',
               transition: 'background-color 0.3s ease, border-color 0.3s ease'
             }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'var(--danger-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger-text)' }}>
                 <AlertTriangle size={18} />
               </div>
               <div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Ошибки</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: stats.error_count > 0 ? '#f87171' : '#4ade80' }}>{stats.error_count}</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: stats.error_count > 0 ? 'var(--danger-text)' : 'var(--success-text)' }}>{stats.error_count}</div>
               </div>
             </div>
 
@@ -650,7 +651,7 @@ export const HistoryPage: React.FC = () => {
                   whiteSpace: 'nowrap',
                   backgroundColor: quickPreset === preset.key ? 'var(--accent)' : 'var(--bg-card)',
                   color: quickPreset === preset.key ? '#ffffff' : 'var(--text-muted)',
-                  transition: 'all 0.15s ease'
+                  transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
                 }}
               >
                 {preset.label}
@@ -690,7 +691,7 @@ export const HistoryPage: React.FC = () => {
               color: 'var(--text-main)',
               fontSize: '0.84rem',
               outline: 'none',
-              transition: 'all 0.15s ease'
+              transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
             }}
           />
           {searchQuery && (
@@ -708,7 +709,7 @@ export const HistoryPage: React.FC = () => {
           {/* Account Filter Pill */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <User size={13} style={{ position: 'absolute', left: '10px', color: 'var(--accent-text)', pointerEvents: 'none' }} />
-            <select
+            <Select
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
               style={{
@@ -722,7 +723,7 @@ export const HistoryPage: React.FC = () => {
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
               }}
             >
               <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Аккаунт: Все</option>
@@ -731,14 +732,14 @@ export const HistoryPage: React.FC = () => {
                   {acc.label}
                 </option>
               ))}
-            </select>
+            </Select>
             <ChevronDown size={12} style={{ position: 'absolute', right: '8px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           </div>
 
           {/* Action Type Filter Pill */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Tag size={13} style={{ position: 'absolute', left: '10px', color: 'var(--accent-text)', pointerEvents: 'none' }} />
-            <select
+            <Select
               value={selectedAction}
               onChange={(e) => setSelectedAction(e.target.value)}
               style={{
@@ -752,7 +753,7 @@ export const HistoryPage: React.FC = () => {
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
               }}
             >
        <option value="bot_actions" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}> Действия ботов (без спама)</option>
@@ -763,14 +764,14 @@ export const HistoryPage: React.FC = () => {
                   {act}
                 </option>
               ))}
-            </select>
+            </Select>
             <ChevronDown size={12} style={{ position: 'absolute', right: '8px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           </div>
 
           {/* Status Filter Pill */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <ShieldCheck size={13} style={{ position: 'absolute', left: '10px', color: 'var(--accent-text)', pointerEvents: 'none' }} />
-            <select
+            <Select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
               style={{
@@ -784,21 +785,21 @@ export const HistoryPage: React.FC = () => {
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
               }}
             >
               <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Статус: Все</option>
               <option value="ok" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>ok (Успешно)</option>
               <option value="error" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Ошибка</option>
               <option value="warning" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Пауза / Flood</option>
-            </select>
+            </Select>
             <ChevronDown size={12} style={{ position: 'absolute', right: '8px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           </div>
 
           {/* Period Filter Pill */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Calendar size={13} style={{ position: 'absolute', left: '10px', color: 'var(--accent-text)', pointerEvents: 'none' }} />
-            <select
+            <Select
               value={selectedPeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
               style={{
@@ -812,14 +813,14 @@ export const HistoryPage: React.FC = () => {
                 outline: 'none',
                 cursor: 'pointer',
                 appearance: 'none',
-                transition: 'all 0.15s ease'
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
               }}
             >
               <option value="all" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Период: Все время</option>
               <option value="today" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>Сегодня</option>
               <option value="24h" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>За 24 часа</option>
               <option value="7d" style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-main)' }}>За 7 дней</option>
-            </select>
+            </Select>
             <ChevronDown size={12} style={{ position: 'absolute', right: '8px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           </div>
 
@@ -872,7 +873,7 @@ export const HistoryPage: React.FC = () => {
                     border: '1px solid var(--border-color)',
                     borderLeft: `4px solid ${statusMeta.border}`,
                     padding: '14px 18px',
-                    transition: 'all 0.15s ease',
+                    transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                   }}
                 >
@@ -980,7 +981,7 @@ export const HistoryPage: React.FC = () => {
                       {!isExpanded ? (
                         <div style={{
                           fontSize: '0.8rem',
-                          color: log.status === 'error' ? '#f87171' : 'var(--text-muted)',
+                          color: log.status === 'error' ? 'var(--danger-text)' : 'var(--text-muted)',
                           fontFamily: 'monospace',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -1040,7 +1041,7 @@ export const HistoryPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Terminal size={16} style={{ color: 'var(--accent-text)' }} />
               <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>TG_ACTOR_STREAM_LOGGER v3.0</span>
-       <span style={{ color: '#34d399', fontSize: '0.72rem' }}>● LIVE</span>
+       <span style={{ color: 'var(--success-text)', fontSize: '0.72rem' }}>● LIVE</span>
             </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}>
@@ -1075,9 +1076,9 @@ export const HistoryPage: React.FC = () => {
               </div>
             ) : (
               logs.map((log) => {
-                let statusColor = '#4ade80';
-                if (log.status === 'error') statusColor = '#f87171';
-                else if (log.status === 'warning' || log.status === 'cooldown') statusColor = '#fbbf24';
+                let statusColor = 'var(--success-text)';
+                if (log.status === 'error') statusColor = 'var(--danger-text)';
+                else if (log.status === 'warning' || log.status === 'cooldown') statusColor = 'var(--warning-text)';
 
                 return (
                   <div
@@ -1190,7 +1191,7 @@ export const HistoryPage: React.FC = () => {
                           {log.target || '-'}
                         </td>
 
-                        <td style={{ padding: '10px 14px', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.78rem', color: log.status === 'error' ? '#f87171' : 'var(--text-muted)' }}>
+                        <td style={{ padding: '10px 14px', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '0.78rem', color: log.status === 'error' ? 'var(--danger-text)' : 'var(--text-muted)' }}>
                           {log.details || '-'}
                         </td>
 
@@ -1448,15 +1449,15 @@ export const HistoryPage: React.FC = () => {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.88rem', cursor: 'pointer', color: 'var(--text-main)' }}>
-                <input type="radio" name="clear_mode" checked={clearMode === 'all'} onChange={() => setClearMode('all')} style={{ accentColor: '#f87171' }} />
+                <input type="radio" name="clear_mode" checked={clearMode === 'all'} onChange={() => setClearMode('all')} style={{ accentColor: 'var(--danger-text)' }} />
                 Полностью очистить ВСЕ логи
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.88rem', cursor: 'pointer', color: 'var(--text-main)' }}>
-                <input type="radio" name="clear_mode" checked={clearMode === '7days'} onChange={() => setClearMode('7days')} style={{ accentColor: '#f87171' }} />
+                <input type="radio" name="clear_mode" checked={clearMode === '7days'} onChange={() => setClearMode('7days')} style={{ accentColor: 'var(--danger-text)' }} />
                 Удалить логи старше 7 дней
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.88rem', cursor: 'pointer', color: 'var(--text-main)' }}>
-                <input type="radio" name="clear_mode" checked={clearMode === '30days'} onChange={() => setClearMode('30days')} style={{ accentColor: '#f87171' }} />
+                <input type="radio" name="clear_mode" checked={clearMode === '30days'} onChange={() => setClearMode('30days')} style={{ accentColor: 'var(--danger-text)' }} />
                 Удалить логи старше 30 дней
               </label>
             </div>
@@ -1483,7 +1484,7 @@ export const HistoryPage: React.FC = () => {
                   padding: '8px 18px',
                   borderRadius: '8px',
                   border: 'none',
-                  backgroundColor: '#ef4444',
+                  backgroundColor: 'var(--danger)',
                   color: '#ffffff',
                   fontSize: '0.88rem',
                   fontWeight: 700,

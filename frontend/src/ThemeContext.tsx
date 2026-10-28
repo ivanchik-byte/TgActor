@@ -14,30 +14,30 @@ export interface ThemeOption {
 export const AVAILABLE_THEMES: ThemeOption[] = [
   {
     id: 'dark-crimson',
-    label: 'Dark Crimson',
-    accentColor: '#b91c3d',
-    bgColor: '#110a0c',
-    description: 'Темно-красная тема: фирменный стиль по умолчанию',
+    label: 'Бордо',
+    accentColor: '#a04a5e',
+    bgColor: '#201a1b',
+    description: 'Приглушённый бордовый акцент и тёплый графит',
   },
   {
     id: 'deep-indigo',
-    label: 'Deep Indigo',
-    accentColor: '#8b5cf6',
-    bgColor: '#0f0d1a',
-    description: 'Глубокий индиго, фиолетовая темная тема',
+    label: 'Сланец',
+    accentColor: '#507c9c',
+    bgColor: '#171b23',
+    description: 'Холодный сланец и сдержанный стальной акцент',
   },
   {
     id: 'dark-charcoal',
-    label: 'Dark Charcoal',
-    accentColor: '#60a5fa',
-    bgColor: '#0a0a0a',
+    label: 'Графит',
+    accentColor: '#388665',
+    bgColor: '#141b18',
     description: 'Угольно-черная нейтральная тема с высокой контрастностью',
   },
   {
     id: 'light',
-    label: 'Light',
-    accentColor: '#b91c3d',
-    bgColor: '#f5f5f4',
+    label: 'Светлая',
+    accentColor: '#24785c',
+    bgColor: '#f5f6f3',
     description: 'Светлая чистая тема для дневной работы',
   },
 ];
@@ -73,19 +73,19 @@ const THEME_CLASS_MAP: Record<Theme, string[]> = {
 };
 
 const THEME_META_COLORS: Record<Theme, string> = {
-  'deep-indigo': '#0f0d1a',
-  'dark-crimson': '#110a0c',
-  'dark-charcoal': '#0a0a0a',
-  'light': '#f5f5f4',
+  'deep-indigo': '#171b23',
+  'dark-crimson': '#201a1b',
+  'dark-charcoal': '#141b18',
+  'light': '#f5f6f3',
 };
 
 function normalizeTheme(raw: string | null): Theme {
-  if (!raw) return 'dark-crimson';
+  if (!raw) return 'light';
   if (raw === 'deep-indigo' || raw === 'theme-indigo') return 'deep-indigo';
   if (raw === 'dark-crimson' || raw === 'theme-crimson') return 'dark-crimson';
   if (raw === 'dark-charcoal' || raw === 'theme-charcoal') return 'dark-charcoal';
   if (raw === 'light' || raw === 'theme-light') return 'light';
-  return 'dark-crimson';
+  return 'light';
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -94,7 +94,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY);
       return normalizeTheme(saved);
     } catch {
-      return 'dark-crimson';
+      return 'light';
     }
   });
 
@@ -141,7 +141,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       metaThemeColor.setAttribute('name', 'theme-color');
       document.head.appendChild(metaThemeColor);
     }
-    metaThemeColor.setAttribute('content', THEME_META_COLORS[theme] || '#0f0d1a');
+    metaThemeColor.setAttribute('content', THEME_META_COLORS[theme] || '#171b23');
   }, [theme]);
 
   const value = useMemo(

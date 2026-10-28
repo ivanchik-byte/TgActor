@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
+import {
+  CheckCircle as CheckCircle2,
+  WarningCircle as AlertCircle,
+  Warning as AlertTriangle,
+  Info,
+  X
+} from '@phosphor-icons/react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 

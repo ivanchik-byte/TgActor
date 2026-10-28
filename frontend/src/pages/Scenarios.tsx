@@ -1,8 +1,29 @@
+import Select from '../components/Select';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Trash2, Paperclip, Plus, Sparkles, MessageSquare, Settings, Play, AlertTriangle, PlusCircle, Save, Download, Upload, GripVertical, Bot, Zap, CheckCircle2, X, BookOpen, ChevronDown } from 'lucide-react';
+import {
+  Trash as Trash2,
+  Paperclip,
+  Plus,
+  Sparkle as Sparkles,
+  ChatCircleText as MessageSquare,
+  GearSix as Settings,
+  Play,
+  Warning as AlertTriangle,
+  PlusCircle,
+  FloppyDisk as Save,
+  DownloadSimple as Download,
+  UploadSimple as Upload,
+  DotsSixVertical as GripVertical,
+  Robot as Bot,
+  Lightning as Zap,
+  CheckCircle as CheckCircle2,
+  X,
+  BookOpenText as BookOpen,
+  CaretDown as ChevronDown
+} from '@phosphor-icons/react';
 import { useToast } from '../components/ToastContext';
 
 interface Replica {
@@ -515,18 +536,7 @@ export default function Scenarios() {
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const getRoleColor = (roleId: string) => {
-    const colors = [
-      '#3b82f6', // blue-500
-      '#10b981', // emerald-500
-      '#8b5cf6', // violet-500
-      '#ec4899', // pink-500
-      '#f59e0b', // amber-500
-      '#ef4444', // red-500
-      '#14b8a6', // teal-500
-      '#f97316', // orange-500
-      '#06b6d4', // cyan-500
-      '#6366f1', // indigo-500
-    ];
+    const colors = ['#436d58', '#647c93', '#9c7861', '#8c788f', '#8c7c4f', '#a26464', '#537d76'];
     const num = parseInt(roleId) || 0;
     if (isNaN(num)) {
       let hash = 0;
@@ -812,7 +822,7 @@ export default function Scenarios() {
     borderRadius: '16px',
     padding: '24px',
     marginBottom: '20px',
-    transition: 'all 0.25s ease',
+    transition: 'background-color 240ms, border-color 240ms, color 240ms, transform 240ms',
   };
 
   const inputStyle: React.CSSProperties = {
@@ -824,7 +834,7 @@ export default function Scenarios() {
     fontSize: '13px',
     color: 'var(--text-main)',
     outline: 'none',
-    transition: 'all 0.15s ease',
+    transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
   };
 
   const textareaStyle: React.CSSProperties = {
@@ -871,7 +881,7 @@ export default function Scenarios() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'all 0.15s ease',
+          transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
         }}
       >
         {checked && (
@@ -893,7 +903,7 @@ export default function Scenarios() {
           top: 0,
           left: 0,
           width: '100vw',
-          height: '100vh',
+          height: '100dvh',
           backgroundColor: 'rgba(0,0,0,0.6)',
           display: 'flex',
           alignItems: 'center',
@@ -929,7 +939,7 @@ export default function Scenarios() {
                 }}
                 style={{
                   flex: 1,
-                  backgroundColor: '#ef4444',
+                  backgroundColor: 'var(--danger)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '10px',
@@ -992,7 +1002,7 @@ export default function Scenarios() {
           }}>
             <div>
               <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Play className="w-5 h-5 text-emerald-500 fill-current" />
+                <Play className="w-5 h-5 text-[var(--success-text)] fill-current" />
                 Запуск сценария в Telegram
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4' }}>
@@ -1029,7 +1039,7 @@ export default function Scenarios() {
                 disabled={!execTarget.trim() || executeScenarioMutation.isPending}
                 style={{
                   flex: 1,
-                  backgroundColor: '#10b981',
+                  backgroundColor: 'var(--success)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '10px',
@@ -1131,7 +1141,7 @@ export default function Scenarios() {
                           backgroundColor: 'var(--bg-main)',
                           color: 'var(--text-main)',
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease',
+                          transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                         }}
                       >
                         {p.name}
@@ -1237,9 +1247,9 @@ export default function Scenarios() {
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: '8px',
-                backgroundColor: aiTestResult.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                backgroundColor: aiTestResult.type === 'success' ? 'var(--success-soft)' : 'var(--danger-soft)',
                 border: aiTestResult.type === 'success' ? '1px solid rgba(34, 197, 94, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
-                color: aiTestResult.type === 'success' ? '#4ade80' : '#f87171',
+                color: aiTestResult.type === 'success' ? 'var(--success-text)' : 'var(--danger-text)',
                 wordBreak: 'break-word'
               }}>
                 {aiTestResult.type === 'success' ? <CheckCircle2 className="w-4 h-4" style={{ flexShrink: 0, marginTop: '1px' }} /> : <AlertTriangle className="w-4 h-4" style={{ flexShrink: 0, marginTop: '1px' }} />}
@@ -1335,14 +1345,13 @@ export default function Scenarios() {
       )}
 
       {/* Top Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div className="scenarios-heading" data-page-header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sparkles className="w-6 h-6 text-accent" />
-            Конструктор диалогов
+          <span className="eyebrow">АВТОМАТИЗАЦИЯ / СЦЕНАРИИ</span><h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            Сценарии диалогов
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-            Управление сценариями и автоматизация цепочек ответов с прокси-аккаунтов.
+            Собирайте диалоги по шагам и управляйте автоматическими ответами.
           </p>
         </div>
 
@@ -1361,7 +1370,7 @@ export default function Scenarios() {
             fontWeight: 600,
             cursor: 'pointer',
             boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
-            transition: 'all 0.15s ease'
+            transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
           }}
         >
           <Bot className="w-4 h-4 text-accent" />
@@ -1369,8 +1378,8 @@ export default function Scenarios() {
         </button>
       </div>
 
-      <div style={pageContainerStyle}>
-        <div style={scenariosSidebarStyle}>
+      <div className="scenarios-layout" style={pageContainerStyle}>
+        <div className="scenarios-list" style={scenariosSidebarStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Сценарии</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1470,7 +1479,7 @@ export default function Scenarios() {
                       width: '6px',
                       height: '6px',
                       borderRadius: '50%',
-                      backgroundColor: s.is_active ? '#22c55e' : '#737373',
+                      backgroundColor: s.is_active ? 'var(--success)' : '#737373',
                       flexShrink: 0
                     }} />
                     <span style={{
@@ -1510,7 +1519,7 @@ export default function Scenarios() {
                       }}
                       title="Удалить сценарий"
                     >
-                      <Trash2 className="w-3.5 h-3.5 hover:text-red-500" />
+                      <Trash2 className="w-3.5 h-3.5 hover:text-[var(--danger-text)]" />
                     </button>
                   </div>
                 </div>
@@ -1525,7 +1534,7 @@ export default function Scenarios() {
         </div>
 
         {/* COLUMN 2: Message steps editor */}
-        <div style={stepsColumnStyle}>
+        <div className="scenarios-editor" style={stepsColumnStyle}>
           {activeScenarioId ? (
             <>
               {/* Header Bar: Prompt Studio & Library & Add/Save Steps */}
@@ -1583,7 +1592,7 @@ export default function Scenarios() {
                           alignItems: 'center',
                           gap: '6px'
                         }}
-                        className="hover:border-[var(--accent)] transition-all active:scale-[0.98]"
+                        className="hover:border-[var(--accent)] transition-colors active:scale-[0.98]"
                       >
                         <BookOpen className="w-3.5 h-3.5 text-accent" />
                         <span>Шаблоны из Библиотеки</span>
@@ -1620,14 +1629,14 @@ export default function Scenarios() {
                                     handleApplyLibraryTemplate(t);
                                     setIsTemplateDropdownOpen(false);
                                   }}
-                                  className="w-full p-2 rounded-lg text-left hover:bg-[var(--bg-card-hover)] transition-all flex flex-col gap-1 cursor-pointer border border-transparent hover:border-[var(--border-color)] group"
+                                  className="w-full p-2 rounded-lg text-left hover:bg-[var(--bg-card-hover)] transition-colors flex flex-col gap-1 cursor-pointer border border-transparent hover:border-[var(--border-color)] group"
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <span className="text-xs font-bold text-[var(--text-main)] group-hover:text-[var(--accent-text)] transition-colors truncate">
                                       {t.title}
                                     </span>
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${t.mode === 'dynamic' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-sky-500/15 text-sky-400'}`}>
+                                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${t.mode === 'dynamic' ? 'bg-[var(--success-soft)] text-[var(--success-text)]' : 'bg-[var(--accent-soft)] text-[var(--accent-text)]'}`}>
                                         {t.mode === 'dynamic' ? 'ИИ' : 'Текст'}
                                       </span>
                                       {stepCount > 0 && (
@@ -1834,13 +1843,13 @@ export default function Scenarios() {
                             style={{
                               background: 'none',
                               border: '1px solid rgba(239, 68, 68, 0.2)',
-                              color: '#ef4444',
+                              color: 'var(--danger)',
                               padding: '6px',
                               borderRadius: '8px',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                              backgroundColor: 'var(--danger-soft)',
                             }}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1848,7 +1857,7 @@ export default function Scenarios() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '32px' }}>
+                      <div className="scenario-step-grid" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr', gap: '32px' }}>
                         {/* Left Column: Text & Attachments */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1943,9 +1952,9 @@ export default function Scenarios() {
                                   onClick={() => handleUpdateReplica(replica.id, 'fileName', '')}
                                   style={{
                                     ...btnSecondary,
-                                    color: '#ef4444',
+                                    color: 'var(--danger)',
                                     borderColor: 'rgba(239, 68, 68, 0.3)',
-                                    backgroundColor: 'rgba(239, 68, 68, 0.05)'
+                                    backgroundColor: 'var(--danger-soft)'
                                   }}
                                 >
                                   Удалить файл
@@ -1964,7 +1973,7 @@ export default function Scenarios() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           <div>
                             <label style={labelStyle}>Персонаж (ID роли)</label>
-                            <select
+                            <Select
                               value={selectedRole}
                               onChange={e => handleUpdateReplica(replica.id, 'role', e.target.value)}
                               style={inputStyle}
@@ -1985,12 +1994,12 @@ export default function Scenarios() {
                                   ))}
                                 </optgroup>
                               )}
-                            </select>
+                            </Select>
                           </div>
 
                           <div>
                             <label style={labelStyle}>Формат отправки</label>
-                            <select
+                            <Select
                               value={replica.type}
                               onChange={e => {
                                 const val = e.target.value as 'normal' | 'reply';
@@ -2005,7 +2014,7 @@ export default function Scenarios() {
                               {precedingReplicas.length > 0 && (
                                 <option value="reply">Ответ (Reply)</option>
                               )}
-                            </select>
+                            </Select>
                           </div>
 
                           {replica.type === 'reply' && precedingReplicas.length > 0 && (
@@ -2016,7 +2025,7 @@ export default function Scenarios() {
                               borderRadius: '10px',
                             }}>
                               <label style={labelStyle}>На какое сообщение ответить?</label>
-                              <select
+                              <Select
                                 value={replica.replyToId}
                                 onChange={e => handleUpdateReplica(replica.id, 'replyToId', e.target.value)}
                                 style={inputStyle}
@@ -2026,7 +2035,7 @@ export default function Scenarios() {
                                     Шаг №{prIdx + 1} - {pr.text ? `"${pr.text.substring(0, 30)}..."` : 'Без текста'}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                             </div>
                           )}
 
@@ -2104,8 +2113,8 @@ export default function Scenarios() {
                             {replica.reactionSource === 'ai_smart' && (
                               <div style={{
                                 fontSize: '11px',
-                                color: '#4ade80',
-                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                color: 'var(--success-text)',
+                                backgroundColor: 'var(--success-soft)',
                                 border: '1px solid rgba(34, 197, 94, 0.25)',
                                 padding: '8px 10px',
                                 borderRadius: '8px',
@@ -2204,7 +2213,7 @@ export default function Scenarios() {
 
         {/* COLUMN 3: Scenario config + Live Preview */}
         {activeScenarioId && (
-          <div style={rightColumnStyle}>
+          <div className="scenarios-settings" style={rightColumnStyle}>
             {/* Scenario Global Settings */}
             <div style={{
               backgroundColor: 'var(--bg-card)',
@@ -2249,7 +2258,7 @@ export default function Scenarios() {
                         padding: '2px 6px',
                         borderRadius: '4px',
                         backgroundColor: scenarioWeight >= 8 ? 'rgba(239,68,68,0.15)' : scenarioWeight >= 4 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)',
-                        color: scenarioWeight >= 8 ? '#ef4444' : scenarioWeight >= 4 ? '#f59e0b' : '#10b981'
+                        color: scenarioWeight >= 8 ? 'var(--danger)' : scenarioWeight >= 4 ? 'var(--warning)' : 'var(--success)'
                       }}>
                         {scenarioWeight >= 8 ? 'Высокий' : scenarioWeight >= 4 ? 'Средний' : 'Низкий'}
                       </span>
@@ -2286,7 +2295,7 @@ export default function Scenarios() {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Аккаунтов в пуле:</span>
-                      <span style={{ fontWeight: 700, color: commentingAccounts.length > 0 ? '#10b981' : '#ef4444' }}>
+                      <span style={{ fontWeight: 700, color: commentingAccounts.length > 0 ? 'var(--success)' : 'var(--danger)' }}>
                         {commentingAccounts.length} активных
                       </span>
                     </div>
@@ -2304,7 +2313,7 @@ export default function Scenarios() {
                       fontSize: '13px',
                       fontWeight: 700,
                       cursor: 'pointer',
-                      transition: 'all 0.15s ease',
+                      transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                       opacity: updateScenarioMutation.isPending ? 0.5 : 1
                     }}
                   >
@@ -2329,7 +2338,7 @@ export default function Scenarios() {
                 alignItems: 'center',
                 gap: '6px',
               }}>
-                <Play className="w-4 h-4 text-emerald-500" />
+                <Play className="w-4 h-4 text-[var(--success-text)]" />
                 Симуляция чата
               </h3>
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: '1.4' }}>

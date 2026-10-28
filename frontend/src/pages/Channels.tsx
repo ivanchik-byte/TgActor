@@ -1,13 +1,29 @@
+import Select from '../components/Select';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
-  Radio, Trash2, Plus, Power, PowerOff, Loader2,
-  Clock, Search, ExternalLink, Activity,
-  ShieldAlert, Layers, Terminal, Check, LogIn,
-  Zap, ShieldCheck, Settings,
-  Megaphone, RotateCw
-} from 'lucide-react';
+  Broadcast as Radio,
+  Trash as Trash2,
+  Plus,
+  Power,
+  Power as PowerOff,
+  CircleNotch as Loader2,
+  Clock,
+  MagnifyingGlass as Search,
+  ArrowSquareOut as ExternalLink,
+  Pulse as Activity,
+  ShieldWarning as ShieldAlert,
+  Stack as Layers,
+  Terminal,
+  Check,
+  SignIn as LogIn,
+  Lightning as Zap,
+  ShieldCheck,
+  GearSix as Settings,
+  Megaphone,
+  ArrowClockwise as RotateCw
+} from '@phosphor-icons/react';
 import { useToast } from '../components/ToastContext';
 import { ModalOverlay } from '../components/ModalOverlay';
 
@@ -355,7 +371,7 @@ export default function Channels() {
         onClose={() => setConfirmDeleteId(null)}
         title="Удаление канала"
         subtitle="Канал будет исключен из очереди автоматического мониторинга"
-        icon={<ShieldAlert className="w-5 h-5 text-red-500" />}
+        icon={<ShieldAlert className="w-5 h-5 text-[var(--danger-text)]" />}
         footer={
           <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
             <button
@@ -372,7 +388,7 @@ export default function Channels() {
               onClick={() => confirmDeleteId && deleteChannel.mutate(confirmDeleteId)}
               disabled={deleteChannel.isPending}
               style={{
-                flex: 1, backgroundColor: '#ef4444', color: '#fff', border: 'none',
+                flex: 1, backgroundColor: 'var(--danger)', color: '#fff', border: 'none',
                 borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: 700,
                 cursor: deleteChannel.isPending ? 'not-allowed' : 'pointer',
                 opacity: deleteChannel.isPending ? 0.6 : 1,
@@ -450,7 +466,7 @@ export default function Channels() {
                     padding: '10px', borderRadius: '10px',
                     border: (editingChannel.execution_mode || 'scenario') === 'scenario' ? '1px solid #10b981' : '1px solid var(--border-color)',
                     backgroundColor: (editingChannel.execution_mode || 'scenario') === 'scenario' ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-main)',
-                    color: (editingChannel.execution_mode || 'scenario') === 'scenario' ? '#10b981' : 'var(--text-muted)',
+                    color: (editingChannel.execution_mode || 'scenario') === 'scenario' ? 'var(--success)' : 'var(--text-muted)',
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', fontWeight: 700
                   }}
                 >
@@ -462,9 +478,9 @@ export default function Channels() {
                   onClick={() => setEditingChannel({ ...editingChannel, execution_mode: 'first_comment' })}
                   style={{
                     padding: '10px', borderRadius: '10px',
-                    border: editingChannel.execution_mode === 'first_comment' ? '1px solid #6366f1' : '1px solid var(--border-color)',
-                    backgroundColor: editingChannel.execution_mode === 'first_comment' ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-main)',
-                    color: editingChannel.execution_mode === 'first_comment' ? '#818cf8' : 'var(--text-muted)',
+                    border: editingChannel.execution_mode === 'first_comment' ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                    backgroundColor: editingChannel.execution_mode === 'first_comment' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg-main)',
+                    color: editingChannel.execution_mode === 'first_comment' ? 'var(--accent-text)' : 'var(--text-muted)',
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', fontWeight: 700
                   }}
                 >
@@ -477,7 +493,7 @@ export default function Channels() {
             {/* First Comment Custom Settings in Modal */}
             {editingChannel.execution_mode === 'first_comment' && (
               <div style={{
-                backgroundColor: 'var(--bg-main)', border: '1px solid rgba(99, 102, 241, 0.25)',
+                backgroundColor: 'var(--bg-main)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
                 borderRadius: '14px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px'
               }}>
                 {/* Sender Account */}
@@ -485,7 +501,7 @@ export default function Channels() {
                   <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                     Рабочий аккаунт
                   </label>
-                  <select
+                  <Select
                     value={editingChannel.sender_account_id || ''}
                     onChange={e => setEditingChannel({ ...editingChannel, sender_account_id: e.target.value ? Number(e.target.value) : null })}
                     style={{
@@ -499,7 +515,7 @@ export default function Channels() {
                         ID #{acc.id} {acc.custom_name ? `• ${acc.custom_name}` : ''} ({acc.username ? `@${acc.username}` : acc.phone})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 {/* Send As Channel Toggle */}
@@ -508,20 +524,20 @@ export default function Channels() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
                     padding: '10px 12px', borderRadius: '10px',
-                    backgroundColor: editSendAsChannelToggle ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-card)',
-                    border: `1px solid ${editSendAsChannelToggle ? 'rgba(99, 102, 241, 0.35)' : 'var(--border-color)'}`
+                    backgroundColor: editSendAsChannelToggle ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-card)',
+                    border: `1px solid ${editSendAsChannelToggle ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'var(--border-color)'}`
                   }}
                 >
                   <div style={{
                     width: '20px', height: '20px', borderRadius: '6px',
-                    backgroundColor: editSendAsChannelToggle ? '#6366f1' : 'transparent',
-                    border: `1px solid ${editSendAsChannelToggle ? '#6366f1' : 'var(--border-color)'}`,
+                    backgroundColor: editSendAsChannelToggle ? 'var(--accent-text)' : 'transparent',
+                    border: `1px solid ${editSendAsChannelToggle ? 'var(--accent-text)' : 'var(--border-color)'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0
                   }}>
                     {editSendAsChannelToggle && <Check className="w-3.5 h-3.5" />}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Megaphone className="w-4 h-4 text-indigo-400" />
+                    <Megaphone className="w-4 h-4 text-[var(--accent-text)]" />
                     <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
                       От лица канала ({editSendAsChannelToggle ? 'ВКЛ' : 'ВЫКЛ'})
                     </span>
@@ -542,7 +558,7 @@ export default function Channels() {
                           disabled={isEditAdminChannelsLoading || !editingChannel.sender_account_id}
                           style={{
                             display: 'flex', alignItems: 'center', gap: '4px',
-                            backgroundColor: 'transparent', border: 'none', color: '#818cf8', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                            backgroundColor: 'transparent', border: 'none', color: 'var(--accent-text)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
                           }}
                         >
                           <RotateCw className={`w-3 h-3 ${isEditAdminChannelsLoading ? 'animate-spin' : ''}`} />
@@ -561,7 +577,7 @@ export default function Channels() {
                     </div>
 
                     {!editManualChannelInput && editAdminChannels.length > 0 ? (
-                      <select
+                      <Select
                         value={editingChannel.send_as_channel_username || ''}
                         onChange={e => setEditingChannel({ ...editingChannel, send_as_channel_username: e.target.value })}
                         style={{
@@ -575,7 +591,7 @@ export default function Channels() {
                             {c.title} {c.username ? `(@${c.username})` : `(ID: ${c.id})`} {c.is_creator ? '• Создатель' : '• Админ'}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     ) : (
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <input
@@ -593,8 +609,8 @@ export default function Channels() {
                           onClick={() => handleVerifySendAs(editingChannel.sender_account_id || '', editingChannel.send_as_channel_username || '', true)}
                           disabled={editVerifyState.loading}
                           style={{
-                            backgroundColor: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)',
-                            color: '#818cf8', borderRadius: '8px', padding: '0 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+                            backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                            color: 'var(--accent-text)', borderRadius: '8px', padding: '0 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
                           }}
                         >
                           {editVerifyState.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Проверить'}
@@ -648,8 +664,8 @@ export default function Channels() {
                 >
                   <div style={{
                     width: '18px', height: '18px', borderRadius: '4px',
-                    backgroundColor: editingChannel.skip_ads !== false ? '#10b981' : 'transparent',
-                    border: `1px solid ${editingChannel.skip_ads !== false ? '#10b981' : 'var(--border-color)'}`,
+                    backgroundColor: editingChannel.skip_ads !== false ? 'var(--success)' : 'transparent',
+                    border: `1px solid ${editingChannel.skip_ads !== false ? 'var(--success)' : 'var(--border-color)'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'
                   }}>
                     {editingChannel.skip_ads !== false && <Check className="w-3 h-3" />}
@@ -698,8 +714,8 @@ export default function Channels() {
         </ModalOverlay>
       )}
 
-      {/* Hero Control Station */}
-      <div style={{
+      {/* Monitoring controls */}
+      <div className="channels-heading" data-page-header style={{
         backgroundColor: 'var(--bg-card)',
         border: '1px solid var(--border-color)',
         borderRadius: '20px',
@@ -717,12 +733,12 @@ export default function Channels() {
             width: '52px',
             height: '52px',
             borderRadius: '16px',
-            backgroundColor: isRunning ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.1)',
+            backgroundColor: isRunning ? 'rgba(16, 185, 129, 0.12)' : 'var(--danger-soft)',
             border: `1px solid ${isRunning ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.25)'}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: isRunning ? '#10b981' : '#ef4444',
+            color: isRunning ? 'var(--success)' : 'var(--danger)',
             position: 'relative'
           }}>
             <Radio className="w-7 h-7" />
@@ -734,7 +750,7 @@ export default function Channels() {
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                backgroundColor: '#10b981',
+                backgroundColor: 'var(--success)',
                 border: '2px solid var(--bg-card)'
               }} />
             )}
@@ -742,26 +758,26 @@ export default function Channels() {
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+              <span className="eyebrow">УПРАВЛЕНИЕ / КАНАЛЫ</span><h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
                 Мониторинг каналов
               </h1>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
                 padding: '4px 10px', borderRadius: '20px',
-                backgroundColor: isRunning ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.08)',
+                backgroundColor: isRunning ? 'var(--success-soft)' : 'rgba(239, 68, 68, 0.08)',
                 border: `1px solid ${isRunning ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.2)'}`,
                 fontSize: '11px', fontWeight: 700,
-                color: isRunning ? '#10b981' : '#ef4444'
+                color: isRunning ? 'var(--success)' : 'var(--danger)'
               }}>
                 <span style={{
                   width: '6px', height: '6px', borderRadius: '50%',
-                  backgroundColor: isRunning ? '#10b981' : '#ef4444',
+                  backgroundColor: isRunning ? 'var(--success)' : 'var(--danger)',
                 }} />
-                {isRunning ? 'РАДАР АКТИВЕН' : 'МОНИТОРИНГ НА ПАУЗЕ'}
+                {isRunning ? 'Мониторинг активен' : 'На паузе'}
               </div>
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-              Автоматический перехват публикаций: диалоговые сценарии или мгновенный первый комментарий от имени канала.
+              Следите за новыми публикациями и управляйте автоматическими ответами.
             </p>
           </div>
         </div>
@@ -773,9 +789,9 @@ export default function Channels() {
               onClick={() => stopMonitor.mutate()}
               disabled={stopMonitor.isPending}
               style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                backgroundColor: 'var(--danger-soft)',
                 border: '1px solid rgba(239, 68, 68, 0.35)',
-                color: '#ef4444',
+                color: 'var(--danger)',
                 padding: '12px 22px',
                 borderRadius: '12px',
                 fontSize: '13px',
@@ -784,7 +800,7 @@ export default function Channels() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                transition: 'all 0.2s ease',
+                transition: 'background-color 180ms, border-color 180ms, color 180ms, transform 180ms',
                 boxShadow: '0 4px 12px rgba(239, 68, 68, 0.15)'
               }}
             >
@@ -807,7 +823,7 @@ export default function Channels() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                transition: 'all 0.2s ease',
+                transition: 'background-color 180ms, border-color 180ms, color 180ms, transform 180ms',
                 boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
                 opacity: (startMonitor.isPending || channels.length === 0) ? 0.5 : 1
               }}
@@ -843,7 +859,7 @@ export default function Channels() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            transition: 'all 0.2s ease'
+            transition: 'background-color 180ms, border-color 180ms, color 180ms, transform 180ms'
           }}
         >
           <Radio className="w-4 h-4" />
@@ -875,7 +891,7 @@ export default function Channels() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            transition: 'all 0.2s ease'
+            transition: 'background-color 180ms, border-color 180ms, color 180ms, transform 180ms'
           }}
         >
           <LogIn className="w-4 h-4" />
@@ -885,7 +901,7 @@ export default function Channels() {
               fontSize: '10px',
               padding: '2px 8px',
               borderRadius: '10px',
-              backgroundColor: '#10b981',
+              backgroundColor: 'var(--success)',
               color: '#fff',
               fontWeight: 800,
               display: 'flex',
@@ -934,13 +950,13 @@ export default function Channels() {
             }}>
               <div style={{
                 width: '42px', height: '42px', borderRadius: '12px',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981',
+                backgroundColor: 'var(--success-soft)', color: 'var(--success)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <Activity className="w-5 h-5" />
               </div>
               <div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--success)', letterSpacing: '-0.02em' }}>
                   {activeChannelsCount}
                 </div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -955,13 +971,13 @@ export default function Channels() {
             }}>
               <div style={{
                 width: '42px', height: '42px', borderRadius: '12px',
-                backgroundColor: 'rgba(99, 102, 241, 0.15)', color: '#818cf8',
+                backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent-text)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <Zap className="w-5 h-5" />
               </div>
               <div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: '#818cf8', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-text)', letterSpacing: '-0.02em' }}>
                   {firstCommentCount}
                 </div>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -976,7 +992,7 @@ export default function Channels() {
             }}>
               <div style={{
                 width: '42px', height: '42px', borderRadius: '12px',
-                backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308',
+                backgroundColor: 'rgba(234, 179, 8, 0.1)', color: 'var(--warning-text)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <Terminal className="w-5 h-5" />
@@ -992,8 +1008,8 @@ export default function Channels() {
             </div>
           </div>
 
-          {/* Main Workspace Layout */}
-          <div style={{
+          {/* Main workspace */}
+          <div className="channels-workspace" style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(340px, 440px) 1fr',
             gap: '24px',
@@ -1066,12 +1082,12 @@ export default function Channels() {
                       cursor: 'pointer',
                       border: addMode === 'scenario' ? '1px solid #10b981' : 'none',
                       backgroundColor: addMode === 'scenario' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                      color: addMode === 'scenario' ? '#10b981' : 'var(--text-muted)',
+                      color: addMode === 'scenario' ? 'var(--success)' : 'var(--text-muted)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      transition: 'all 0.15s ease'
+                      transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
                     }}
                   >
                     <Layers className="w-4 h-4" />
@@ -1091,14 +1107,14 @@ export default function Channels() {
                       fontSize: '12px',
                       fontWeight: 700,
                       cursor: 'pointer',
-                      border: addMode === 'first_comment' ? '1px solid #6366f1' : 'none',
-                      backgroundColor: addMode === 'first_comment' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-                      color: addMode === 'first_comment' ? '#818cf8' : 'var(--text-muted)',
+                      border: addMode === 'first_comment' ? '1px solid var(--accent)' : 'none',
+                      backgroundColor: addMode === 'first_comment' ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'transparent',
+                      color: addMode === 'first_comment' ? 'var(--accent-text)' : 'var(--text-muted)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      transition: 'all 0.15s ease'
+                      transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms'
                     }}
                   >
                     <Zap className="w-4 h-4" />
@@ -1140,15 +1156,15 @@ export default function Channels() {
               {/* FIRST COMMENT SPECIFIC SETTINGS */}
               {addMode === 'first_comment' && (
                 <div style={{
-                  backgroundColor: 'rgba(99, 102, 241, 0.06)',
-                  border: '1px solid rgba(99, 102, 241, 0.25)',
+                  backgroundColor: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
                   borderRadius: '14px',
                   padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '14px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#818cf8' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-text)' }}>
                     <Zap className="w-4 h-4" />
                     <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       Параметры первого комментария
@@ -1160,7 +1176,7 @@ export default function Channels() {
                     <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '6px', display: 'block' }}>
                       Рабочий аккаунт
                     </label>
-                    <select
+                    <Select
                       value={senderAccountId}
                       onChange={e => setSenderAccountId(e.target.value ? Number(e.target.value) : '')}
                       style={{
@@ -1174,7 +1190,7 @@ export default function Channels() {
                           ID #{acc.id} {acc.custom_name ? `• ${acc.custom_name}` : ''} ({acc.username ? `@${acc.username}` : acc.phone})
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   {/* Send As Channel Toggle */}
@@ -1183,20 +1199,20 @@ export default function Channels() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
                       padding: '10px 12px', borderRadius: '10px',
-                      backgroundColor: sendAsChannelToggle ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-main)',
-                      border: `1px solid ${sendAsChannelToggle ? 'rgba(99, 102, 241, 0.35)' : 'var(--border-color)'}`
+                      backgroundColor: sendAsChannelToggle ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-main)',
+                      border: `1px solid ${sendAsChannelToggle ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'var(--border-color)'}`
                     }}
                   >
                     <div style={{
                       width: '20px', height: '20px', borderRadius: '6px',
-                      backgroundColor: sendAsChannelToggle ? '#6366f1' : 'transparent',
-                      border: `1px solid ${sendAsChannelToggle ? '#6366f1' : 'var(--border-color)'}`,
+                      backgroundColor: sendAsChannelToggle ? 'var(--accent-text)' : 'transparent',
+                      border: `1px solid ${sendAsChannelToggle ? 'var(--accent-text)' : 'var(--border-color)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0
                     }}>
                       {sendAsChannelToggle && <Check className="w-3.5 h-3.5" />}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Megaphone className="w-4 h-4 text-indigo-400" />
+                      <Megaphone className="w-4 h-4 text-[var(--accent-text)]" />
                       <div>
                         <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>
                           От лица канала ({sendAsChannelToggle ? 'ВКЛ' : 'ВЫКЛ'})
@@ -1222,7 +1238,7 @@ export default function Channels() {
                             disabled={isAddAdminChannelsLoading || !senderAccountId}
                             style={{
                               display: 'flex', alignItems: 'center', gap: '4px',
-                              backgroundColor: 'transparent', border: 'none', color: '#818cf8', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
+                              backgroundColor: 'transparent', border: 'none', color: 'var(--accent-text)', fontSize: '11px', fontWeight: 600, cursor: 'pointer'
                             }}
                           >
                             <RotateCw className={`w-3 h-3 ${isAddAdminChannelsLoading ? 'animate-spin' : ''}`} />
@@ -1241,7 +1257,7 @@ export default function Channels() {
                       </div>
 
                       {!manualChannelInput && addAdminChannels.length > 0 ? (
-                        <select
+                        <Select
                           value={sendAsChannel}
                           onChange={e => setSendAsChannel(e.target.value)}
                           style={{
@@ -1255,7 +1271,7 @@ export default function Channels() {
                               {c.title} {c.username ? `(@${c.username})` : `(ID: ${c.id})`} {c.is_creator ? '• Создатель' : '• Админ'}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       ) : (
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <input
@@ -1273,8 +1289,8 @@ export default function Channels() {
                             onClick={() => handleVerifySendAs(senderAccountId, sendAsChannel, false)}
                             disabled={verifyState.loading}
                             style={{
-                              backgroundColor: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.35)',
-                              color: '#818cf8', borderRadius: '8px', padding: '0 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+                              backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                              color: 'var(--accent-text)', borderRadius: '8px', padding: '0 12px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
                             }}
                           >
                             {verifyState.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Проверить'}
@@ -1299,9 +1315,9 @@ export default function Channels() {
                           onClick={() => setCustomPrompt(p.prompt)}
                           style={{
                             padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
-                            backgroundColor: customPrompt === p.prompt ? 'rgba(99, 102, 241, 0.25)' : 'var(--bg-main)',
-                            border: `1px solid ${customPrompt === p.prompt ? '#6366f1' : 'var(--border-color)'}`,
-                            color: customPrompt === p.prompt ? '#818cf8' : 'var(--text-muted)',
+                            backgroundColor: customPrompt === p.prompt ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'var(--bg-main)',
+                            border: `1px solid ${customPrompt === p.prompt ? 'var(--accent-text)' : 'var(--border-color)'}`,
+                            color: customPrompt === p.prompt ? 'var(--accent-text)' : 'var(--text-muted)',
                             cursor: 'pointer'
                           }}
                         >
@@ -1327,14 +1343,14 @@ export default function Channels() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
                       padding: '10px 12px', borderRadius: '10px',
-                      backgroundColor: skipAds ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-main)',
+                      backgroundColor: skipAds ? 'var(--success-soft)' : 'var(--bg-main)',
                       border: `1px solid ${skipAds ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`
                     }}
                   >
                     <div style={{
                       width: '20px', height: '20px', borderRadius: '6px',
-                      backgroundColor: skipAds ? '#10b981' : 'transparent',
-                      border: `1px solid ${skipAds ? '#10b981' : 'var(--border-color)'}`,
+                      backgroundColor: skipAds ? 'var(--success)' : 'transparent',
+                      border: `1px solid ${skipAds ? 'var(--success)' : 'var(--border-color)'}`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0
                     }}>
                       {skipAds && <Check className="w-3.5 h-3.5" />}
@@ -1360,7 +1376,7 @@ export default function Channels() {
                   }}>
                     Пауза перед отправкой
                   </label>
-                  <span style={{ fontSize: '10px', color: '#818cf8', fontWeight: 600 }}>
+                  <span style={{ fontSize: '10px', color: 'var(--accent-text)', fontWeight: 600 }}>
                     {addMode === 'first_comment' ? 'Мгновенная реакция' : 'до старта ветки'}
                   </span>
                 </div>
@@ -1434,8 +1450,8 @@ export default function Channels() {
 
               {/* Auto-join Bots */}
               <div style={{
-                backgroundColor: autoJoinOnAdd ? 'rgba(99, 102, 241, 0.08)' : 'var(--bg-main)',
-                border: `1px solid ${autoJoinOnAdd ? 'rgba(99, 102, 241, 0.3)' : 'var(--border-color)'}`,
+                backgroundColor: autoJoinOnAdd ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-main)',
+                border: `1px solid ${autoJoinOnAdd ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--border-color)'}`,
                 borderRadius: '12px',
                 padding: '12px 14px',
                 display: 'flex',
@@ -1448,8 +1464,8 @@ export default function Channels() {
                 >
                   <div style={{
                     width: '20px', height: '20px', borderRadius: '6px',
-                    backgroundColor: autoJoinOnAdd ? '#6366f1' : 'transparent',
-                    border: `1px solid ${autoJoinOnAdd ? '#6366f1' : 'var(--border-color)'}`,
+                    backgroundColor: autoJoinOnAdd ? 'var(--accent-text)' : 'transparent',
+                    border: `1px solid ${autoJoinOnAdd ? 'var(--accent-text)' : 'var(--border-color)'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: '#fff', flexShrink: 0
                   }}>
@@ -1466,7 +1482,7 @@ export default function Channels() {
                 </div>
 
                 {autoJoinOnAdd && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px', borderTop: '1px solid rgba(99, 102, 241, 0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px', borderTop: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)' }}>
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Количество ботов:</span>
                     <div style={{ display: 'flex', gap: '4px' }}>
                       {[1, 2, 3, 5].map(n => (
@@ -1476,8 +1492,8 @@ export default function Channels() {
                           onClick={() => setAutoJoinCountOnAdd(n)}
                           style={{
                             padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700,
-                            border: autoJoinCountOnAdd === n ? '1px solid #6366f1' : '1px solid var(--border-color)',
-                            backgroundColor: autoJoinCountOnAdd === n ? '#6366f1' : 'var(--bg-main)',
+                            border: autoJoinCountOnAdd === n ? '1px solid var(--accent)' : '1px solid var(--border-color)',
+                            backgroundColor: autoJoinCountOnAdd === n ? 'var(--accent-text)' : 'var(--bg-main)',
                             color: autoJoinCountOnAdd === n ? '#fff' : 'var(--text-muted)',
                             cursor: 'pointer'
                           }}
@@ -1495,7 +1511,7 @@ export default function Channels() {
                 onClick={() => addChannels.mutate()}
                 disabled={!newChannels.trim() || addChannels.isPending}
                 style={{
-                  backgroundColor: addMode === 'first_comment' ? '#6366f1' : 'var(--accent)',
+                  backgroundColor: addMode === 'first_comment' ? 'var(--accent-text)' : 'var(--accent)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '12px',
@@ -1507,7 +1523,7 @@ export default function Channels() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  transition: 'all 0.2s ease',
+                  transition: 'background-color 180ms, border-color 180ms, color 180ms, transform 180ms',
                   opacity: (!newChannels.trim() || addChannels.isPending) ? 0.5 : 1
                 }}
               >
@@ -1539,8 +1555,8 @@ export default function Channels() {
                     </p>
                   </div>
 
-                  {/* Filter & Search Toolbar */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Filter and search */}
+                  <div className="channels-filter-toolbar" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
                       backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)',
@@ -1608,8 +1624,8 @@ export default function Channels() {
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             padding: '14px 18px', borderRadius: '14px',
                             backgroundColor: 'var(--bg-main)',
-                            border: `1px solid ${isFirstComment ? 'rgba(99, 102, 241, 0.25)' : 'var(--border-color)'}`,
-                            transition: 'all 0.15s ease',
+                            border: `1px solid ${isFirstComment ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'var(--border-color)'}`,
+                            transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                             opacity: ch.is_active ? 1 : 0.65,
                             flexWrap: 'wrap',
                             gap: '12px'
@@ -1619,8 +1635,8 @@ export default function Channels() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '220px' }}>
                             <div style={{
                               width: '36px', height: '36px', borderRadius: '10px',
-                              backgroundColor: isFirstComment ? 'rgba(99, 102, 241, 0.15)' : ch.is_active ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                              color: isFirstComment ? '#818cf8' : ch.is_active ? '#10b981' : '#ef4444',
+                              backgroundColor: isFirstComment ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : ch.is_active ? 'var(--success-soft)' : 'var(--danger-soft)',
+                              color: isFirstComment ? 'var(--accent-text)' : ch.is_active ? 'var(--success)' : 'var(--danger)',
                               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                             }}>
                               {isFirstComment ? <Zap className="w-4 h-4" /> : <Radio className="w-4 h-4" />}
@@ -1643,7 +1659,7 @@ export default function Channels() {
                                 {isFirstComment ? (
                                   <span style={{
                                     fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '6px',
-                                    backgroundColor: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                    backgroundColor: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: 'var(--accent-text)', display: 'inline-flex', alignItems: 'center', gap: '3px'
                                   }}>
                                     <Zap className="w-2.5 h-2.5" />
                                     {ch.send_as_mode === 'channel' && ch.send_as_channel_username ? `Канал: ${ch.send_as_channel_username}` : 'Первый комментарий'}
@@ -1651,7 +1667,7 @@ export default function Channels() {
                                 ) : (
                                   <span style={{
                                     fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '6px',
-                                    backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '3px'
+                                    backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '3px'
                                   }}>
                                     <Layers className="w-2.5 h-2.5" />
                                     Сценарий
@@ -1659,7 +1675,7 @@ export default function Channels() {
                                 )}
 
                                 {ch.skip_ads && isFirstComment && (
-                                  <span style={{ fontSize: '10px', color: '#10b981', display: 'inline-flex', alignItems: 'center' }} title="Фильтр рекламы активен">
+                                  <span style={{ fontSize: '10px', color: 'var(--success)', display: 'inline-flex', alignItems: 'center' }} title="Фильтр рекламы активен">
                                     <ShieldCheck className="w-3 h-3" />
                                   </span>
                                 )}
@@ -1667,8 +1683,8 @@ export default function Channels() {
                             </div>
                           </div>
 
-                          {/* Middle: Timing Controls */}
-                          <div style={{
+                          {/* Timing controls */}
+                          <div className="channel-timing" style={{
                             display: 'flex', alignItems: 'center', gap: '8px',
                             backgroundColor: 'var(--bg-card)', padding: '6px 10px', borderRadius: '10px',
                             border: '1px solid var(--border-color)'
@@ -1725,9 +1741,9 @@ export default function Channels() {
                               style={{
                                 display: 'flex', alignItems: 'center', gap: '4px',
                                 padding: '6px 10px', borderRadius: '8px',
-                                border: isFirstComment ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid rgba(16, 185, 129, 0.3)',
-                                backgroundColor: isFirstComment ? 'rgba(99, 102, 241, 0.15)' : 'rgba(16, 185, 129, 0.08)',
-                                color: isFirstComment ? '#818cf8' : '#10b981',
+                                border: isFirstComment ? '1px solid color-mix(in srgb, var(--accent) 40%, transparent)' : '1px solid rgba(16, 185, 129, 0.3)',
+                                backgroundColor: isFirstComment ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'rgba(16, 185, 129, 0.08)',
+                                color: isFirstComment ? 'var(--accent-text)' : 'var(--success)',
                                 fontSize: '11px', fontWeight: 700, cursor: 'pointer',
                                 transition: 'all 0.15s'
                               }}
@@ -1758,7 +1774,7 @@ export default function Channels() {
                                 padding: '6px 12px', borderRadius: '8px',
                                 backgroundColor: ch.is_active ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.08)',
                                 border: `1px solid ${ch.is_active ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.2)'}`,
-                                color: ch.is_active ? '#10b981' : '#ef4444',
+                                color: ch.is_active ? 'var(--success)' : 'var(--danger)',
                                 fontSize: '11px', fontWeight: 700, cursor: 'pointer',
                                 transition: 'all 0.15s'
                               }}
@@ -1776,7 +1792,7 @@ export default function Channels() {
                                 cursor: 'pointer', transition: 'all 0.15s'
                               }}
                               onMouseEnter={e => {
-                                e.currentTarget.style.color = '#ef4444';
+                                e.currentTarget.style.color = 'var(--danger)';
                                 e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
                               }}
                               onMouseLeave={e => {
@@ -1809,7 +1825,7 @@ export default function Channels() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{
                       width: '28px', height: '28px', borderRadius: '8px',
-                      backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308',
+                      backgroundColor: 'rgba(234, 179, 8, 0.1)', color: 'var(--warning-text)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
                       <Terminal className="w-4 h-4" />
@@ -1846,7 +1862,7 @@ export default function Channels() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{
                               width: '8px', height: '8px', borderRadius: '50%',
-                              backgroundColor: isSuccess ? '#10b981' : '#ef4444',
+                              backgroundColor: isSuccess ? 'var(--success)' : 'var(--danger)',
                               flexShrink: 0
                             }} />
                             <span style={{ fontSize: '12px', color: 'var(--text-main)', wordBreak: 'break-all' }}>
@@ -1885,7 +1901,7 @@ export default function Channels() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
+          <div className="channels-inviter" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px', display: 'block' }}>
@@ -1971,7 +1987,7 @@ export default function Channels() {
                     onClick={() => cancelSmoothJoinMutation.mutate()}
                     disabled={cancelSmoothJoinMutation.isPending}
                     style={{
-                      backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)',
+                      backgroundColor: 'var(--danger-soft)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.3)',
                       borderRadius: '12px', padding: '12px 18px', fontSize: '13px', fontWeight: 700, cursor: 'pointer'
                     }}
                   >
@@ -1993,7 +2009,7 @@ export default function Channels() {
                 <span style={{
                   fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px',
                   backgroundColor: smoothJoinStatus?.status === 'running' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
-                  color: smoothJoinStatus?.status === 'running' ? '#10b981' : 'var(--text-muted)'
+                  color: smoothJoinStatus?.status === 'running' ? 'var(--success)' : 'var(--text-muted)'
                 }}>
                   {smoothJoinStatus?.status === 'running' ? 'ВЫПОЛНЯЕТСЯ' : 'НЕ АКТИВЕН'}
                 </span>
@@ -2014,7 +2030,7 @@ export default function Channels() {
                       style={{
                         padding: '6px 10px', borderRadius: '6px',
                         backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                        color: item.startsWith('OK') || item.includes('Успешно') ? '#10b981' : item.includes('Ошибка') ? '#ef4444' : 'var(--text-main)'
+                        color: item.startsWith('OK') || item.includes('Успешно') ? 'var(--success)' : item.includes('Ошибка') ? 'var(--danger)' : 'var(--text-main)'
                       }}
                     >
                       {item}

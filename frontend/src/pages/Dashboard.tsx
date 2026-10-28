@@ -1,32 +1,33 @@
+import Select from '../components/Select';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
-  Upload,
-  Loader2,
+  UploadSimple as Upload,
+  CircleNotch as Loader2,
   Phone,
   Folder,
-  RefreshCw,
-  Trash2,
+  ArrowsClockwise as RefreshCw,
+  Trash as Trash2,
   User,
   X,
   Shield,
   Plus,
-  Search,
+  MagnifyingGlass as Search,
   Users,
-  AlertCircle,
-  MessageSquare,
+  WarningCircle as AlertCircle,
+  ChatCircleText as MessageSquare,
   Copy,
   Check,
   Globe,
-  Edit2,
-  ShieldAlert,
+  PencilSimple as Edit2,
+  ShieldWarning as ShieldAlert,
   ArrowLeft,
   ArrowRight,
-  Send,
-  Lock
-} from 'lucide-react';
+  PaperPlaneTilt as Send,
+  LockKey as Lock
+} from '@phosphor-icons/react';
 import { useToast } from '../components/ToastContext';
 
 interface Account {
@@ -115,12 +116,12 @@ export default function Dashboard() {
   };
 
   // Queries
-  const { data: accounts = [], isLoading: isLoadingAccounts } = useQuery<Account[]>({
+  const { data: accounts = [], isLoading: isLoadingAccounts, isError: accountsError } = useQuery<Account[]>({
     queryKey: ['accounts'],
     queryFn: async () => (await axios.get('/api/accounts')).data,
   });
 
-  const { data: proxies = [], isLoading: isLoadingProxies } = useQuery<ProxyItem[]>({
+  const { data: proxies = [], isLoading: isLoadingProxies, isError: proxiesError } = useQuery<ProxyItem[]>({
     queryKey: ['proxies'],
     queryFn: async () => (await axios.get('/api/proxies')).data,
   });
@@ -128,13 +129,13 @@ export default function Dashboard() {
   // Dynamic Avatar Gradient Generator
   const getAvatarGradient = (id: number) => {
     const gradients = [
-      'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
-      'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
-      'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-      'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-      'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)',
-      'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
-      'linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)',
+      'linear-gradient(135deg, #708a75, #496b55)',
+      'linear-gradient(135deg, #aa8876, #886552)',
+      'linear-gradient(135deg, #7d939e, #506f7c)',
+      'linear-gradient(135deg, #7e9b83, #4c7554)',
+      'linear-gradient(135deg, #b6a06c, #927c46)',
+      'linear-gradient(135deg, #9b8e91, #756970)',
+      'linear-gradient(135deg, #7a9f99, #4b7870)',
     ];
     return gradients[id % gradients.length];
   };
@@ -456,279 +457,37 @@ export default function Dashboard() {
   }, [activeTab]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* 1. Header & Quick Analytics */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
-                  backgroundColor: 'var(--accent-soft)',
-                  border: '1px solid var(--accent)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent-text)',
-                }}
-              >
-                <Users className="w-5 h-5" />
-              </div>
-              <div>
-                <h1
-                  style={{
-                    fontSize: '24px',
-                    fontWeight: 800,
-                    letterSpacing: '-0.02em',
-                    color: 'var(--text-main)',
-                    margin: 0,
-                  }}
-                >
-                  Управление аккаунтами
-                </h1>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px', margin: 0 }}>
-                  Пул Telegram-сессий, назначение прокси и мониторинг работоспособности
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['accounts'] })}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-main)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-muted" />
-              <span>Обновить статус</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Metric Bento Cards */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '14px',
-          }}
-        >
-          {/* Total Accounts */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Всего аккаунтов
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {isLoadingAccounts ? '...' : stats.total}
-              </div>
-              <div style={{ fontSize: '12px', color: '#22c55e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
-                <span>{stats.active} активных</span>
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                color: '#6366f1',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Active Status */}
-          <div
-            onClick={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: `1px solid ${statusFilter === 'active' ? 'var(--accent)' : 'var(--border-color)'}`,
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-            onMouseLeave={(e) => {
-              if (statusFilter !== 'active') e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Готовы к работе
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {isLoadingAccounts ? '...' : stats.active}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Подключены к Telegram
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                color: '#22c55e',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Check className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Errors / Attention */}
-          <div
-            onClick={() => setStatusFilter(statusFilter === 'error' ? 'all' : 'error')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: `1px solid ${statusFilter === 'error' ? '#ef4444' : 'var(--border-color)'}`,
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#ef4444')}
-            onMouseLeave={(e) => {
-              if (statusFilter !== 'error') e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Требуют внимания
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: stats.error > 0 ? '#ef4444' : 'var(--text-main)', marginTop: '4px' }}>
-                {isLoadingAccounts ? '...' : stats.error}
-              </div>
-              <div style={{ fontSize: '12px', color: stats.error > 0 ? '#ef4444' : 'var(--text-muted)', marginTop: '2px' }}>
-                {stats.error > 0 ? 'Ошибка авторизации' : 'Все сессии в норме'}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                color: '#ef4444',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <AlertCircle className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Proxy Pool */}
-          <div
-            onClick={() => setStatusFilter(statusFilter === 'no_proxy' ? 'all' : 'no_proxy')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: `1px solid ${statusFilter === 'no_proxy' ? 'var(--accent)' : 'var(--border-color)'}`,
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-            onMouseLeave={(e) => {
-              if (statusFilter !== 'no_proxy') e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Прокси защита
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {stats.withProxy} / {stats.total}
-              </div>
-              <div style={{ fontSize: '12px', color: stats.noProxy > 0 ? '#eab308' : 'var(--text-muted)', marginTop: '2px' }}>
-                {stats.noProxy > 0 ? `${stats.noProxy} без прокси` : '100% через прокси'}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                color: '#3b82f6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Shield className="w-5 h-5" />
-            </div>
-          </div>
+    <div className="accounts-page">
+      <div className="accounts-heading">
+        <div><span className="eyebrow">УПРАВЛЕНИЕ / АККАУНТЫ</span><h1>Ваши аккаунты</h1><p>Все Telegram-сессии, подключения и прокси в одном пространстве.</p></div>
+        <div className="accounts-heading-actions">
+          <button className="secondary-button" onClick={() => queryClient.invalidateQueries({ queryKey: ['accounts'] })}><RefreshCw size={15} /> Обновить статус</button>
+          <button className="primary-button" onClick={() => document.getElementById('account-import')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' })}><Plus size={16} /> Добавить аккаунт</button>
         </div>
       </div>
+      {(accountsError || proxiesError) && <div role="alert" className="accounts-query-error"><AlertCircle size={18} /><span>Не удалось загрузить {accountsError && proxiesError ? 'аккаунты и прокси' : accountsError ? 'аккаунты' : 'прокси'}. Проверьте подключение к серверу.</span><button onClick={() => { queryClient.invalidateQueries({ queryKey: ['accounts'] }); queryClient.invalidateQueries({ queryKey: ['proxies'] }); }}>Повторить</button></div>}
+      <div className="account-metrics" aria-label="Обзор аккаунтов">
+        {([
+          { filter: 'all', label: 'Всего аккаунтов', value: stats.total, description: 'В вашем пространстве', icon: Users, tone: '' },
+          { filter: 'active', label: 'Готовы к работе', value: stats.active, description: 'Подключены к Telegram', icon: Check, tone: '' },
+          { filter: 'error', label: 'Требуют внимания', value: stats.error, description: stats.error ? 'Проверьте авторизацию' : 'Все сессии в норме', icon: AlertCircle, tone: stats.error ? 'metric-danger' : '' },
+          { filter: 'no_proxy', label: 'Под защитой прокси', value: `${stats.withProxy} / ${stats.total}`, description: stats.noProxy ? `${stats.noProxy} без прокси` : stats.total ? 'Все подключения защищены' : 'Добавьте первый аккаунт', icon: Shield, tone: stats.noProxy ? 'metric-warning' : '' },
+        ] as const).map(metric => <button key={metric.filter} className={`metric ${metric.tone} ${statusFilter === metric.filter && metric.filter !== 'all' ? 'is-selected' : ''}`} aria-pressed={statusFilter === metric.filter} onClick={() => setStatusFilter(statusFilter === metric.filter ? 'all' : metric.filter)}>
+          <span className="metric-label">{metric.label}<metric.icon size={17} /></span>
+          <span className="metric-value">{isLoadingAccounts ? <span className="metric-skeleton" aria-label="Загрузка" /> : accountsError ? '—' : metric.value}</span>
+          <span className="metric-description"><span className="metric-dot" />{metric.description}</span>
+        </button>)}
+      </div>
 
-      {/* 2. Import / Add Accounts Hub */}
-      <div
-        style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '14px',
-          padding: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+      {/* Import and phone authentication share the original handlers. */}
+      <div id="account-import" className="account-import">
+        <div className="account-import-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 2px 0' }}>
-              Импорт и подключение аккаунтов
+              Подключите новый аккаунт
             </h2>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              Добавляйте сессии через tdata ZIP-архивы или авторизуйтесь по официальному SMS-коду Telegram
+              Импортируйте TData или войдите по номеру телефона.
             </p>
           </div>
 
@@ -756,11 +515,11 @@ export default function Dashboard() {
                 cursor: 'pointer',
                 backgroundColor: activeTab === 'tdata' ? 'var(--accent)' : 'transparent',
                 color: activeTab === 'tdata' ? '#ffffff' : 'var(--text-muted)',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
               }}
             >
               <Folder className="w-3.5 h-3.5" />
-              <span>TData Архив (.zip)</span>
+              <span>TData-архив</span>
             </button>
             <button
               onClick={() => setActiveTab('phone')}
@@ -776,11 +535,11 @@ export default function Dashboard() {
                 cursor: 'pointer',
                 backgroundColor: activeTab === 'phone' ? 'var(--accent)' : 'transparent',
                 color: activeTab === 'phone' ? '#ffffff' : 'var(--text-muted)',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
               }}
             >
               <Phone className="w-3.5 h-3.5" />
-              <span>SMS Авторизация</span>
+              <span>По номеру телефона</span>
             </button>
           </div>
         </div>
@@ -789,6 +548,11 @@ export default function Dashboard() {
         {activeTab === 'tdata' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div
+              data-dropzone
+              role="button"
+              tabIndex={0}
+              aria-label="Выбрать ZIP-архивы TData"
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -803,7 +567,7 @@ export default function Dashboard() {
                 borderRadius: '12px',
                 padding: '24px 20px',
                 backgroundColor: isDragging ? 'var(--accent-soft)' : 'var(--bg-main)',
-                transition: 'all 0.2s ease',
+                transition: 'background-color 180ms, border-color 180ms, color 180ms, transform 180ms',
                 cursor: 'pointer',
                 textAlign: 'center',
               }}
@@ -846,7 +610,7 @@ export default function Dashboard() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
                 gap: '12px',
                 alignItems: 'center',
               }}
@@ -916,7 +680,7 @@ export default function Dashboard() {
                     fontWeight: 600,
                     cursor: selectedFiles.length === 0 || uploadTdata.isPending ? 'not-allowed' : 'pointer',
                     opacity: selectedFiles.length === 0 || uploadTdata.isPending ? 0.6 : 1,
-                    transition: 'all 0.15s ease',
+                    transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                   }}
                 >
                   {uploadTdata.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -960,7 +724,7 @@ export default function Dashboard() {
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: '#ef4444',
+                        color: 'var(--danger)',
                         cursor: 'pointer',
                         padding: 0,
                         fontSize: '12px',
@@ -1282,7 +1046,7 @@ export default function Dashboard() {
                   cursor: 'pointer',
                   backgroundColor: isActive ? 'var(--accent)' : 'transparent',
                   color: isActive ? '#ffffff' : 'var(--text-muted)',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
@@ -1318,7 +1082,7 @@ export default function Dashboard() {
       {/* 4. Accounts Cards Grid */}
       <div>
         {isLoadingAccounts ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: '16px' }}>
             {[1, 2, 3, 4, 5, 6].map((n) => (
               <div
                 key={n}
@@ -1344,7 +1108,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        ) : filteredAccounts.length === 0 ? (
+        ) : filteredAccounts.length === 0 && !accountsError ? (
           <div
             style={{
               backgroundColor: 'var(--bg-card)',
@@ -1372,7 +1136,7 @@ export default function Dashboard() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
               gap: '16px',
             }}
           >
@@ -1393,13 +1157,13 @@ export default function Dashboard() {
                     flexDirection: 'column',
                     justifyContent: 'space-between',
                     gap: '14px',
-                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                    transition: 'border-color 180ms, transform 180ms, box-shadow 180ms',
                     position: 'relative',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = 'var(--accent)';
                     e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+                    e.currentTarget.style.boxShadow = 'var(--shadow-card)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = 'var(--border-color)';
@@ -1474,14 +1238,14 @@ export default function Dashboard() {
                             />
                             <button
                               onClick={() => updateAccountName.mutate({ id: acc.id, name: renamingName })}
-                              style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: '2px' }}
+                              style={{ background: 'none', border: 'none', color: 'var(--success)', cursor: 'pointer', padding: '2px' }}
                               title="Сохранить"
                             >
                               <Check className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setRenamingAccountId(null)}
-                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                              style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
                               title="Отмена"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -1539,11 +1303,11 @@ export default function Dashboard() {
                           fontWeight: 600,
                           textTransform: 'uppercase',
                           backgroundColor: isError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(34, 197, 94, 0.12)',
-                          color: isError ? '#ef4444' : '#22c55e',
+                          color: isError ? 'var(--danger)' : 'var(--success)',
                           border: `1px solid ${isError ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)'}`,
                         }}
                       >
-                        <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: isError ? '#ef4444' : '#22c55e' }} />
+                        <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: isError ? 'var(--danger)' : 'var(--success)' }} />
                         {acc.status || (acc.is_active ? 'active' : 'error')}
                       </span>
 
@@ -1603,7 +1367,7 @@ export default function Dashboard() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Globe className="w-3.5 h-3.5 text-muted" />
                       <span style={{ color: 'var(--text-muted)' }}>Прокси:</span>
-                      <span style={{ fontWeight: 600, color: acc.proxy_id ? 'var(--text-main)' : '#eab308' }}>
+                      <span style={{ fontWeight: 600, color: acc.proxy_id ? 'var(--text-main)' : 'var(--warning-text)' }}>
                         {acc.proxy_id ? `ID #${acc.proxy_id}` : 'Не привязан'}
                       </span>
                     </div>
@@ -1649,7 +1413,7 @@ export default function Dashboard() {
                         fontSize: '11px',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease',
+                        transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
                       onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
@@ -1672,7 +1436,7 @@ export default function Dashboard() {
                         fontSize: '11px',
                         fontWeight: 600,
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease',
+                        transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1702,7 +1466,7 @@ export default function Dashboard() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '4px',
-                        transition: 'all 0.15s ease',
+                        transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
                       onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-color)')}
@@ -1721,9 +1485,9 @@ export default function Dashboard() {
                         borderRadius: '6px',
                         backgroundColor: 'rgba(239, 68, 68, 0.08)',
                         border: '1px solid rgba(239, 68, 68, 0.2)',
-                        color: '#ef4444',
+                        color: 'var(--danger)',
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease',
+                        transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1742,8 +1506,8 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* 5. Proxy Management Module */}
-      <div
+      {/* Proxy management */}
+      <div className="proxy-manager"
         style={{
           backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-color)',
@@ -1811,7 +1575,7 @@ export default function Dashboard() {
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
               }}
             >
               {showAddProxy ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
@@ -1862,7 +1626,7 @@ export default function Dashboard() {
                 <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                   Протокол по умолчанию
                 </label>
-                <select
+                <Select
                   value={proxyProtocol}
                   onChange={(e) => setProxyProtocol(e.target.value)}
                   style={{
@@ -1879,7 +1643,7 @@ export default function Dashboard() {
                 >
                   <option value="socks5">SOCKS5</option>
                   <option value="http">HTTP</option>
-                </select>
+                </Select>
               </div>
 
               <button
@@ -1919,7 +1683,7 @@ export default function Dashboard() {
             <p style={{ fontSize: '12px', margin: 0 }}>Нажмите «Добавить прокси» для импорта ваших серверов</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '10px' }}>
             {proxies.map((p) => {
               const checkInfo = proxyCheckState[p.id];
               const isChecked = checkInfo && !checkInfo.loading;
@@ -1945,7 +1709,7 @@ export default function Dashboard() {
                         width: '7px',
                         height: '7px',
                         borderRadius: '50%',
-                        backgroundColor: isChecked ? (isSuccess ? '#10b981' : '#ef4444') : '#818cf8',
+                        backgroundColor: isChecked ? (isSuccess ? 'var(--success)' : 'var(--danger)') : 'var(--accent-text)',
                         flexShrink: 0,
                       }}
                       title={isChecked ? (isSuccess ? `Пинг к Telegram DC: ${checkInfo.latency_ms}мс` : checkInfo.error) : 'Не проверен'}
@@ -1955,10 +1719,10 @@ export default function Dashboard() {
                         {p.host || p.ip}:{p.port}
                       </div>
                       <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <span style={{ textTransform: 'uppercase', color: '#818cf8', fontWeight: 700 }}>{p.protocol || 'socks5'}</span>
+                        <span style={{ textTransform: 'uppercase', color: 'var(--accent-text)', fontWeight: 700 }}>{p.protocol || 'socks5'}</span>
                         {p.username && <span>• {p.username}</span>}
                         {isChecked && (
-                          <span style={{ color: isSuccess ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                          <span style={{ color: isSuccess ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
                             • {isSuccess ? `${checkInfo.latency_ms}ms` : (checkInfo.error?.slice(0, 15) || 'Ошибка')}
                           </span>
                         )}
@@ -1999,7 +1763,7 @@ export default function Dashboard() {
                         alignItems: 'center',
                         transition: 'color 0.15s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
                       onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2020,7 +1784,7 @@ export default function Dashboard() {
             top: 0,
             left: 0,
             width: '100vw',
-            height: '100vh',
+            height: '100dvh',
             backgroundColor: 'rgba(0,0,0,0.65)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
@@ -2109,7 +1873,7 @@ export default function Dashboard() {
                       onClick={() => copyToClipboard(selectedProfileAccount.phone, 'phone')}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}
                     >
-                      {copiedKey === 'phone' ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                      {copiedKey === 'phone' ? <Check className="w-3 h-3 text-[var(--success-text)]" /> : <Copy className="w-3 h-3" />}
                     </button>
                   )}
                 </div>
@@ -2122,7 +1886,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Статус:</span>
-                <span style={{ fontWeight: 700, color: selectedProfileAccount.status === 'active' ? '#22c55e' : '#ef4444' }}>
+                <span style={{ fontWeight: 700, color: selectedProfileAccount.status === 'active' ? 'var(--success)' : 'var(--danger)' }}>
                   {selectedProfileAccount.status}
                 </span>
               </div>
@@ -2161,7 +1925,7 @@ export default function Dashboard() {
             top: 0,
             left: 0,
             width: '100vw',
-            height: '100vh',
+            height: '100dvh',
             backgroundColor: 'rgba(0,0,0,0.65)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
@@ -2195,7 +1959,7 @@ export default function Dashboard() {
               </p>
             </div>
 
-            <select
+            <Select
               value={selectedProxyId || ''}
               onChange={(e) => setSelectedProxyId(e.target.value ? Number(e.target.value) : null)}
               style={{
@@ -2216,7 +1980,7 @@ export default function Dashboard() {
                   ID #{p.id}: {p.ip}:{p.port} ({p.protocol.toUpperCase()})
                 </option>
               ))}
-            </select>
+            </Select>
 
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -2266,7 +2030,7 @@ export default function Dashboard() {
             top: 0,
             left: 0,
             width: '100vw',
-            height: '100vh',
+            height: '100dvh',
             backgroundColor: 'rgba(0,0,0,0.65)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
@@ -2324,7 +2088,7 @@ export default function Dashboard() {
                   flex: 1,
                   padding: '9px',
                   borderRadius: '8px',
-                  backgroundColor: '#ef4444',
+                  backgroundColor: 'var(--danger)',
                   color: '#ffffff',
                   border: 'none',
                   fontSize: '13px',
@@ -2348,7 +2112,7 @@ export default function Dashboard() {
             top: 0,
             left: 0,
             width: '100vw',
-            height: '100vh',
+            height: '100dvh',
             backgroundColor: 'rgba(0,0,0,0.65)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
@@ -2406,7 +2170,7 @@ export default function Dashboard() {
                   flex: 1,
                   padding: '9px',
                   borderRadius: '8px',
-                  backgroundColor: '#ef4444',
+                  backgroundColor: 'var(--danger)',
                   color: '#ffffff',
                   border: 'none',
                   fontSize: '13px',

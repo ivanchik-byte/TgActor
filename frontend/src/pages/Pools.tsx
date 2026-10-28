@@ -3,17 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import {
   Users,
-  MessageSquare,
+  ChatCircleText as MessageSquare,
   Heart,
-  Search,
-  AlertCircle,
-  Sparkles,
-  Layers,
-  LayoutGrid,
-  List,
+  MagnifyingGlass as Search,
+  WarningCircle as AlertCircle,
+  Sparkle as Sparkles,
+  SquaresFour as LayoutGrid,
+  ListBullets as List,
   CheckSquare,
-  RotateCcw,
-} from 'lucide-react';
+  ArrowCounterClockwise as RotateCcw
+} from '@phosphor-icons/react';
 import { useToast } from '../components/ToastContext';
 
 interface Account {
@@ -172,13 +171,13 @@ export default function Pools() {
   // Color generator for avatar initials
   const getAvatarGradient = (id: number) => {
     const gradients = [
-      'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
-      'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
-      'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-      'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-      'linear-gradient(135deg, #f59e0b 0%, #b45309 100%)',
-      'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
-      'linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)',
+      'linear-gradient(135deg, #708a75, #496b55)',
+      'linear-gradient(135deg, #aa8876, #886552)',
+      'linear-gradient(135deg, #7d939e, #506f7c)',
+      'linear-gradient(135deg, #7e9b83, #4c7554)',
+      'linear-gradient(135deg, #b6a06c, #927c46)',
+      'linear-gradient(135deg, #9b8e91, #756970)',
+      'linear-gradient(135deg, #7a9f99, #4b7870)',
     ];
     return gradients[id % gradients.length];
   };
@@ -325,48 +324,7 @@ export default function Pools() {
             gap: '16px',
           }}
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div
-                style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
-                  backgroundColor: 'var(--accent-soft)',
-                  border: '1px solid var(--accent)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent-text)',
-                }}
-              >
-                <Layers className="w-5 h-5" />
-              </div>
-              <div>
-                <h1
-                  style={{
-                    fontSize: '24px',
-                    fontWeight: 800,
-                    letterSpacing: '-0.02em',
-                    color: 'var(--text-main)',
-                    margin: 0,
-                  }}
-                >
-                  Пулы аккаунтов
-                </h1>
-                <p
-                  style={{
-                    fontSize: '13px',
-                    color: 'var(--text-muted)',
-                    marginTop: '2px',
-                    margin: 0,
-                  }}
-                >
-                  Оркестрация ролей: распределение аккаунтов по задачам написания сообщений и реакций
-                </p>
-              </div>
-            </div>
-          </div>
+          <div className="accounts-heading"><div><span className="eyebrow">УПРАВЛЕНИЕ / ПУЛЫ</span><h1>Роли ваших аккаунтов</h1><p>Распределяйте аккаунты между диалогами и реакциями.</p></div></div>
 
           {/* Quick Actions Dropdown / Group */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -386,7 +344,7 @@ export default function Pools() {
                 fontWeight: 600,
                 cursor: accounts.length === 0 ? 'not-allowed' : 'pointer',
                 opacity: accounts.length === 0 ? 0.6 : 1,
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
               }}
               onMouseEnter={(e) => {
                 if (accounts.length > 0) e.currentTarget.style.backgroundColor = 'var(--accent)';
@@ -417,11 +375,11 @@ export default function Pools() {
                 fontSize: '12px',
                 fontWeight: 500,
                 cursor: accounts.length === 0 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
+                transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#ef4444';
-                e.currentTarget.style.color = '#ef4444';
+                e.currentTarget.style.borderColor = 'var(--danger)';
+                e.currentTarget.style.color = 'var(--danger)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'var(--border-color)';
@@ -435,191 +393,13 @@ export default function Pools() {
           </div>
         </div>
 
-        {/* 4 Stat Cards */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '14px',
-          }}
-        >
-          {/* Card 1: Total */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Всего аккаунтов
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {isLoading ? '...' : stats.total}
-              </div>
-              <div style={{ fontSize: '12px', color: '#22c55e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#22c55e' }} />
-                <span>{stats.active} активных</span>
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                color: '#6366f1',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Card 2: Commenting */}
-          <div
-            onClick={() => setActiveFilter(activeFilter === 'commenting' ? 'all' : 'commenting')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: `1px solid ${activeFilter === 'commenting' ? 'var(--accent)' : 'var(--border-color)'}`,
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-            onMouseLeave={(e) => {
-              if (activeFilter !== 'commenting') e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Пул комментаторов
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {isLoading ? '...' : stats.commenting}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Пишут тексты и диалоги
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                color: '#3b82f6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <MessageSquare className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Card 3: Reactions */}
-          <div
-            onClick={() => setActiveFilter(activeFilter === 'reactions' ? 'all' : 'reactions')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: `1px solid ${activeFilter === 'reactions' ? 'var(--accent)' : 'var(--border-color)'}`,
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-            onMouseLeave={(e) => {
-              if (activeFilter !== 'reactions') e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Пул реакций
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {isLoading ? '...' : stats.reaction}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Ставят эмодзи-лайки
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(236, 72, 153, 0.1)',
-                color: '#ec4899',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Heart className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Card 4: Both / Unassigned */}
-          <div
-            onClick={() => setActiveFilter(activeFilter === 'both' ? 'all' : 'both')}
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: `1px solid ${activeFilter === 'both' ? 'var(--accent)' : 'var(--border-color)'}`,
-              borderRadius: '12px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-            onMouseLeave={(e) => {
-              if (activeFilter !== 'both') e.currentTarget.style.borderColor = 'var(--border-color)';
-            }}
-          >
-            <div>
-              <div style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                Универсальные (Оба)
-              </div>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-                {isLoading ? '...' : stats.both}
-              </div>
-              <div style={{ fontSize: '12px', color: stats.none > 0 ? '#eab308' : 'var(--text-muted)', marginTop: '2px' }}>
-        {stats.none > 0 ? ` ${stats.none} без пула` : 'Все распределены'}
-              </div>
-            </div>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                color: '#10b981',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Sparkles className="w-5 h-5" />
-            </div>
-          </div>
+        <div className="account-metrics" aria-label="Состав пулов">
+          {([
+            { filter: 'all', label: 'Всего аккаунтов', value: stats.total, description: 'Доступны для распределения', icon: Users },
+            { filter: 'commenting', label: 'Комментаторы', value: stats.commenting, description: 'Пишут тексты и диалоги', icon: MessageSquare },
+            { filter: 'reactions', label: 'Реакции', value: stats.reaction, description: 'Реагируют на публикации', icon: Heart },
+            { filter: 'both', label: 'Универсальные', value: stats.both, description: 'Участвуют в обоих пулах', icon: Sparkles },
+          ] as const).map(metric => <button key={metric.filter} className={`metric ${activeFilter === metric.filter && metric.filter !== 'all' ? 'is-selected' : ''}`} aria-pressed={activeFilter === metric.filter} onClick={() => setActiveFilter(activeFilter === metric.filter ? 'all' : metric.filter)}><span className="metric-label">{metric.label}<metric.icon size={17} /></span><span className="metric-value">{isLoading ? <span className="metric-skeleton" aria-label="Загрузка" /> : metric.value}</span><span className="metric-description">{metric.description}</span></button>)}
         </div>
       </div>
 
@@ -725,7 +505,7 @@ export default function Pools() {
                   cursor: 'pointer',
                   backgroundColor: isActive ? 'var(--accent)' : 'transparent',
                   color: isActive ? '#ffffff' : 'var(--text-muted)',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
@@ -781,7 +561,7 @@ export default function Pools() {
               color: viewMode === 'grid' ? 'var(--accent-text)' : 'var(--text-muted)',
               cursor: 'pointer',
               boxShadow: viewMode === 'grid' ? '0 1px 3px rgba(0,0,0,0.2)' : 'none',
-              transition: 'all 0.15s ease',
+              transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
             }}
             title="Вид: Сетка карточек"
           >
@@ -800,7 +580,7 @@ export default function Pools() {
               color: viewMode === 'table' ? 'var(--accent-text)' : 'var(--text-muted)',
               cursor: 'pointer',
               boxShadow: viewMode === 'table' ? '0 1px 3px rgba(0,0,0,0.2)' : 'none',
-              transition: 'all 0.15s ease',
+              transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
             }}
             title="Вид: Компактная таблица"
           >
@@ -815,7 +595,7 @@ export default function Pools() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
             gap: '16px',
           }}
         >
@@ -867,7 +647,7 @@ export default function Pools() {
             gap: '12px',
           }}
         >
-          <AlertCircle className="w-10 h-10 text-red-500" />
+          <AlertCircle className="w-10 h-10 text-[var(--danger-text)]" />
           <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)' }}>
             Не удалось загрузить список аккаунтов
           </h3>
@@ -956,7 +736,7 @@ export default function Pools() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
             gap: '16px',
           }}
         >
@@ -976,14 +756,14 @@ export default function Pools() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '16px',
-                  transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  transition: 'border-color 180ms, transform 180ms, box-shadow 180ms',
                   position: 'relative',
                   overflow: 'hidden',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = 'var(--accent)';
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.18)';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-card)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = 'var(--border-color)';
@@ -1061,7 +841,7 @@ export default function Pools() {
                           fontSize: '11px',
                           fontWeight: 600,
                           backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                          color: '#10b981',
+                          color: 'var(--success)',
                           border: '1px solid rgba(16, 185, 129, 0.25)',
                         }}
                       >
@@ -1079,7 +859,7 @@ export default function Pools() {
                           fontSize: '11px',
                           fontWeight: 600,
                           backgroundColor: 'rgba(59, 130, 246, 0.12)',
-                          color: '#3b82f6',
+                          color: 'var(--accent-text)',
                           border: '1px solid rgba(59, 130, 246, 0.25)',
                         }}
                       >
@@ -1134,14 +914,14 @@ export default function Pools() {
                     onChange={(val) => togglePool.mutate({ id: acc.id, pool: 'comment', val })}
                     label="Комментирование"
                     icon={MessageSquare}
-                    color="#3b82f6"
+                    color="var(--accent)"
                   />
                   <PoolToggle
                     checked={acc.in_reaction_pool}
                     onChange={(val) => togglePool.mutate({ id: acc.id, pool: 'reaction', val })}
                     label="Эмодзи-реакции"
                     icon={Heart}
-                    color="#ec4899"
+                    color="var(--text-muted)"
                   />
                 </div>
               </div>
@@ -1261,7 +1041,7 @@ export default function Pools() {
                           fontWeight: 600,
                           backgroundColor:
                             acc.status === 'error' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(34, 197, 94, 0.12)',
-                          color: acc.status === 'error' ? '#ef4444' : '#22c55e',
+                          color: acc.status === 'error' ? 'var(--danger)' : 'var(--success)',
                           border: `1px solid ${
                             acc.status === 'error' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)'
                           }`,
@@ -1272,7 +1052,7 @@ export default function Pools() {
                             width: '5px',
                             height: '5px',
                             borderRadius: '50%',
-                            backgroundColor: acc.status === 'error' ? '#ef4444' : '#22c55e',
+                            backgroundColor: acc.status === 'error' ? 'var(--danger)' : 'var(--success)',
                           }}
                         />
                         {acc.status || 'active'}
@@ -1288,7 +1068,7 @@ export default function Pools() {
                             onChange={(val) => togglePool.mutate({ id: acc.id, pool: 'comment', val })}
                             label="Комменты"
                             icon={MessageSquare}
-                            color="#3b82f6"
+                            color="var(--accent)"
                           />
                         </div>
                         <div style={{ width: '170px' }}>
@@ -1297,7 +1077,7 @@ export default function Pools() {
                             onChange={(val) => togglePool.mutate({ id: acc.id, pool: 'reaction', val })}
                             label="Реакции"
                             icon={Heart}
-                            color="#ec4899"
+                            color="var(--text-muted)"
                           />
                         </div>
                       </div>

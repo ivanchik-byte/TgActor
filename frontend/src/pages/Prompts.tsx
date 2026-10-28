@@ -1,38 +1,40 @@
+import Select from '../components/Select';
+import ModalOverlay from '../components/ModalOverlay';
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
+  Sparkle as Sparkles,
   Plus,
-  Search,
+  MagnifyingGlass as Search,
   Copy,
   Check,
-  Zap,
-  BookOpen,
-  Trash2,
-  Edit3,
-  RefreshCw,
-  Dices,
+  Lightning as Zap,
+  BookOpenText as BookOpen,
+  Trash as Trash2,
+  PencilSimpleLine as Edit3,
+  ArrowsClockwise as RefreshCw,
+  DiceFive as Dices,
   X,
-  Flame,
+  Fire as Flame,
   Shield,
   Coins,
   Cpu,
-  TrendingUp,
-  MessageSquare,
-  Settings2,
+  TrendUp as TrendingUp,
+  ChatCircleText as MessageSquare,
+  GearSix as Settings2,
   Tag,
   FolderPlus,
-  Layers,
-  HelpCircle,
-  Swords,
+  Stack as Layers,
+  Question as HelpCircle,
+  Sword as Swords,
   Rocket,
   Wrench,
   Users,
   SlidersHorizontal,
-  Wand2
-} from 'lucide-react';
+  MagicWand as Wand2
+} from '@phosphor-icons/react';
 import { useToast } from '../components/ToastContext';
 
 interface CategoryItem {
@@ -100,7 +102,7 @@ const DRAMA_PRESETS = [
     title: 'Прогрев интереса & Кейс',
     desc: 'Интригующий вопрос о механике → обсуждение результатов и деталей → уточняющий вопрос',
     icon: TrendingUp,
-    color: '#4ade80',
+    color: 'var(--success-text)',
     badge: 'Прогрев'
   },
   {
@@ -116,7 +118,7 @@ const DRAMA_PRESETS = [
     title: 'Живой спор мнений',
     desc: 'Две стороны аргументированно отстаивают разные подходы без негатива → третий подводит баланс',
     icon: Swords,
-    color: '#f87171',
+    color: 'var(--danger-text)',
     badge: 'Вовлечение'
   },
   {
@@ -132,7 +134,7 @@ const DRAMA_PRESETS = [
     title: 'Разбор проблемы / Фикс',
     desc: 'Жалоба на трудность/ошибку → разбор причины → проверенный пошаговый совет',
     icon: Wrench,
-    color: '#fbbf24',
+    color: 'var(--warning-text)',
     badge: 'Техподдержка'
   },
   {
@@ -216,9 +218,9 @@ const SAMPLE_TOPICS = [
 const COLOR_PALETTE = [
   '#38bdf8', // Sky
   '#a78bfa', // Violet
-  '#4ade80', // Green
-  '#fbbf24', // Amber
-  '#f87171', // Red
+  'var(--success-text)', // Green
+  'var(--warning-text)', // Amber
+  'var(--danger-text)', // Red
   '#ec4899', // Pink
   '#2dd4bf', // Teal
   '#94a3b8'  // Gray
@@ -236,6 +238,8 @@ export default function Prompts() {
 
   // UI Modals state
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ type: 'category'; id: string; label: string } | { type: 'template'; id: number } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplateItem | null>(null);
@@ -515,8 +519,7 @@ export default function Prompts() {
     }
   };
 
-  const handleDeleteCategory = async (catId: string, label: string) => {
-    if (!window.confirm(`Удалить категорию "${label}"?`)) return;
+  const deleteCategory = async (catId: string, label: string) => {
     try {
       await axios.delete(`/api/prompts/categories/${catId}`);
       showToast(`Категория "${label}" удалена`, 'success');
@@ -614,14 +617,27 @@ export default function Prompts() {
     }
   };
 
-  const handleDeleteTemplate = async (id: number) => {
-    if (!window.confirm('Удалить этот шаблон из библиотеки?')) return;
+  const deleteTemplate = async (id: number) => {
     try {
       await axios.delete(`/api/prompts/${id}`);
       showToast('Шаблон удален', 'success');
       queryClient.invalidateQueries({ queryKey: ['promptTemplates'] });
     } catch (err: any) {
       showToast(err.response?.data?.detail || 'Ошибка удаления', 'error');
+    }
+  };
+
+  const handleDeleteCategory = (id: string, label: string) => setPendingDelete({ type: 'category', id, label });
+  const handleDeleteTemplate = (id: number) => setPendingDelete({ type: 'template', id });
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    try {
+      if (pendingDelete.type === 'category') await deleteCategory(pendingDelete.id, pendingDelete.label);
+      else await deleteTemplate(pendingDelete.id);
+      setPendingDelete(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -680,35 +696,37 @@ export default function Prompts() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      <ModalOverlay
+        isOpen={pendingDelete !== null}
+        onClose={() => { if (!isDeleting) setPendingDelete(null); }}
+        title={pendingDelete?.type === 'category' ? 'Удалить категорию?' : 'Удалить шаблон?'}
+        icon={<Trash2 size={20} />}
+        footer={<><button type="button" className="secondary-button" disabled={isDeleting} onClick={() => setPendingDelete(null)}>Отмена</button><button type="button" className="danger-button" disabled={isDeleting} onClick={confirmDelete}>{isDeleting ? 'Удаление…' : 'Удалить'}</button></>}
+      >
+        <p className="confirmation-copy">{pendingDelete?.type === 'category' ? `Категория «${pendingDelete.label}» будет удалена.` : 'Шаблон будет удалён из библиотеки.'} Это действие нельзя отменить.</p>
+      </ModalOverlay>
       {/* 1. Header Banner & Studio Actions */}
       <div
-        className="rounded-[var(--radius-container)] p-6 md:p-8 border border-[var(--border-color)] bg-[var(--bg-card)] relative overflow-hidden"
+        className="prompts-heading relative"
         style={{
           boxShadow: 'var(--shadow-bento)'
         }}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="p-2 rounded-xl bg-[var(--accent-soft)] border border-[var(--accent)] text-[var(--accent-text)]">
-                <Sparkles className="w-5 h-5" />
-              </span>
-              <span className="text-xs uppercase tracking-widest font-bold text-[var(--accent-text)]">
-                AI Prompt Studio & Multi-Category Library
-              </span>
-            </div>
+            <span className="eyebrow">АВТОМАТИЗАЦИЯ / БИБЛИОТЕКА ПРОМПТОВ</span>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[var(--text-main)]">
-              Студия Промптов
+              Студия промптов
             </h1>
             <p className="text-sm text-[var(--text-muted)] mt-1 max-w-2xl leading-relaxed">
-              Формулируйте точечные пошаговые инструкции для ИИ, объединяйте шаблоны в несколько категорий и создавайте реалистичные ветки сценариев в 1 клик.
+              Создавайте инструкции для ИИ, собирайте библиотеку шаблонов и превращайте идеи в диалоги.
             </p>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={() => setIsCategoryManagerOpen(true)}
-              className="px-3.5 py-2.5 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] bg-[var(--bg-main)] hover:bg-[var(--bg-card-hover)] transition-all flex items-center gap-2 cursor-pointer active:scale-[0.98]"
+              className="px-3.5 py-2.5 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] bg-[var(--bg-main)] hover:bg-[var(--bg-card-hover)] transition-colors flex items-center gap-2 cursor-pointer active:scale-[0.98]"
               title="Управление категориями"
             >
               <Settings2 className="w-4 h-4 text-[var(--accent-text)]" />
@@ -725,7 +743,7 @@ export default function Prompts() {
                 setFormTags('');
                 setIsManualModalOpen(true);
               }}
-              className="px-3.5 py-2.5 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] bg-[var(--bg-main)] hover:bg-[var(--bg-card-hover)] transition-all flex items-center gap-2 cursor-pointer active:scale-[0.98]"
+              className="px-3.5 py-2.5 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] bg-[var(--bg-main)] hover:bg-[var(--bg-card-hover)] transition-colors flex items-center gap-2 cursor-pointer active:scale-[0.98]"
             >
               <Plus className="w-4 h-4" />
               <span>Создать вручную</span>
@@ -733,7 +751,7 @@ export default function Prompts() {
 
             <button
               onClick={() => setIsStudioOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-[0.98]"
+              className="px-4 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition-colors shadow-md flex items-center gap-2 cursor-pointer active:scale-[0.98]"
             >
               <Sparkles className="w-4 h-4" />
        <span> AI Генератор</span>
@@ -742,8 +760,8 @@ export default function Prompts() {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-[var(--border-color)]">
-          <div className="p-3 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-between">
+        <div className="prompt-metrics grid grid-cols-2 sm:grid-cols-4 mt-7">
+          <div className="prompt-metric flex items-center justify-between">
             <div>
               <span className="text-[11px] text-[var(--text-muted)] font-medium">Всего шаблонов</span>
               <div className="text-lg font-bold text-[var(--text-main)]">{stats.total}</div>
@@ -751,28 +769,28 @@ export default function Prompts() {
             <BookOpen className="w-4 h-4 text-[var(--accent-text)]" />
           </div>
 
-          <div className="p-3 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-between">
+          <div className="prompt-metric flex items-center justify-between">
             <div>
               <span className="text-[11px] text-[var(--text-muted)] font-medium">Динамические (Live)</span>
-              <div className="text-lg font-bold text-emerald-400">{stats.dynamicCount}</div>
+              <div className="text-lg font-bold text-[var(--success-text)]">{stats.dynamicCount}</div>
             </div>
-            <Zap className="w-4 h-4 text-emerald-400" />
+            <Zap className="w-4 h-4 text-[var(--success-text)]" />
           </div>
 
-          <div className="p-3 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-between">
+          <div className="prompt-metric flex items-center justify-between">
             <div>
               <span className="text-[11px] text-[var(--text-muted)] font-medium">Статические</span>
-              <div className="text-lg font-bold text-sky-400">{stats.staticCount}</div>
+              <div className="text-lg font-bold text-[var(--accent-text)]">{stats.staticCount}</div>
             </div>
-            <MessageSquare className="w-4 h-4 text-sky-400" />
+            <MessageSquare className="w-4 h-4 text-[var(--accent-text)]" />
           </div>
 
-          <div className="p-3 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] flex items-center justify-between">
+          <div className="prompt-metric flex items-center justify-between">
             <div>
               <span className="text-[11px] text-[var(--text-muted)] font-medium">Категорий</span>
-              <div className="text-lg font-bold text-purple-400">{categories.length}</div>
+              <div className="text-lg font-bold text-[var(--accent-text)]">{categories.length}</div>
             </div>
-            <Layers className="w-4 h-4 text-purple-400" />
+            <Layers className="w-4 h-4 text-[var(--accent-text)]" />
           </div>
         </div>
       </div>
@@ -795,7 +813,7 @@ export default function Prompts() {
         <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
               selectedCategory === 'all'
                 ? 'bg-[var(--accent)] text-white'
                 : 'bg-[var(--bg-main)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-color)]'
@@ -810,7 +828,7 @@ export default function Prompts() {
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
                   isSel
                     ? 'bg-[var(--accent)] text-white'
                     : 'bg-[var(--bg-main)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-color)]'
@@ -835,7 +853,7 @@ export default function Prompts() {
         <div className="flex items-center gap-1 bg-[var(--bg-main)] p-1 rounded-xl border border-[var(--border-color)] flex-shrink-0">
           <button
             onClick={() => setSelectedMode('all')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
               selectedMode === 'all' ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' : 'text-[var(--text-muted)]'
             }`}
           >
@@ -843,8 +861,8 @@ export default function Prompts() {
           </button>
           <button
             onClick={() => setSelectedMode('dynamic')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
-              selectedMode === 'dynamic' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'text-[var(--text-muted)]'
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
+              selectedMode === 'dynamic' ? 'bg-[var(--success-soft)] text-[var(--success-text)] border border-[var(--success)]' : 'text-[var(--text-muted)]'
             }`}
           >
             <Zap className="w-3 h-3" />
@@ -852,8 +870,8 @@ export default function Prompts() {
           </button>
           <button
             onClick={() => setSelectedMode('static')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
-              selectedMode === 'static' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40' : 'text-[var(--text-muted)]'
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
+              selectedMode === 'static' ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)]' : 'text-[var(--text-muted)]'
             }`}
           >
             <MessageSquare className="w-3 h-3" />
@@ -944,7 +962,7 @@ export default function Prompts() {
             return (
               <div
                 key={template.id}
-                className="rounded-[var(--radius-card)] bg-[var(--bg-card)] border border-[var(--border-color)] p-5 flex flex-col justify-between hover:border-[var(--border-subtle)] transition-all relative group"
+                className="rounded-[var(--radius-card)] bg-[var(--bg-card)] border border-[var(--border-color)] p-5 flex flex-col justify-between hover:border-[var(--border-subtle)] transition-colors relative group"
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
                 <div>
@@ -973,8 +991,8 @@ export default function Prompts() {
                       <span
                         className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 ${
                           template.mode === 'dynamic'
-                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                            ? 'bg-[var(--success-soft)] text-[var(--success-text)] border border-[var(--success)]'
+                            : 'bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)]'
                         }`}
                       >
                         {template.mode === 'dynamic' ? <Zap className="w-2.5 h-2.5" /> : <MessageSquare className="w-2.5 h-2.5" />}
@@ -987,7 +1005,7 @@ export default function Prompts() {
                       </span>
 
                       {template.is_builtin && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--accent-soft)] text-[var(--accent-text)] border border-[var(--accent)]">
               Системный
                         </span>
                       )}
@@ -1004,7 +1022,7 @@ export default function Prompts() {
                       </button>
                       <button
                         onClick={() => handleDeleteTemplate(template.id)}
-                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 cursor-pointer"
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--danger-text)] hover:bg-[var(--danger-soft)] cursor-pointer"
                         title="Удалить шаблон"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1122,16 +1140,16 @@ export default function Prompts() {
                 <div className="pt-3 border-t border-[var(--border-color)] flex items-center justify-between gap-2 mt-2">
                   <button
                     onClick={() => handleCopyText(template.prompt_text, template.id)}
-                    className="px-3 py-1.5 rounded-lg border border-[var(--border-color)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98]"
+                    className="px-3 py-1.5 rounded-lg border border-[var(--border-color)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer transition-colors active:scale-[0.98]"
                   >
-                    {copiedId === template.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedId === template.id ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedId === template.id ? 'Скопировано' : 'Копировать'}</span>
                   </button>
 
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleOpenQuickLaunch(template)}
-                      className="px-3.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-[0.98] shadow-sm"
+                      className="px-3.5 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors active:scale-[0.98] shadow-sm"
                       title="Выбрать количество сообщений (КОЛ смс) и создать сценарий"
                     >
                       <Rocket className="w-3.5 h-3.5" />
@@ -1163,7 +1181,7 @@ export default function Prompts() {
                 </span>
                 <div>
                   <h2 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
-                    Интерактивная AI Студия Промптов
+                    Интерактивная AI Студия промптов
                   </h2>
                   <p className="text-xs text-[var(--text-muted)]">
                     Опишите задумку сцены своими словами: нейросеть создаст точечные роли и структурированные инструкции.
@@ -1236,19 +1254,19 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setStudioMode('dynamic')}
-                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                    className={`p-3.5 rounded-xl border text-left transition-colors cursor-pointer flex items-start gap-3 ${
                       studioMode === 'dynamic'
-                        ? 'bg-emerald-500/10 border-emerald-500 text-[var(--text-main)] shadow-sm'
+                        ? 'bg-[var(--success-soft)] border-[var(--success)] text-[var(--text-main)] shadow-sm'
                         : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--border-subtle)]'
                     }`}
                   >
-                    <div className={`p-2 rounded-lg ${studioMode === 'dynamic' ? 'bg-emerald-500 text-white' : 'bg-[var(--bg-card)] text-emerald-400'}`}>
+                    <div className={`p-2 rounded-lg ${studioMode === 'dynamic' ? 'bg-[var(--success)] text-white' : 'bg-[var(--bg-card)] text-[var(--success-text)]'}`}>
                       <Zap className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
             <span> Динамические промпты на лету</span>
-                        {studioMode === 'dynamic' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                        {studioMode === 'dynamic' && <Check className="w-3.5 h-3.5 text-[var(--success-text)]" />}
                       </div>
                       <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-normal">
                         ИИ формулирует ответ в момент выхода поста, адаптируясь под тему новости.
@@ -1259,19 +1277,19 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setStudioMode('static')}
-                    className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                    className={`p-3.5 rounded-xl border text-left transition-colors cursor-pointer flex items-start gap-3 ${
                       studioMode === 'static'
-                        ? 'bg-sky-500/10 border-sky-500 text-[var(--text-main)] shadow-sm'
+                        ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--text-main)] shadow-sm'
                         : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--border-subtle)]'
                     }`}
                   >
-                    <div className={`p-2 rounded-lg ${studioMode === 'static' ? 'bg-sky-500 text-white' : 'bg-[var(--bg-card)] text-sky-400'}`}>
+                    <div className={`p-2 rounded-lg ${studioMode === 'static' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-card)] text-[var(--accent-text)]'}`}>
                       <MessageSquare className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5">
             <span> Статический готовый сценарий</span>
-                        {studioMode === 'static' && <Check className="w-3.5 h-3.5 text-sky-400" />}
+                        {studioMode === 'static' && <Check className="w-3.5 h-3.5 text-[var(--accent-text)]" />}
                       </div>
                       <p className="text-[11px] text-[var(--text-muted)] mt-0.5 leading-normal">
                         Фиксированные заготовки текста для полного контроля над каждым словом.
@@ -1295,7 +1313,7 @@ export default function Prompts() {
                         type="button"
                         key={drama.id}
                         onClick={() => setStudioDrama(drama.id as any)}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between ${
                           isSel
                             ? 'bg-[var(--accent-soft)] border-[var(--accent)] shadow-sm'
                             : 'bg-[var(--bg-main)] border-[var(--border-color)] hover:border-[var(--border-subtle)]'
@@ -1338,7 +1356,7 @@ export default function Prompts() {
                         type="button"
                         key={tone.id}
                         onClick={() => setStudioTone(tone.id as any)}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        className={`p-3 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between ${
                           isSel
                             ? 'bg-[var(--accent-soft)] border-[var(--accent)] shadow-sm'
                             : 'bg-[var(--bg-main)] border-[var(--border-color)] hover:border-[var(--border-subtle)]'
@@ -1377,7 +1395,7 @@ export default function Prompts() {
                         type="button"
                         key={r.count}
                         onClick={() => setStudioRolesCount(r.count)}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
                           isSel
                             ? 'bg-[var(--accent-soft)] border-[var(--accent)] shadow-sm'
                             : 'bg-[var(--bg-main)] border-[var(--border-color)] hover:border-[var(--border-subtle)]'
@@ -1417,7 +1435,7 @@ export default function Prompts() {
                         type="button"
                         key={count}
                         onClick={() => setStudioStepsCount(count)}
-                        className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer ${
+                        className={`py-2 px-1 rounded-xl border text-center transition-colors cursor-pointer ${
                           isSel
                             ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)] font-bold shadow-sm'
                             : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--border-subtle)]'
@@ -1438,7 +1456,7 @@ export default function Prompts() {
                 type="button"
                 disabled={isGenerating || !studioTopic.trim()}
                 onClick={handleGenerateStudio}
-                className="w-full py-3.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
+                className="w-full py-3.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
               >
                 {isGenerating ? (
                   <>
@@ -1487,7 +1505,7 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setStudioActiveTab('steps')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                       studioActiveTab === 'steps'
                         ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
@@ -1499,7 +1517,7 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setStudioActiveTab('roles')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                       studioActiveTab === 'roles'
                         ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
@@ -1511,7 +1529,7 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setStudioActiveTab('overview')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
                       studioActiveTab === 'overview'
                         ? 'bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
@@ -1529,7 +1547,7 @@ export default function Prompts() {
                       {studioResult.steps_payload.map((step, idx) => (
                         <div
                           key={idx}
-                          className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2.5 transition-all hover:border-[var(--accent)]/40"
+                          className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2.5 transition-colors hover:border-[var(--accent)]/40"
                         >
                           {/* Step Header */}
                           <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
@@ -1539,7 +1557,7 @@ export default function Prompts() {
                               </span>
 
                               {/* Role Selector */}
-                              <select
+                              <Select
                                 value={step.role_id}
                                 onChange={(e) => {
                                   const rId = Number(e.target.value);
@@ -1554,10 +1572,10 @@ export default function Prompts() {
                                     Роль #{r.role_order}: {r.role_name}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
 
                               {/* Reply-to Selector */}
-                              <select
+                              <Select
                                 value={step.reply_to_step || ''}
                                 onChange={(e) => {
                                   const val = e.target.value ? Number(e.target.value) : null;
@@ -1571,7 +1589,7 @@ export default function Prompts() {
                                     ↳ Ответ на шаг #{pIdx + 1}
                                   </option>
                                 ))}
-                              </select>
+                              </Select>
                             </div>
 
                             {/* Delay & Delete Step Button */}
@@ -1602,7 +1620,7 @@ export default function Prompts() {
                                 type="button"
                                 onClick={() => handleDeleteStudioStep(idx)}
                                 disabled={studioResult.steps_payload.length <= 1}
-                                className="p-1 rounded text-[var(--text-dim)] hover:text-red-400 disabled:opacity-30 cursor-pointer"
+                                className="p-1 rounded text-[var(--text-dim)] hover:text-[var(--danger-text)] disabled:opacity-30 cursor-pointer"
                                 title="Удалить этот шаг"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1661,7 +1679,7 @@ export default function Prompts() {
                     <button
                       type="button"
                       onClick={handleAddStudioStep}
-                      className="w-full py-2.5 rounded-xl border border-dashed border-[var(--border-color)] hover:border-[var(--accent)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 rounded-xl border border-dashed border-[var(--border-color)] hover:border-[var(--accent)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Добавить сообщение в диалог</span>
@@ -1762,7 +1780,7 @@ export default function Prompts() {
                       onClick={() => handleCopyText(studioResult.prompt_text)}
                       className="px-3 py-2 rounded-xl border border-[var(--border-color)] text-xs font-semibold text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center gap-1.5 cursor-pointer"
                     >
-                      {studioCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      {studioCopied ? <Check className="w-3.5 h-3.5 text-[var(--success-text)]" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{studioCopied ? 'Скопировано' : 'Скопировать'}</span>
                     </button>
 
@@ -1858,7 +1876,7 @@ export default function Prompts() {
                         type="button"
                         key={cat.id}
                         onClick={() => toggleFormCategory(cat.id)}
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
                           isSelected
                             ? 'text-white shadow-sm'
                             : 'text-[var(--text-muted)] hover:text-[var(--text-main)] bg-[var(--bg-card)] border-[var(--border-color)]'
@@ -1880,14 +1898,14 @@ export default function Prompts() {
                 <label className="text-xs font-bold text-[var(--text-muted)] block mb-1">
                   Режим:
                 </label>
-                <select
+                <Select
                   value={formMode}
                   onChange={(e) => setFormMode(e.target.value as any)}
                   className="w-full p-2.5 rounded-xl bg-[var(--bg-main)] border border-[var(--border-color)] text-xs text-[var(--text-main)] outline-none cursor-pointer"
                 >
          <option value="dynamic"> Динамический (is_ai_dynamic)</option>
          <option value="static"> Статический</option>
-                </select>
+                </Select>
               </div>
 
               <div>
@@ -2044,7 +2062,7 @@ export default function Prompts() {
                         (системная)
                       </span>
                     ) : (
-                      <span className="text-[10px] text-emerald-400 font-mono">
+                      <span className="text-[10px] text-[var(--success-text)] font-mono">
                         (пользовательская)
                       </span>
                     )}
@@ -2053,7 +2071,7 @@ export default function Prompts() {
                   {!cat.is_builtin && (
                     <button
                       onClick={() => handleDeleteCategory(cat.id, cat.label)}
-                      className="p-1 rounded-md text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 cursor-pointer"
+                      className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--danger-text)] hover:bg-[var(--danger-soft)] cursor-pointer"
                       title="Удалить категорию"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -2145,7 +2163,7 @@ export default function Prompts() {
                         type="button"
                         key={count}
                         onClick={() => setQuickLaunchStepsCount(count)}
-                        className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer ${
+                        className={`py-2 px-1 rounded-xl border text-center transition-colors cursor-pointer ${
                           isSel
                             ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)] font-bold shadow-sm'
                             : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)] hover:border-[var(--border-subtle)]'
@@ -2167,9 +2185,9 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setQuickLaunchMode('dynamic')}
-                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-all ${
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-colors ${
                       quickLaunchMode === 'dynamic'
-                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-bold'
+                        ? 'bg-[var(--success-soft)] border-[var(--success)] text-[var(--success-text)] font-bold'
                         : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)]'
                     }`}
                   >
@@ -2179,9 +2197,9 @@ export default function Prompts() {
                   <button
                     type="button"
                     onClick={() => setQuickLaunchMode('static')}
-                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-all ${
+                    className={`p-2.5 rounded-xl border text-left flex items-center gap-2 cursor-pointer transition-colors ${
                       quickLaunchMode === 'static'
-                        ? 'bg-sky-500/15 border-sky-500 text-sky-400 font-bold'
+                        ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent-text)] font-bold'
                         : 'bg-[var(--bg-main)] border-[var(--border-color)] text-[var(--text-muted)]'
                     }`}
                   >

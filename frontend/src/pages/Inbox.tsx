@@ -1,28 +1,28 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  Search,
-  RefreshCw,
-  Send,
+  MagnifyingGlass as Search,
+  ArrowsClockwise as RefreshCw,
+  PaperPlaneTilt as Send,
   Paperclip,
   X,
-  MessageSquare,
-  Download,
-  Trash2,
-  Edit2,
-  Reply,
+  ChatCircleText as MessageSquare,
+  DownloadSimple as Download,
+  Trash as Trash2,
+  PencilSimple as Edit2,
+  ArrowBendUpLeft as Reply,
   Copy,
-  CheckCheck,
-  Bot,
-  Image as ImageIcon,
+  Checks as CheckCheck,
+  Robot as Bot,
+  ImageSquare as ImageIcon,
   ArrowDown,
   Hash,
-  Layers,
-  ChevronDown,
-  ChevronRight,
-  ChevronLeft,
-  Loader2,
-  FileText,
-} from 'lucide-react';
+  Stack as Layers,
+  CaretDown as ChevronDown,
+  CaretRight as ChevronRight,
+  CaretLeft as ChevronLeft,
+  CircleNotch as Loader2,
+  FileText
+} from '@phosphor-icons/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useToast } from '../components/ToastContext';
@@ -75,14 +75,9 @@ interface Account {
 // ─── Helpers ─────────────────────────────────────────────
 
 const AVATAR_PALETTE: readonly [string, string][] = [
-  ['#6366f1', '#4338ca'],
-  ['#0ea5e9', '#0369a1'],
-  ['#10b981', '#047857'],
-  ['#f59e0b', '#b45309'],
-  ['#ec4899', '#be185d'],
-  ['#8b5cf6', '#6d28d9'],
-  ['#06b6d4', '#0e7490'],
-  ['#e11d48', '#9f1239'],
+  ['#708a75', '#496b55'], ['#7d939e', '#506f7c'], ['#7e9b83', '#4c7554'],
+  ['#b6a06c', '#927c46'], ['#aa8876', '#886552'], ['#9b8e91', '#756970'],
+  ['#7a9f99', '#4b7870'], ['#aa7e82', '#855b60'],
 ];
 
 function getAvatarColors(name?: string | null, id?: number | null): [string, string] {
@@ -541,21 +536,23 @@ export default function Inbox() {
   // ─── Render ──────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', gap: '12px' }}>
+    <div className="inbox-page" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 196px)', minHeight: '600px', gap: '12px' }}>
 
-      {/* ════════ TWO-PANEL MESSENGER ════════ */}
+      <div className="inbox-heading accounts-heading"><div><span className="eyebrow">АКТИВНОСТЬ / ВХОДЯЩИЕ</span><h1>Все диалоги. Один инбокс.</h1><p>Переписывайтесь от лица любого подключённого аккаунта.</p></div></div>
+      {/* Two-panel messenger */}
       <div
+        className="inbox-layout"
         style={{
           display: 'grid',
-          gridTemplateColumns: '360px 1fr',
+          gridTemplateColumns: '320px minmax(0, 1fr)',
           gap: '12px',
           flex: 1,
           minHeight: 0,
         }}
       >
 
-        {/* ──── LEFT: Accounts & Chat Directory Panel ──── */}
-        <div
+        {/* Accounts and conversations */}
+        <div className="inbox-chat-list"
           style={{
             backgroundColor: 'var(--bg-card)',
             border: '1px solid var(--border-color)',
@@ -611,7 +608,7 @@ export default function Inbox() {
                         padding: '1px 5px',
                         borderRadius: '4px',
                         backgroundColor: isWsConnected ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                        color: isWsConnected ? '#4ade80' : '#f59e0b',
+                        color: isWsConnected ? 'var(--success-text)' : 'var(--warning)',
                         border: `1px solid ${isWsConnected ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
                       }}
                     >
@@ -620,7 +617,7 @@ export default function Inbox() {
                           width: '6px',
                           height: '6px',
                           borderRadius: '50%',
-                          backgroundColor: isWsConnected ? '#22c55e' : '#f59e0b',
+                          backgroundColor: isWsConnected ? 'var(--success)' : 'var(--warning)',
                           boxShadow: isWsConnected ? '0 0 6px #22c55e' : 'none',
                         }}
                       />
@@ -650,7 +647,7 @@ export default function Inbox() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: syncMutation.isPending ? 'wait' : 'pointer',
-                    transition: 'all 0.15s ease',
+                    transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                   }}
                 >
                   <RefreshCw
@@ -672,7 +669,7 @@ export default function Inbox() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease',
+                    transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                   }}
                 >
                   <Trash2 style={{ width: 13, height: 13 }} />
@@ -930,7 +927,7 @@ export default function Inbox() {
                         border: '1px solid var(--border-color)',
                         borderRadius: '14px',
                         overflow: 'hidden',
-                        transition: 'all 0.15s ease',
+                        transition: 'background-color 150ms, border-color 150ms, color 150ms, transform 120ms',
                       }}
                     >
                       {/* Account Section Header */}
@@ -1108,7 +1105,7 @@ export default function Inbox() {
 
         {/* ──── RIGHT: Chat Room ──── */}
         {selectedChat ? (
-          <div
+          <div className="inbox-conversation"
             style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-color)',
@@ -1655,6 +1652,7 @@ export default function Inbox() {
               />
 
               <button
+                aria-label="Отправить сообщение"
                 onClick={() => sendMutation.mutate()}
                 disabled={(!text.trim() && !attachedFile) || sendMutation.isPending}
                 style={{
@@ -1679,8 +1677,8 @@ export default function Inbox() {
             </div>
           </div>
         ) : (
-          /* ──── Empty state (no chat selected) ──── */
-          <div
+          /* No conversation selected */
+          <div className="inbox-conversation inbox-empty"
             style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-color)',
@@ -1883,7 +1881,7 @@ export default function Inbox() {
                 flex: 1,
                 padding: '9px',
                 borderRadius: '10px',
-                backgroundColor: '#dc2626',
+                backgroundColor: 'var(--danger-hover)',
                 color: '#fff',
                 border: 'none',
                 fontSize: '12px',
